@@ -1,5 +1,5 @@
 ﻿using Application.Interfaces.Repositories.Patterns;
-using Infrastructure.Data;
+using Infrastructure.Data.Database;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
@@ -19,11 +19,6 @@ namespace Infrastructure.Repositories.Patterns
         public async Task AddAsync(T entity)
         {
             await _dbSet.AddAsync(entity);
-        }
-
-        public void Delete(T entity)
-        {
-            _dbSet.Remove(entity);
         }
 
         public async Task<IEnumerable<T>> GetAllAsync(Expression<Func<T, bool>>? filter = null,

@@ -5,6 +5,7 @@ using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
 using AutoMapper;
 using Domain.Entities.ShippingCore;
+using Domain.Exceptions;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
 {
@@ -44,7 +45,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
         {
             var existing = await _unitOfWork.Ports.GetByCodeAsync(dto.Code);
             if (existing != null && !existing.IsDeleted)
-                throw new InvalidOperationException($"A port with code '{dto.Code}' already exists.");
+                throw new BusinessRuleException($"A port with code '{dto.Code}' already exists.");
 
             dto.Code = dto.Code.Replace(" ", "").Trim().ToUpper();
 
@@ -77,7 +78,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
 
             var existing = await _unitOfWork.Ports.GetByCodeAsync(dto.Code);
             if (existing != null && !existing.IsDeleted && existing.Id != id)
-                throw new InvalidOperationException($"A port with code '{dto.Code}' already exists.");
+                throw new BusinessRuleException($"A port with code '{dto.Code}' already exists.");
 
             port.Name = dto.Name;
             port.Code = dto.Code.Replace(" ", "").Trim().ToUpper();

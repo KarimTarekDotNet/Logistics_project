@@ -1,4 +1,6 @@
-﻿using Domain.Entities.ShippingCore;
+﻿using Domain.Entities.Shipments;
+using Domain.Entities.ShippingCore;
+using Domain.Entities.Users;
 
 namespace Domain.Entities.Pricing.Quotation
 {
@@ -6,13 +8,16 @@ namespace Domain.Entities.Pricing.Quotation
     {
         public Guid Id { get; set; }
 
-        public string CustomerName { get; set; } = null!;
+        public Guid CustomerId { get; set; }
+        public Customer Customer { get; set; } = null!;
 
         public Guid RouteId { get; set; }
         public Route Route { get; set; } = null!;
 
         public Guid ContainerTypeId { get; set; }
         public ContainerType ContainerType { get; set; } = null!;
+
+        public Shipment? Shipment { get; set; }
 
         public decimal FinalPrice { get; set; }
         public string Currency { get; set; } = null!;

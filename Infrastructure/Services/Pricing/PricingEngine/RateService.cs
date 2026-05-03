@@ -5,6 +5,7 @@ using Application.Interfaces.Services.Pricing.PricingEngine;
 using Application.Models;
 using AutoMapper;
 using Domain.Entities.Pricing.PricingEngine;
+using Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Services.Pricing.PricingEngine
@@ -53,7 +54,7 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                     throw new KeyNotFoundException("Rate not found.");
 
                 if (rate.IsDeleted)
-                    throw new InvalidOperationException("Rate is already deleted.");
+                    throw new BusinessRuleException("Rate is already deleted.");
 
                 rate.IsDeleted = true;
                 rate.IsActive = false;
@@ -85,10 +86,10 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                     dto.ValidTo = rate.ValidTo;
 
                 if(!RateRules.IsValidDateRange(dto.ValidFrom, dto.ValidTo))
-                    throw new InvalidOperationException("Invalid date range.");
+                    throw new BusinessRuleException("Invalid date range.");
 
                 if(!RateRules.IsValidCurrency(dto.Currency))
-                    throw new InvalidOperationException($"Invalid currency please choose a valid currency" +
+                    throw new BusinessRuleException($"Invalid currency please choose a valid currency" +
                         $" from the allowed list [{string.Join(", ", RateRules.AllowedCurrencies)}].");
                 rate.Price = dto.Price; rate.Currency = dto.Currency; rate.ValidFrom = dto.ValidFrom;
                 rate.ValidTo = dto.ValidTo; rate.UpdatedAt = DateTimeOffset.UtcNow;
@@ -131,12 +132,12 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                     throw new KeyNotFoundException("Rate not found.");
 
                 if (rate.IsDeleted)
-                    throw new InvalidOperationException("Cannot change active state of a deleted rate.");
+                    throw new BusinessRuleException("Cannot change active state of a deleted rate.");
 
                 if (!rate.IsActive)
                 {
                     if (!RateRules.CanActivateRate(rate.ValidTo))
-                        throw new InvalidOperationException("Cannot activate a rate with an expired validity period.");
+                        throw new BusinessRuleException("Cannot activate a rate with an expired validity period.");
 
                     await DeactivateOtherActiveRatesAsync(rate.CarrierId, rate.RouteId,
                     rate.ContainerTypeId, rate.Id);
@@ -210,7 +211,7 @@ namespace Infrastructure.Services.Pricing.PricingEngine
         private async Task DeactivateOtherActiveRatesAsync(Guid carrierId, Guid routeId, Guid containerTypeId, Guid? excludeRateId = null)
         {
             var activeRates = await _unitOfWork.Rates
-                .GetActiveRatesByCarrierRouteAndContainerTypeAsync(carrierId, routeId, containerTypeId);
+                .GetAvailableRatesByCarrierRouteAndContainerTypeAsync(carrierId, routeId, containerTypeId);
 
             foreach (var activeRate in activeRates)
             {

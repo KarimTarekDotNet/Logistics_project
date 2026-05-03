@@ -1,9 +1,10 @@
 ﻿using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Repositories.Pricing.PricingEngine;
 using Application.Interfaces.Repositories.Pricing.Quotation;
+using Application.Interfaces.Repositories.Shipments.Core;
+using Application.Interfaces.Repositories.Shipments.User;
 using Application.Interfaces.Repositories.ShippingCore;
-using Domain.Entities.Pricing.PricingEngine;
-using Infrastructure.Data;
+using Infrastructure.Data.Database;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Infrastructure.Repositories.Patterns
@@ -19,6 +20,11 @@ namespace Infrastructure.Repositories.Patterns
         public IRouteRepository Routes { get; }
         public IRateRepository Rates { get; }
         public IQuoteRepository Quotes { get; }
+        public ICustomerRepository Customers { get; }
+        public IShipmentRepository Shipments { get; }
+        public IShipmentItemRepository ShipmentItems { get; }
+        public IShipmentChargeRepository ShipmentCharges { get; }
+        public IShipmentStatusHistoryRepository StatusHistoryRepositories { get; }
 
         public UnitOfWork(
             ApplicationDbContext context,
@@ -27,7 +33,12 @@ namespace Infrastructure.Repositories.Patterns
             IPortRepository portRepository,
             IRouteRepository routeRepository,
             IRateRepository rateRepository,
-            IQuoteRepository quoteRepository)
+            IQuoteRepository quoteRepository,
+            ICustomerRepository customerRepository,
+            IShipmentRepository shipmentRepository,
+            IShipmentItemRepository shipmentItemRepository,
+            IShipmentChargeRepository shipmentChargeRepository,
+            IShipmentStatusHistoryRepository shipmentStatusHistoryRepository)
         {
             _context = context;
             Carriers = carrierRepository;
@@ -36,6 +47,11 @@ namespace Infrastructure.Repositories.Patterns
             Routes = routeRepository;
             Rates = rateRepository;
             Quotes = quoteRepository;
+            Customers = customerRepository;
+            Shipments = shipmentRepository;
+            ShipmentItems = shipmentItemRepository;
+            ShipmentCharges = shipmentChargeRepository;
+            StatusHistoryRepositories = shipmentStatusHistoryRepository;
         }
 
         public async Task<int> SaveChangesAsync()

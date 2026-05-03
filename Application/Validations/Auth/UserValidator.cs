@@ -55,18 +55,18 @@ public class RegisterRequestValidator : AbstractValidator<RegisterRequest>
         RuleFor(x => x.ConfirmPassword)
             .Equal(x => x.Password).WithMessage("Passwords do not match.");
     }
-    public class ConfirmPhoneRequestValidator : AbstractValidator<ConfirmPhoneRequest>
+}
+public class ConfirmPhoneRequestValidator : AbstractValidator<ConfirmPhoneRequest>
+{
+    public ConfirmPhoneRequestValidator()
     {
-        public ConfirmPhoneRequestValidator()
-        {
-            RuleFor(x => x.PhoneNumber)
-                .NotEmpty().WithMessage("Phone number is required.")
-                .Matches(@"^\+\d{7,15}$")
-                .WithMessage("Phone number must contain only digits.");
+        RuleFor(x => x.PhoneNumber)
+            .NotEmpty().WithMessage("Phone number is required.")
+            .Matches(@"^\+\d{7,15}$")
+            .WithMessage("Phone number must start with '+' followed by 7 to 15 digits.");
 
-            RuleFor(x => x.Code)
-                .MaximumLength(10)
-                .NotEmpty().WithMessage("Code is required");
-        }
+        RuleFor(x => x.Code)
+            .MaximumLength(10)
+            .NotEmpty().WithMessage("Code is required");
     }
 }

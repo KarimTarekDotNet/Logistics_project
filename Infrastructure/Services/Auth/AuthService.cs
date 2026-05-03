@@ -13,7 +13,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Security.Claims;
 using System.Text;
-using Twilio.Jwt.AccessToken;
 
 namespace Infrastructure.Services.Auth
 {
@@ -131,7 +130,7 @@ namespace Infrastructure.Services.Auth
                     };
                 }
 
-                var addToRoleResult = await _userManager.AddToRoleAsync(user, Role.Customer.ToString());
+                var addToRoleResult = await _userManager.AddToRoleAsync(user, Role.User.ToString());
 
                 if (!addToRoleResult.Succeeded)
                 {

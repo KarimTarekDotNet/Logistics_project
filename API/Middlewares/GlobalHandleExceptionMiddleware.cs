@@ -62,6 +62,16 @@ namespace API.Middlewares
                     statusCode = StatusCodes.Status409Conflict;
                     message = "The item was modified by someone else. Please reload and try again.";
                 }
+                else if (ex is BusinessRuleException)
+                {
+                    statusCode = StatusCodes.Status409Conflict;
+                    message = ex.Message;
+                }
+                else if (ex is DbUpdateException)
+                {
+                    statusCode = StatusCodes.Status500InternalServerError;
+                    message = "A database update error occurred.";
+                }
                 else
                 {
                     statusCode = StatusCodes.Status500InternalServerError;

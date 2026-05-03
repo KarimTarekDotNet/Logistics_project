@@ -5,6 +5,7 @@ using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
 using AutoMapper;
 using Domain.Entities.ShippingCore;
+using Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
@@ -70,7 +71,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
 
             var existing = await _unitOfWork.Routes.GetByPortsAsync(dto.FromPortId, dto.ToPortId);
             if (existing != null && !existing.IsDeleted)
-                throw new InvalidOperationException("A route between these two ports already exists.");
+                throw new BusinessRuleException("A route between these two ports already exists.");
 
             var route = _mapper.Map<Route>(dto);
             route.CreatedAt = DateTimeOffset.UtcNow;
@@ -104,7 +105,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
 
             var existing = await _unitOfWork.Routes.GetByPortsAsync(dto.FromPortId, dto.ToPortId);
             if (existing != null && !existing.IsDeleted && existing.Id != id)
-                throw new InvalidOperationException("A route between these two ports already exists.");
+                throw new BusinessRuleException("A route between these two ports already exists.");
 
             route.FromPortId = dto.FromPortId;
             route.ToPortId = dto.ToPortId;

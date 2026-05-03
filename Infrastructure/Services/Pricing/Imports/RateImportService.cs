@@ -213,7 +213,7 @@ namespace Infrastructure.Services.Pricing.Imports
         private async Task DeactivateOtherActiveRatesAsync(Guid carrierId, Guid routeId, Guid containerTypeId, Guid? excludeRateId = null)
         {
             var activeRates = await _unitOfWork.Rates
-                .GetActiveRatesByCarrierRouteAndContainerTypeAsync(carrierId, routeId, containerTypeId);
+                .GetAvailableRatesByCarrierRouteAndContainerTypeAsync(carrierId, routeId, containerTypeId);
 
             foreach (var activeRate in activeRates)
             {

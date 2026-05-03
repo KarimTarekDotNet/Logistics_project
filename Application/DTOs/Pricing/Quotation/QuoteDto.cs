@@ -15,13 +15,15 @@ namespace Application.DTOs.Pricing.Quotation
         public IReadOnlyList<QuoteItemResponse> Items { get; init; } = null!;
     }
 
-    public record CreateQuoteRequest(
-        string CustomerName,
-        Guid RouteId,
-        Guid ContainerTypeId,
-        decimal FinalPrice,
-        string Currency,
-        IReadOnlyList<CreateQuoteItemRequest> Items);
+    public record CreateQuoteRequest
+    {
+        public Guid CustomerId { get; init; }
+        public Guid RouteId { get; init; }
+        public Guid ContainerTypeId { get; init; }
+        public decimal FinalPrice { get; init; }
+        public string Currency { get; init; } = null!;
+        public IReadOnlyList<CreateQuoteItemRequest> Items { get; init; } = null!;
+    }
 
     public record UpdateQuoteRequest(
         string CustomerName,

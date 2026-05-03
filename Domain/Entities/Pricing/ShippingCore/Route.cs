@@ -1,4 +1,5 @@
 ﻿using Domain.Entities.Pricing.PricingEngine;
+using Domain.Entities.Shipments;
 
 namespace Domain.Entities.ShippingCore
 {
@@ -13,6 +14,7 @@ namespace Domain.Entities.ShippingCore
         public Port ToPort { get; set; } = null!;
 
         public ICollection<Rate> Rates { get; set; } = new List<Rate>();
+        public ICollection<Shipment> Shipments { get; set; } = new List<Shipment>();
 
         public bool IsDeleted { get; set; } = false;
         public DateTimeOffset? DeletedAt { get; set; }

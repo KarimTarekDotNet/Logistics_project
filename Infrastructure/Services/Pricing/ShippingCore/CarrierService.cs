@@ -5,6 +5,7 @@ using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
 using AutoMapper;
 using Domain.Entities.ShippingCore;
+using Domain.Exceptions;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
 {
@@ -46,7 +47,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
         {
             var existing = await _unitOfWork.Carriers.GetByNameOrCodeAsync(dto.Code);
             if (existing != null && !existing.IsDeleted)
-                throw new InvalidOperationException($"A carrier with code '{dto.Code}' already exists.");
+                throw new BusinessRuleException($"A carrier with code '{dto.Code}' already exists.");
 
             var carrier = _mapper.Map<Carrier>(dto);
             carrier.CreatedAt = DateTimeOffset.UtcNow;
@@ -74,7 +75,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
 
             var existing = await _unitOfWork.Carriers.GetByNameOrCodeAsync(dto.Code);
             if (existing != null && !existing.IsDeleted && existing.Id != id)
-                throw new InvalidOperationException($"A carrier with code '{dto.Code}' already exists.");
+                throw new BusinessRuleException($"A carrier with code '{dto.Code}' already exists.");
 
             if(string.IsNullOrEmpty(dto.Name))
                 dto.Name = carrier.Name;

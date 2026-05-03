@@ -4,6 +4,7 @@ using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
 using AutoMapper;
 using Domain.Entities.ShippingCore;
+using Domain.Exceptions;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
 {
@@ -38,7 +39,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
             var existing = await _unitOfWork.ContainerTypes.GetByNameAsync(dto.Name);
 
             if (existing != null)
-                throw new InvalidOperationException($"A container type with name '{dto.Name}' already exists.");
+                throw new BusinessRuleException($"A container type with name '{dto.Name}' already exists.");
 
             var containerType = _mapper.Map<ContainerType>(dto);
             containerType.CreatedAt = DateTimeOffset.UtcNow;
@@ -62,7 +63,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                 !ct.IsDeleted && ct.Name == dto.Name && ct.Id != id);
 
             if (existing.Any())
-                throw new InvalidOperationException($"A container type with name '{dto.Name}' already exists.");
+                throw new BusinessRuleException($"A container type with name '{dto.Name}' already exists.");
 
             containerType.Name = dto.Name;
             containerType.UpdatedAt = DateTimeOffset.UtcNow;

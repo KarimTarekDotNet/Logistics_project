@@ -2,7 +2,7 @@
 using Application.Models;
 using Domain.Entities.Pricing.PricingEngine;
 using Domain.Entities.ShippingCore;
-using Infrastructure.Data;
+using Infrastructure.Data.Database;
 using Infrastructure.Repositories.Patterns;
 using Microsoft.EntityFrameworkCore;
 

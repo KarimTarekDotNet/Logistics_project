@@ -1,9 +1,13 @@
-﻿namespace Domain.Entities.ShippingCore
+﻿using Domain.Entities.Shipments;
+
+namespace Domain.Entities.ShippingCore
 {
     public class ContainerType // Type of shipping container (e.g., 20ft, 40ft)
     {
         public Guid Id { get; set; }
         public string Name { get; set; } = null!;
+
+        public ICollection<Shipment> Shipments { get; set; } = new List<Shipment>();
 
         public bool IsDeleted { get; set; } = false;
         public DateTimeOffset? DeletedAt { get; set; }

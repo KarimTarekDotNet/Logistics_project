@@ -1,7 +1,7 @@
 using Application.Interfaces.Repositories.Pricing.Quotation;
 using Application.Models;
 using Domain.Entities.Pricing.Quotation;
-using Infrastructure.Data;
+using Infrastructure.Data.Database;
 using Infrastructure.Repositories.Patterns;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,6 +20,7 @@ namespace Infrastructure.Repositories.Pricing.Quotation
         {
             return await _context.Quotes
                 .AsNoTracking()
+                .Include(x => x.Customer).ThenInclude(c => c.ApplicationUser)
                 .Include(q => q.Items)
                 .Include(q => q.Route).ThenInclude(r => r.FromPort)
                 .Include(q => q.Route).ThenInclude(r => r.ToPort)
@@ -31,6 +32,7 @@ namespace Infrastructure.Repositories.Pricing.Quotation
         {
             var quotesQuery = _context.Quotes
                 .AsNoTracking()
+                .Include(x => x.Customer).ThenInclude(c => c.ApplicationUser)
                 .Include(x => x.Items)
                 .Include(q => q.Route).ThenInclude(r => r.FromPort)
                 .Include(q => q.Route).ThenInclude(r => r.ToPort)
@@ -44,10 +46,12 @@ namespace Infrastructure.Repositories.Pricing.Quotation
             var quotesQuery = _context.Quotes
                 .AsNoTracking()
                 .Include(x => x.Items)
+                .Include(x => x.Customer).ThenInclude(c => c.ApplicationUser)
                 .Include(q => q.Route).ThenInclude(r => r.FromPort)
                 .Include(q => q.Route).ThenInclude(r => r.ToPort)
                 .Include(q => q.ContainerType)
-                .Where(q => EF.Functions.Like(q.CustomerName, $"%{customerName}%"))
+                .Where(q => EF.Functions.Like(q.Customer.ApplicationUser.FirstName, $"%{customerName}%") ||
+                EF.Functions.Like(q.Customer.ApplicationUser.LastName, $"%{customerName}%"))
                 .AsQueryable();
 
             return await Pagination(quotesQuery, query);
@@ -58,6 +62,7 @@ namespace Infrastructure.Repositories.Pricing.Quotation
             var quotesQuery = _context.Quotes
                 .AsNoTracking()
                 .Include(x => x.Items)
+                .Include(x => x.Customer).ThenInclude(c => c.ApplicationUser)
                 .Include(q => q.Route).ThenInclude(r => r.FromPort)
                 .Include(q => q.Route).ThenInclude(r => r.ToPort)
                 .Include(q => q.ContainerType)
@@ -73,7 +78,8 @@ namespace Infrastructure.Repositories.Pricing.Quotation
             {
                 var searchTerm = $"%{query.Search}%";
                 quotesQuery = quotesQuery
-                    .Where(q => EF.Functions.Like(q.CustomerName, searchTerm)
+                    .Where(q => EF.Functions.Like(q.Customer.ApplicationUser.FirstName, searchTerm)
+                    || EF.Functions.Like(q.Customer.ApplicationUser.LastName, searchTerm)
                     || EF.Functions.Like(q.Route.FromPort.Name, searchTerm)
                     || EF.Functions.Like(q.Route.ToPort.Name, searchTerm)
                     || EF.Functions.Like(q.ContainerType.Name, searchTerm));
@@ -81,7 +87,7 @@ namespace Infrastructure.Repositories.Pricing.Quotation
 
             quotesQuery = query.SortBy?.ToLower() switch
             {
-                "customer" => quotesQuery.OrderBy(q => q.CustomerName),
+                "customer" => quotesQuery.OrderBy(q => q.Customer.ApplicationUser.FirstName).ThenBy(q => q.Customer.ApplicationUser.LastName),
                 "price" => quotesQuery.OrderBy(q => q.FinalPrice),
                 "price_desc" => quotesQuery.OrderByDescending(q => q.FinalPrice),
                 "createdat" => quotesQuery.OrderByDescending(q => q.CreatedAt),

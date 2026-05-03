@@ -1,5 +1,7 @@
 ﻿using Application.Interfaces.Repositories.Pricing.PricingEngine;
 using Application.Interfaces.Repositories.Pricing.Quotation;
+using Application.Interfaces.Repositories.Shipments.Core;
+using Application.Interfaces.Repositories.Shipments.User;
 using Application.Interfaces.Repositories.ShippingCore;
 using Application.Interfaces.Services.Auth;
 
@@ -13,6 +15,11 @@ namespace Application.Interfaces.Repositories.Patterns
         IRouteRepository Routes { get; }
         IRateRepository Rates { get; }
         IQuoteRepository Quotes { get; }
+        ICustomerRepository Customers { get; }
+        IShipmentRepository Shipments { get; }
+        IShipmentItemRepository ShipmentItems { get; }
+        IShipmentChargeRepository ShipmentCharges { get; }
+        IShipmentStatusHistoryRepository StatusHistoryRepositories { get; }
 
         Task<int> SaveChangesAsync();
         Task BeginTransactionAsync();

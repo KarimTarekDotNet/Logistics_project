@@ -64,18 +64,12 @@ namespace Infrastructure.Services.Pricing.Quotation
 
             var quote = _mapper.Map<Quote>(dto);
             quote.CreatedAt = DateTimeOffset.UtcNow;
-            quote.UpdatedAt = null;
-            quote.IsDeleted = false;
-            quote.DeletedAt = null;
 
             if (quote.Items != null && quote.Items.Any())
             {
                 foreach (var item in quote.Items)
                 {
                     item.CreatedAt = DateTimeOffset.UtcNow;
-                    item.UpdatedAt = null;
-                    item.IsDeleted = false;
-                    item.DeletedAt = null;
                 }
             }
 

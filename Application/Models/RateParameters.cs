@@ -25,5 +25,6 @@ namespace Application.Models
         public DateTimeOffset? ValidTo { get; set; }
         public DateTimeOffset? CreatedFrom { get; set; }
         public DateTimeOffset? CreatedTo { get; set; }
+        public bool? OnlyCurrentlyValid { get; set; }
     }
 }

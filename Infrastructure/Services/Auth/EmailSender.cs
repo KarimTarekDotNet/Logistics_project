@@ -1,4 +1,5 @@
 ﻿using Application.Interfaces.Services.Auth;
+using Domain.Exceptions;
 using Microsoft.Extensions.Configuration;
 using SendGrid;
 using SendGrid.Helpers.Mail;
@@ -25,7 +26,7 @@ namespace Infrastructure.Services.Auth
             if (string.IsNullOrWhiteSpace(apiKey) ||
                 string.IsNullOrWhiteSpace(fromEmail))
             {
-                throw new InvalidOperationException("SendGrid settings are not configured correctly.");
+                throw new BusinessRuleException("SendGrid settings are not configured correctly.");
             }
 
             var client = new SendGridClient(apiKey);

@@ -3,7 +3,7 @@
     public enum Role
     {
         Admin,
-        Customer,
+        User,
         Staff,
         Integration
     }

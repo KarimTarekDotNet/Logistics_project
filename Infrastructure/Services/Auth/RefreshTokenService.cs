@@ -1,6 +1,6 @@
 ﻿using Application.Interfaces.Services.Auth;
 using Domain.Entities.Users;
-using Infrastructure.Data;
+using Infrastructure.Data.Database;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 

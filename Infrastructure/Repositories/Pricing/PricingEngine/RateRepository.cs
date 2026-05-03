@@ -1,7 +1,7 @@
 ﻿using Application.Interfaces.Repositories.Pricing.PricingEngine;
 using Application.Models;
 using Domain.Entities.Pricing.PricingEngine;
-using Infrastructure.Data;
+using Infrastructure.Data.Database;
 using Infrastructure.Repositories.Patterns;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,24 +17,42 @@ namespace Infrastructure.Repositories.Pricing.PricingEngine
 
         public async Task<IEnumerable<Rate>> SearchAsync(RateParameters query)
         {
-            var now = DateTimeOffset.UtcNow;
             var ratesQuery = _context.Rates
                 .AsNoTracking()
                 .Include(r => r.Carrier)
                 .Include(r => r.Route).ThenInclude(r => r.FromPort)
                 .Include(r => r.Route).ThenInclude(r => r.ToPort)
-                .Include(r => r.ContainerType);
+                .Include(r => r.ContainerType)
+                .Where(x => !x.IsDeleted);
 
             return await Pagination(ratesQuery, query);
         }
 
-        public async Task<IEnumerable<Rate>> GetActiveRatesByCarrierRouteAndContainerTypeAsync(Guid carrierId, Guid routeId, Guid containerTypeId)
+        public async Task<bool> ExistsActiveRateAsync(Guid carrierId, Guid routeId, Guid containerTypeId)
         {
+            var now = DateTimeOffset.UtcNow;
+
+            return await _context.Rates.AnyAsync(r =>
+                r.CarrierId == carrierId &&
+                r.RouteId == routeId &&
+                r.ContainerTypeId == containerTypeId &&
+                r.IsActive &&
+                !r.IsDeleted &&
+                r.ValidFrom <= now &&
+                r.ValidTo >= now
+            );
+        }
+
+        public async Task<IEnumerable<Rate>> GetAvailableRatesByCarrierRouteAndContainerTypeAsync(Guid carrierId, Guid routeId, Guid containerTypeId)
+        {
+            var now = DateTimeOffset.UtcNow;
             return await _context.Rates
                 .Where(r => r.IsActive
+                    && !r.IsDeleted
                     && r.CarrierId == carrierId
                     && r.RouteId == routeId
-                    && r.ContainerTypeId == containerTypeId)
+                    && r.ContainerTypeId == containerTypeId
+                    && r.ValidFrom <= now && r.ValidTo >= now)
                 .ToListAsync();
         }
 
@@ -121,6 +139,12 @@ namespace Infrastructure.Repositories.Pricing.PricingEngine
             if (query.CreatedTo.HasValue)
             {
                 ratesQuery = ratesQuery.Where(r => r.CreatedAt <= query.CreatedTo.Value);
+            }
+
+            if(query.OnlyCurrentlyValid.HasValue && query.OnlyCurrentlyValid.Value)
+            {
+                var now = DateTimeOffset.UtcNow;
+                ratesQuery = ratesQuery.Where(r => r.IsActive && r.ValidFrom <= now && r.ValidTo >= now);
             }
 
             if (!string.IsNullOrWhiteSpace(query.Search))

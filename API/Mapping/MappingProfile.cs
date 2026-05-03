@@ -8,6 +8,9 @@ using Domain.Entities.Pricing.PricingEngine;
 using Domain.Entities.Pricing.Quotation;
 using Domain.Entities.Users;
 using Application.DTOs.Auth;
+using Domain.Entities.Shipments;
+using Application.DTOs.Shipments.User;
+using Application.DTOs.Shipments.Core;
 
 namespace API.Mapping
 {
@@ -49,6 +52,8 @@ namespace API.Mapping
             // ── Quotation ────────────────────────────────────────────────────
             CreateMap<Quote, QuoteResponse>()
                 .ForMember(d => d.FromPortCode, o => o.MapFrom(s => s.Route.FromPort.Code))
+                .ForMember(d => d.CustomerName,
+        o => o.MapFrom(s => s.Customer.ApplicationUser.FirstName + " " + s.Customer.ApplicationUser.LastName))
                 .ForMember(d => d.ToPortCode, o => o.MapFrom(s => s.Route.ToPort.Code))
                 .ForMember(d => d.ContainerTypeName,
                 o => o.MapFrom(s => s.ContainerType.Name));
@@ -63,6 +68,36 @@ namespace API.Mapping
             CreateMap<ApplicationUser, AuthResponse>();
             CreateMap<LoginRequest, ApplicationUser>();
             CreateMap<RegisterRequest, ApplicationUser>();
+
+            CreateMap<Customer, CustomerResponse>()
+                .ForMember(d => d.Shipments, o => o.MapFrom(s => s.Shipments))
+                .ForMember(d => d.Quotes, o => o.MapFrom(s => s.Quotes));
+            CreateMap<CreateCustomerRequest, Customer>();
+            CreateMap<UpdateCustomerRequest, Customer>();
+
+            // ── Shipments ────────────────────────────────────────────────────
+            CreateMap<Shipment, ShipmentResponse>()
+                .ForMember(d => d.CarrierName, o => o.MapFrom(s => s.Carrier.Name))
+                .ForMember(d => d.CustomerName, 
+                o => o.MapFrom(s => s.Customer.ApplicationUser.FirstName +
+                " " + s.Customer.ApplicationUser.LastName))
+                .ForMember(d => d.ContainerTypeName,
+                o => o.MapFrom(s => s.ContainerType.Name));
+            CreateMap<CreateShipmentRequest, Shipment>();
+            CreateMap<UpdateShipmentRequest, Shipment>();
+
+            CreateMap<ShipmentCharge, ShipmentChargeResponse>();
+            CreateMap<CreateShipmentChargeRequest, ShipmentCharge>();
+            CreateMap<UpdateShipmentChargeRequest, ShipmentCharge>();
+
+            CreateMap<ShipmentItem, ShipmentItemResponse>();
+            CreateMap<CreateShipmentItemRequest, ShipmentItem>();
+            CreateMap<UpdateShipmentItemRequest, ShipmentItem>();
+            CreateMap<ShipmentStatusHistory, ShipmentStatusHistoryResponse>()
+                .ForMember(d => d.ToStatus,
+                o => o.MapFrom(s => s.ToStatus.ToString()))
+                .ForMember(d => d.FromStatus,
+                o => o.MapFrom(s => s.FromStatus.ToString()));
         }
     }
 }

@@ -8,9 +8,8 @@ namespace Application.Validations.PricingFeature.Quotation
     {
         public CreateQuoteRequestValidator()
         {
-            RuleFor(q => q.CustomerName)
-                .NotEmpty().WithMessage("Customer name is required.")
-                .MaximumLength(100).WithMessage("Customer name must not exceed 100 characters.");
+            RuleFor(q => q.CustomerId)
+                .NotEmpty().WithMessage("Customer ID is required.");
 
             RuleFor(q => q.RouteId)
                 .NotEmpty().WithMessage("Route is required.");
