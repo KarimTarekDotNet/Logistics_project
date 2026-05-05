@@ -2,6 +2,7 @@
 using Application.Interfaces.Services.Auth;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace API.Controllers.Auth
 {
@@ -63,7 +64,7 @@ namespace API.Controllers.Auth
             return Ok(result);
         }
 
-        [HttpGet("confirm-email")]
+        [HttpPost("confirm-email")]
         public async Task<IActionResult> ConfirmEmail([FromQuery] string userId, [FromQuery] string token)
         {
             var result = await _emailVerificationService.ConfirmEmailAsync(userId, token);
@@ -82,7 +83,7 @@ namespace API.Controllers.Auth
         }
 
         [HttpPost("refresh")]
-        public async Task<IActionResult> RefreshToken([FromQuery] RefreshTokenRequest request)
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
         {
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
             var result = await auth.RefreshAsync(request, ipAddress);
@@ -92,7 +93,7 @@ namespace API.Controllers.Auth
         }
 
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout([FromQuery] RefreshTokenRequest request)
+        public async Task<IActionResult> Logout([FromBody] RefreshTokenRequest request)
         {
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
             var result = await auth.LogoutAsync(request, ipAddress);
@@ -102,13 +103,24 @@ namespace API.Controllers.Auth
         }
 
         [HttpPost("logout-all")]
-        public async Task<IActionResult> LogoutAll([FromQuery] string userId)
+        public async Task<IActionResult> LogoutAll()
         {
+            var currentUserId = GetUserId();
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-            var result = await auth.LogoutAllAsync(userId, ipAddress);
+            var result = await auth.LogoutAllAsync(currentUserId, ipAddress);
             if (!result)
                 return BadRequest(new { Message = "Failed to logout from all sessions" });
             return Ok(new { Message = "Logged out from all sessions successfully" });
+        }
+
+        private string GetUserId()
+        {
+            string userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new UnauthorizedAccessException("User id claim not found.");
+
+            return userId;
         }
     }
 }

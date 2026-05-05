@@ -5,24 +5,35 @@ using Application.Interfaces.Services.Shipments.Core;
 using Application.Models;
 using AutoMapper;
 using Domain.Entities.Shipments;
+using Domain.Entities.Users;
 using Domain.Enums;
 using Domain.Exceptions;
+using Microsoft.AspNetCore.Identity;
 
 namespace Infrastructure.Services.Shipments.Core
 {
     public class ShipmentService : IShipmentService
     {
+        private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
 
-        public ShipmentService(IUnitOfWork unitOfWork, IMapper mapper)
+        public ShipmentService(IUnitOfWork unitOfWork, IMapper mapper, UserManager<ApplicationUser> userManager)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _userManager = userManager;
         }
 
-        public async Task<ShipmentResponse?> ChangeStatusAsync(Guid id, ChangeShipmentStatusRequest request)
+        public async Task<ShipmentResponse?> ChangeStatusAsync(Guid id, string userId, bool isPrivileged, ChangeShipmentStatusRequest request)
         {
+            var user = await _userManager.FindByIdAsync(userId);
+            if(user == null || !isPrivileged)
+            {
+                throw new BusinessRuleException("User not found or does not have permission to change shipment status.");
+            }
+            else if (user == null || user.CustomerProfile == null)
+                return null;
             var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(id);
             if(shipment == null)
                 return null;
@@ -62,7 +73,7 @@ namespace Infrastructure.Services.Shipments.Core
                 FromStatus = oldStatus,
                 ToStatus = newStatus,
                 ChangedAt = DateTimeOffset.UtcNow,
-                ChangedBy = "System",
+                ChangedBy = user.UserName,
                 Reason = request.Reason
             });
 
@@ -71,10 +82,14 @@ namespace Infrastructure.Services.Shipments.Core
             return _mapper.Map<ShipmentResponse>(shipment);
         }
 
-        public async Task<ShipmentResponse> CreateAsync(CreateShipmentRequest request)
+        public async Task<ShipmentResponse> CreateAsync(string userId, CreateShipmentRequest request)
         {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.CustomerProfile == null)
+                throw new BusinessRuleException("User not found or does not have a customer profile.");
+
             var quote = await _unitOfWork.Quotes.GetByIdAsync(request.QuoteId);
-            if (quote == null)
+            if (quote == null || quote.CustomerId != user.CustomerProfile.Id)
                 throw new BusinessRuleException("Quote not found.");
 
             var carrier = await _unitOfWork.Carriers.GetByIdAsync(request.CarrierId);
@@ -112,13 +127,17 @@ namespace Infrastructure.Services.Shipments.Core
             return _mapper.Map<ShipmentResponse>(shipment);
         }
 
-        public async Task<bool> DeleteAsync(Guid id)
+        public async Task<bool> DeleteAsync(Guid id, string userId)
         {
-            var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(id);
-            if (shipment == null)
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.CustomerProfile == null)
                 return false;
 
-            if (shipment.Status == ShipmentStatus.Delivered)
+            var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(id);
+            if (shipment == null || shipment.CustomerId != user.CustomerProfile.Id)
+                return false;
+
+            if (!ShipmentStatusRules.CanModifyCharges(shipment.Status))
                 throw new BusinessRuleException("Cannot delete delivered shipment.");
 
             _unitOfWork.Shipments.Delete(shipment);
@@ -134,18 +153,49 @@ namespace Infrastructure.Services.Shipments.Core
             return _mapper.Map<IReadOnlyList<ShipmentResponse>>(shipments);
         }
 
-        public async Task<ShipmentResponse?> GetByIdAsync(Guid id)
+        public async Task<IReadOnlyList<ShipmentResponse>> GetAllForUserAsync(string userId, ShipmentParameters parameters)
         {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.CustomerProfile == null)
+                return new List<ShipmentResponse>();
+
+            var shipments = await _unitOfWork.Shipments.GetAllForUserAsync(user.CustomerProfile.Id, parameters);
+            if (shipments == null || shipments.Count == 0)
+                return new List<ShipmentResponse>();
+
+            return _mapper.Map<IReadOnlyList<ShipmentResponse>>(shipments);
+        }
+
+        public async Task<ShipmentResponse?> GetByIdAsync(Guid id, string userId, bool isPrivileged)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return null;
+
             var shipment = await _unitOfWork.Shipments.GetByIdWithDetailsAsync(id);
             if (shipment == null)
                 return null;
+
+            if (isPrivileged)
+                return _mapper.Map<ShipmentResponse>(shipment);
+
+            if (user.CustomerProfile == null)
+                return null;
+
+            if (shipment.CustomerId != user.CustomerProfile.Id)
+                return null;
+
             return _mapper.Map<ShipmentResponse>(shipment);
         }
 
-        public async Task<ShipmentResponse?> UpdateAsync(Guid id, UpdateShipmentRequest request)
+        public async Task<ShipmentResponse?> UpdateAsync(Guid id, string userId, UpdateShipmentRequest request)
         {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.CustomerProfile == null)
+                return null;
+
             var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(id);
-            if (shipment == null)
+            if (shipment == null || shipment.CustomerId != user.CustomerProfile.Id)
                 return null;
 
             if (shipment.Status == ShipmentStatus.Delivered)
@@ -158,7 +208,7 @@ namespace Infrastructure.Services.Shipments.Core
                 request.CarrierId = shipment.CarrierId;
 
             var quote = await _unitOfWork.Quotes.GetByIdAsync(request.QuoteId.Value);
-            if (quote == null)
+            if (quote == null || quote.CustomerId != user.CustomerProfile.Id)
                 throw new BusinessRuleException("Quote not found.");
 
             var carrier = await _unitOfWork.Carriers.GetByIdAsync(request.CarrierId.Value);

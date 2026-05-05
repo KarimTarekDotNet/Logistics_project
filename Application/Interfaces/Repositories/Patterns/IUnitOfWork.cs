@@ -1,4 +1,5 @@
-﻿using Application.Interfaces.Repositories.Pricing.PricingEngine;
+﻿using Application.Interfaces.Repositories.Pricing.Imports;
+using Application.Interfaces.Repositories.Pricing.PricingEngine;
 using Application.Interfaces.Repositories.Pricing.Quotation;
 using Application.Interfaces.Repositories.Shipments.Core;
 using Application.Interfaces.Repositories.Shipments.User;
@@ -20,6 +21,7 @@ namespace Application.Interfaces.Repositories.Patterns
         IShipmentItemRepository ShipmentItems { get; }
         IShipmentChargeRepository ShipmentCharges { get; }
         IShipmentStatusHistoryRepository StatusHistoryRepositories { get; }
+        IIntegrationMessageRepository IntegrationMessage { get; }
 
         Task<int> SaveChangesAsync();
         Task BeginTransactionAsync();

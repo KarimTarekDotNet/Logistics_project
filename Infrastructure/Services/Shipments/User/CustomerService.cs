@@ -5,6 +5,7 @@ using Application.Interfaces.Services.Shipments.User;
 using Application.Models;
 using AutoMapper;
 using Domain.Entities.Users;
+using Domain.Enums;
 using Domain.Exceptions;
 
 namespace Infrastructure.Services.Shipments.User
@@ -49,7 +50,7 @@ namespace Infrastructure.Services.Shipments.User
                 if (!taxValid.IsValid)
                     throw new BusinessRuleException("Invalid tax number.");
 
-                var taxExists = await _unitOfWork.Customers.TaxNumberExistsAsync(request.TaxNumber, request.CountryCode);
+                var taxExists = await _unitOfWork.Customers.TaxNumberExistsAsync(taxNumber, countryCode);
 
                 if (taxExists)
                     throw new BusinessRuleException("Invalid tax number.");
@@ -72,7 +73,7 @@ namespace Infrastructure.Services.Shipments.User
         {
             var customer = await _unitOfWork.Customers.GetByApplicationUserIdAsync(userId);
 
-            if (customer == null)
+            if (customer == null || customer.IsDeleted)
                 throw new KeyNotFoundException("Customer not found.");
 
             if (!request.DateOfBirth.HasValue)
@@ -114,7 +115,7 @@ namespace Infrastructure.Services.Shipments.User
                     throw new BusinessRuleException("Invalid tax number.");
 
                 var taxExists = await _unitOfWork.Customers.
-                    TaxNumberExistsAsync(request.TaxNumber, request.CountryCode, customer.Id);
+                    TaxNumberExistsAsync(taxNumber, countryCode, customer.Id);
 
                 if (taxExists)
                     throw new BusinessRuleException("Tax number already exists.");
@@ -134,10 +135,24 @@ namespace Infrastructure.Services.Shipments.User
 
         public async Task<bool> DeleteCustomerAsync(string userId)
         {
-            var customer = await _unitOfWork.Customers.GetByApplicationUserIdAsync(userId);
+            var customer = await _unitOfWork.Customers.GetDetailsByApplicationUserIdAsync(userId);
 
-            if (customer == null)
+            if (customer == null || customer.IsDeleted)
                 throw new KeyNotFoundException("Customer not found.");
+
+            var hasActiveShipments = customer.Shipments.Any(s =>
+                !s.IsDeleted &&
+                s.Status != ShipmentStatus.Delivered &&
+                s.Status != ShipmentStatus.Closed &&
+                s.Status != ShipmentStatus.Cancelled);
+
+            if (hasActiveShipments)
+                throw new BusinessRuleException("Cannot delete customer with active shipments.");
+
+            var hasActiveQuotes = customer.Quotes.Any(q => !q.IsDeleted);
+
+            if (hasActiveQuotes)
+                throw new BusinessRuleException("Cannot delete customer with active quotes.");
 
             customer.IsDeleted = true;
             customer.DeletedAt = DateTimeOffset.UtcNow;
@@ -151,7 +166,7 @@ namespace Infrastructure.Services.Shipments.User
         {
             var customer = await _unitOfWork.Customers.GetDetailsByApplicationUserIdAsync(userId);
 
-            return customer == null ? null : _mapper.Map<CustomerResponse>(customer);
+            return customer == null || customer.IsDeleted ? null : _mapper.Map<CustomerResponse>(customer);
         }
 
         public async Task<IEnumerable<CustomerResponse>> GetAllAsync(CustomerParameters parameters)

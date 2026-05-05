@@ -93,7 +93,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                 throw new KeyNotFoundException("Route not found.");
 
             if (!PortRules.AreDistinct(dto.FromPortId, dto.ToPortId))
-                throw new ArgumentException("Origin and destination ports must be different.");
+                throw new BusinessRuleException("Origin and destination ports must be different.");
 
             var fromPort = await _unitOfWork.Ports.GetByIdAsync(dto.FromPortId);
             if (fromPort == null || fromPort.IsDeleted)

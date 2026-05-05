@@ -28,5 +28,28 @@ namespace Application.ApplicationRules.Shipments
                 _ => false
             };
         }
+
+        public static bool CanModifyCharges(ShipmentStatus status)
+        {
+            return status is not (
+                ShipmentStatus.PaymentCompleted or
+                ShipmentStatus.TelexReleased or
+                ShipmentStatus.Delivered or
+                ShipmentStatus.Closed or
+                ShipmentStatus.Cancelled
+            );
+        }
+
+        public static bool CanModifyItems(ShipmentStatus status)
+        {
+            return status is not (
+                ShipmentStatus.ShippingInstructionsSubmitted or
+                ShipmentStatus.PaymentCompleted or
+                ShipmentStatus.TelexReleased or
+                ShipmentStatus.Delivered or
+                ShipmentStatus.Closed or
+                ShipmentStatus.Cancelled
+            );
+        }
     }
 }

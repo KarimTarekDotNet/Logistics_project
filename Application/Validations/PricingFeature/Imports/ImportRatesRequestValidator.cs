@@ -1,8 +1,5 @@
 ﻿using Application.DTOs.Pricing.Imports;
 using FluentValidation;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Application.Validations.PricingFeature.Imports
 {
@@ -11,8 +8,7 @@ namespace Application.Validations.PricingFeature.Imports
         public ImportRatesRequestValidator()
         {
             RuleFor(x => x.Source)
-                .NotEmpty().WithMessage("Source is required.")
-                .MaximumLength(50);
+                .NotEmpty().IsInEnum().WithMessage("Source is required.");
 
             RuleFor(x => x.Rates)
                 .NotNull().WithMessage("Rates list cannot be null.")

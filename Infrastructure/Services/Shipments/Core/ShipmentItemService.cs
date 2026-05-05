@@ -1,31 +1,39 @@
-﻿using Application.DTOs.Shipments.Core;
+﻿using Application.ApplicationRules.Shipments;
+using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Services.Shipments.Core;
 using AutoMapper;
 using Domain.Entities.Shipments;
+using Domain.Entities.Users;
 using Domain.Enums;
 using Domain.Exceptions;
+using Microsoft.AspNetCore.Identity;
 
 namespace Infrastructure.Services.Shipments.Core
 {
     public class ShipmentItemService : IShipmentItemService
     {
+        private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
-        public ShipmentItemService(IUnitOfWork unitOfWork, IMapper mapper)
+        public ShipmentItemService(IUnitOfWork unitOfWork, IMapper mapper, UserManager<ApplicationUser> userManager)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _userManager = userManager;
         }
 
-        public async Task<ShipmentItemResponse> CreateAsync(CreateShipmentItemRequest request)
+        public async Task<ShipmentItemResponse> CreateAsync(CreateShipmentItemRequest request, string userId)
         {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.CustomerProfile == null)
+                throw new Exception("User not found");
             var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(request.ShipmentId);
-            if(shipment == null)
+            if(shipment == null || shipment.CustomerId != user.CustomerProfile.Id)
                 throw new KeyNotFoundException($"Shipment with not found.");
 
-            if(shipment.Status == ShipmentStatus.Delivered || shipment.Status == ShipmentStatus.Closed)
-                throw new BusinessRuleException($"Cannot add items to a delivered/closed shipment.");
+            if(!ShipmentStatusRules.CanModifyItems(shipment.Status))
+                throw new BusinessRuleException($"Cannot add items.");
 
             var shipmentItem = new ShipmentItem
             {
@@ -41,10 +49,14 @@ namespace Infrastructure.Services.Shipments.Core
             return _mapper.Map<ShipmentItemResponse>(shipmentItem);
         }
 
-        public async Task<bool> DeleteAsync(Guid id)
+        public async Task<bool> DeleteAsync(Guid id, string userId)
         {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.CustomerProfile == null)
+                throw new Exception("User not found");
+
             var shipmentItem = await _unitOfWork.ShipmentItems.GetByIdAsync(id);
-            if (shipmentItem == null)
+            if (shipmentItem == null || shipmentItem.Shipment.CustomerId != user.CustomerProfile.Id)
                 return false;
 
             var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(shipmentItem.ShipmentId);
@@ -52,7 +64,7 @@ namespace Infrastructure.Services.Shipments.Core
             if (shipment == null)
                 throw new KeyNotFoundException("Shipment not found.");
 
-            if (shipment.Status == ShipmentStatus.Delivered || shipment.Status == ShipmentStatus.Closed)
+            if (!ShipmentStatusRules.CanModifyItems(shipment.Status))
                 throw new BusinessRuleException("Cannot delete items from a delivered/closed shipment.");
 
             _unitOfWork.ShipmentItems.Delete(shipmentItem);
@@ -60,37 +72,66 @@ namespace Infrastructure.Services.Shipments.Core
             return true;
         }
 
-        public async Task<ShipmentItemResponse?> GetByIdAsync(Guid id)
+        public async Task<ShipmentItemResponse?> GetByIdAsync(Guid id, string userId, bool isPrivileged)
         {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                throw new Exception("User not found");
+
             var shipmentItem = await _unitOfWork.ShipmentItems.GetByIdAsync(id);
             if(shipmentItem == null)
+                return null;
+
+            if(isPrivileged)
+                return _mapper.Map<ShipmentItemResponse>(shipmentItem);
+
+            if(user.CustomerProfile == null)
+                throw new Exception("User not found");
+
+            if (user.CustomerProfile.Id != shipmentItem.Shipment.CustomerId)
                 return null;
 
             return _mapper.Map<ShipmentItemResponse>(shipmentItem);
         }
 
-        public async Task<IReadOnlyList<ShipmentItemResponse>> GetByShipmentIdAsync(Guid shipmentId)
+        public async Task<IReadOnlyList<ShipmentItemResponse>> GetByShipmentIdAsync(Guid shipmentId, string userId, bool isPrivileged)
         {
-            var shipmentItems = await _unitOfWork.ShipmentItems.GetByShipmentIdAsync(shipmentId);
-            if(!shipmentItems.Any())
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null )
+                throw new Exception("User not found");
+
+            var shipment = await _unitOfWork.Shipments.GetByIdWithDetailsAsync(shipmentId);
+
+            if (shipment == null)
                 return new List<ShipmentItemResponse>();
 
+            if (!isPrivileged)
+            {
+                if (user.CustomerProfile == null || shipment.CustomerId != user.CustomerProfile.Id)
+                    return new List<ShipmentItemResponse>();
+            }
+
+            var shipmentItems = await _unitOfWork.ShipmentItems.GetByShipmentIdAsync(shipmentId);
             return _mapper.Map<IReadOnlyList<ShipmentItemResponse>>(shipmentItems);
         }
 
-        public async Task<ShipmentItemResponse?> UpdateAsync(Guid id, UpdateShipmentItemRequest request)
+        public async Task<ShipmentItemResponse?> UpdateAsync(Guid id, string userId, UpdateShipmentItemRequest request)
         {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.CustomerProfile == null)
+                throw new Exception("User not found");
+
             var shipmentItem = await _unitOfWork.ShipmentItems.GetByIdAsync(id);
             if (shipmentItem == null)
                 return null;
 
             var currentShipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(shipmentItem.ShipmentId);
 
-            if (currentShipment == null)
+            if (currentShipment == null || currentShipment.CustomerId != user.CustomerProfile.Id)
                 throw new KeyNotFoundException("Shipment not found.");
 
-            if (currentShipment.Status == ShipmentStatus.Delivered || currentShipment.Status == ShipmentStatus.Closed)
-                throw new BusinessRuleException("Cannot update items in a delivered/closed shipment.");
+            if (!ShipmentStatusRules.CanModifyItems(currentShipment.Status))
+                throw new BusinessRuleException("Cannot update items.");
 
             if (!request.ShipmentId.HasValue)
                 request.ShipmentId = shipmentItem.ShipmentId;
@@ -107,10 +148,11 @@ namespace Infrastructure.Services.Shipments.Core
             if(request.ShipmentId != shipmentItem.ShipmentId)
             {
                 var newShipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(request.ShipmentId.Value);
-                if(newShipment == null)
+                if(newShipment == null || newShipment.CustomerId != user.CustomerProfile.Id)
                     throw new KeyNotFoundException($"Shipment with not found.");
-                if(newShipment.Status == ShipmentStatus.Delivered || newShipment.Status == ShipmentStatus.Closed)
-                    throw new BusinessRuleException($"Cannot move item to a delivered/closed shipment.");
+
+                if(!ShipmentStatusRules.CanModifyItems(newShipment.Status))
+                    throw new BusinessRuleException($"Cannot move item to.");
 
                 shipmentItem.ShipmentId = request.ShipmentId.Value;
             }

@@ -24,7 +24,6 @@ namespace Infrastructure.Repositories.Shipments.Core
         {
             shipment.IsDeleted = true;
             shipment.DeletedAt = DateTimeOffset.UtcNow;
-            _context.Shipments.Update(shipment);
         }
 
         public async Task<bool> ExistsAsync(Guid id)
@@ -54,47 +53,22 @@ namespace Infrastructure.Repositories.Shipments.Core
                 .Include(s => s.Carrier)
                 .Where(s => !s.IsDeleted);
 
-            if (parameters.CreatedFrom.HasValue)
-                query = query.Where(c => c.CreatedAt >= parameters.CreatedFrom.Value);
+            return await paginate(query, parameters);
+                
+        }
 
-            if (parameters.CreatedTo.HasValue)
-                query = query.Where(c => c.CreatedAt <= parameters.CreatedTo.Value);
-
-            if (parameters.DeliveredFrom.HasValue)
-                query = query.Where(c => c.DeliveredAt >= parameters.DeliveredFrom.Value);
-
-            if (parameters.DeliveredTo.HasValue)
-                query = query.Where(c => c.DeliveredAt <= parameters.DeliveredTo.Value);
-
-            if (!string.IsNullOrWhiteSpace(parameters.Search))
-            {
-                var term = $"%{parameters.Search.Trim()}%";
-
-                query = query.Where(c =>
-                    EF.Functions.Like(c.Carrier.Name!, term) ||
-                    EF.Functions.Like(c.Carrier.Code!, term) ||
-                    EF.Functions.Like(c.Currency!, term) ||
-                    EF.Functions.Like(c.ContainerType.Name!, term));
-            }
-
-            query = parameters.SortBy?.ToLower() switch
-            {
-                "createdat_asc" => query.OrderBy(c => c.CreatedAt),
-                "createdat_desc" => query.OrderByDescending(c => c.CreatedAt),
-
-                "deliveredat_asc" => query.OrderBy(c => c.DeliveredAt),
-                "deliveredat_desc" => query.OrderByDescending(c => c.DeliveredAt),
-
-                "currency_asc" => query.OrderBy(c => c.Currency),
-                "currency_desc" => query.OrderByDescending(c => c.Currency),
-
-                _ => query.OrderByDescending(c => c.CreatedAt)
-            };
-
-            return await query
-                .Skip((parameters.PageNumber - 1) * parameters.PageSize)
-                .Take(parameters.PageSize)
-                .ToListAsync();
+        public async Task<IReadOnlyList<Shipment>> GetAllForUserAsync(Guid customerId, ShipmentParameters parameters)
+        {
+            var query = _context.Shipments
+                .AsNoTracking()
+                .Include(s => s.Quote)
+                .Include(s => s.Customer).ThenInclude(c => c.ApplicationUser)
+                .Include(s => s.Route).ThenInclude(r => r.FromPort)
+                .Include(s => s.Route).ThenInclude(r => r.ToPort)
+                .Include(s => s.ContainerType)
+                .Include(s => s.Carrier)
+                .Where(s => !s.IsDeleted && s.CustomerId == customerId);
+            return await paginate(query, parameters);
         }
 
         public async Task<Shipment?> GetByIdAsync(Guid id)
@@ -132,6 +106,50 @@ namespace Infrastructure.Repositories.Shipments.Core
         public void Update(Shipment shipment)
         {
             _context.Update(shipment);
+        }
+
+        private async Task<IReadOnlyList<Shipment>> paginate(IQueryable<Shipment> query, ShipmentParameters parameters)
+        {
+            if (parameters.CreatedFrom.HasValue)
+                query = query.Where(c => c.CreatedAt >= parameters.CreatedFrom.Value);
+
+            if (parameters.CreatedTo.HasValue)
+                query = query.Where(c => c.CreatedAt <= parameters.CreatedTo.Value);
+
+            if (parameters.DeliveredFrom.HasValue)
+                query = query.Where(c => c.DeliveredAt >= parameters.DeliveredFrom.Value);
+
+            if (parameters.DeliveredTo.HasValue)
+                query = query.Where(c => c.DeliveredAt <= parameters.DeliveredTo.Value);
+
+            if (!string.IsNullOrWhiteSpace(parameters.Search))
+            {
+                var term = $"%{parameters.Search.Trim()}%";
+
+                query = query.Where(c =>
+                    EF.Functions.Like(c.Carrier.Name!, term) ||
+                    EF.Functions.Like(c.Carrier.Code!, term) ||
+                    EF.Functions.Like(c.Currency!, term) ||
+                    EF.Functions.Like(c.ContainerType.Name!, term));
+            }
+
+            query = parameters.SortBy?.ToLower() switch
+            {
+                "createdat_asc" => query.OrderBy(c => c.CreatedAt),
+                "createdat_desc" => query.OrderByDescending(c => c.CreatedAt),
+
+                "deliveredat_asc" => query.OrderBy(c => c.DeliveredAt),
+                "deliveredat_desc" => query.OrderByDescending(c => c.DeliveredAt),
+
+                "currency_asc" => query.OrderBy(c => c.Currency),
+                "currency_desc" => query.OrderByDescending(c => c.Currency),
+
+                _ => query.OrderByDescending(c => c.CreatedAt)
+            };
+            query = query
+                .Skip((parameters.PageNumber - 1) * parameters.PageSize)
+                .Take(parameters.PageSize);
+            return await query.ToListAsync();
         }
     }
 }

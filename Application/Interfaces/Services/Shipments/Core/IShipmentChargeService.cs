@@ -4,8 +4,8 @@ namespace Application.Interfaces.Services.Shipments.Core
 {
     public interface IShipmentChargeService
     {
-        Task<ShipmentChargeResponse?> GetByIdAsync(Guid id);
-        Task<IReadOnlyList<ShipmentChargeResponse>> GetByShipmentIdAsync(Guid shipmentId);
+        Task<ShipmentChargeResponse?> GetByIdAsync(Guid id, string userId, bool isPrivileged);
+        Task<IReadOnlyList<ShipmentChargeResponse>> GetByShipmentIdAsync(Guid shipmentId, string userId, bool isPrivileged);
 
         Task<ShipmentChargeResponse> CreateAsync(CreateShipmentChargeRequest request);
         Task<ShipmentChargeResponse?> UpdateAsync(Guid id, UpdateShipmentChargeRequest request);

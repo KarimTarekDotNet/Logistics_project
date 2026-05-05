@@ -5,27 +5,42 @@ using Application.Interfaces.Services.Pricing.Quotation;
 using Application.Models;
 using AutoMapper;
 using Domain.Entities.Pricing.Quotation;
+using Domain.Entities.Users;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Services.Pricing.Quotation
 {
     public class QuoteService : IQuoteService
     {
+        private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
 
-        public QuoteService(IUnitOfWork unitOfWork, IMapper mapper)
+        public QuoteService(IUnitOfWork unitOfWork, IMapper mapper, UserManager<ApplicationUser> userManager)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _userManager = userManager;
         }
 
-        public async Task<QuoteResponse?> GetByIdAsync(Guid id)
+        public async Task<QuoteResponse?> GetByIdAsync(Guid id, string userId, bool isAdminOrStaff)
         {
-            var quote = await _unitOfWork.Quotes.GetWithItemsAsync(id);
-            if (quote == null || quote.IsDeleted)
-                return null;
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.CustomerProfile == null)
+                throw new KeyNotFoundException("User not found.");
 
+            var quote = await _unitOfWork.Quotes.GetWithItemsAsync(id);
+            if (isAdminOrStaff)
+            { 
+                if (quote == null || quote.IsDeleted)
+                    return null;
+            }
+            else
+            {
+                if (quote == null || quote.IsDeleted || quote.CustomerId != user.CustomerProfile.Id)
+                    return null;
+            }
             return _mapper.Map<QuoteResponse>(quote);
         }
 
@@ -100,7 +115,6 @@ namespace Infrastructure.Services.Pricing.Quotation
                 }
             }
 
-            _unitOfWork.Quotes.Update(quote);
             await _unitOfWork.SaveChangesAsync();
         }
     }

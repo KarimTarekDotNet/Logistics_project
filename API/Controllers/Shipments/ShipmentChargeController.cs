@@ -1,12 +1,17 @@
 ﻿using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Services.Shipments.Core;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace API.Controllers.Shipments
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
+    [EnableRateLimiting("ReadPolicy")]
     public class ShipmentChargeController : ControllerBase
     {
         private readonly IShipmentChargeService shipmentChargeService;
@@ -19,7 +24,10 @@ namespace API.Controllers.Shipments
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            var charge = await shipmentChargeService.GetByIdAsync(id);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
+
+            var charge = await shipmentChargeService.GetByIdAsync(id, userId, isPrivileged);
             if (charge == null)
                 return NotFound();
 
@@ -29,7 +37,9 @@ namespace API.Controllers.Shipments
         [HttpGet("shipment/{shipmentId}")]
         public async Task<IActionResult> GetByShipmentId(Guid shipmentId)
         {
-            var charges = await shipmentChargeService.GetByShipmentIdAsync(shipmentId);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
+            var charges = await shipmentChargeService.GetByShipmentIdAsync(shipmentId, userId, isPrivileged);
             if (!charges.Any())
                 return NotFound();
 
@@ -37,6 +47,8 @@ namespace API.Controllers.Shipments
         }
 
         [HttpPost]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Create(CreateShipmentChargeRequest request)
         {
             var createdCharge = await shipmentChargeService.CreateAsync(request);
@@ -44,6 +56,8 @@ namespace API.Controllers.Shipments
         }
 
         [HttpPut("{id}")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Update(Guid id, UpdateShipmentChargeRequest request)
         {
             var updatedCharge = await shipmentChargeService.UpdateAsync(id, request);
@@ -54,6 +68,8 @@ namespace API.Controllers.Shipments
         }
 
         [HttpDelete("{id}")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var deleted = await shipmentChargeService.DeleteAsync(id);

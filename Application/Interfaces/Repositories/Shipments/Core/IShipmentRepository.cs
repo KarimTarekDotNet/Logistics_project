@@ -10,6 +10,7 @@ namespace Application.Interfaces.Repositories.Shipments.Core
         Task<Shipment?> GetTrackedByIdWithDetailsAsync(Guid id);
 
         Task<IReadOnlyList<Shipment>> GetAllAsync(ShipmentParameters parameters);
+        Task<IReadOnlyList<Shipment>> GetAllForUserAsync(Guid customerId, ShipmentParameters parameters);
 
         Task AddAsync(Shipment shipment);
         void Update(Shipment shipment);

@@ -71,7 +71,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                 dto.Code = carrier.Code;
 
             if (!CarrierRule.IsCodeMatch(dto.Code))
-                throw new Exception("Carrier code must be exactly 4 uppercase letters (SCAC format).");
+                throw new BusinessRuleException("Carrier code must be exactly 4 uppercase letters (SCAC format).");
 
             var existing = await _unitOfWork.Carriers.GetByNameOrCodeAsync(dto.Code);
             if (existing != null && !existing.IsDeleted && existing.Id != id)

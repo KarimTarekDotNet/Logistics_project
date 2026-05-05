@@ -11,6 +11,7 @@ using Application.DTOs.Auth;
 using Domain.Entities.Shipments;
 using Application.DTOs.Shipments.User;
 using Application.DTOs.Shipments.Core;
+using Application.DTOs.User;
 
 namespace API.Mapping
 {
@@ -69,6 +70,8 @@ namespace API.Mapping
             CreateMap<LoginRequest, ApplicationUser>();
             CreateMap<RegisterRequest, ApplicationUser>();
 
+
+            // ── Customer ────────────────────────────────────────────────────
             CreateMap<Customer, CustomerResponse>()
                 .ForMember(d => d.Shipments, o => o.MapFrom(s => s.Shipments))
                 .ForMember(d => d.Quotes, o => o.MapFrom(s => s.Quotes));
@@ -98,6 +101,14 @@ namespace API.Mapping
                 o => o.MapFrom(s => s.ToStatus.ToString()))
                 .ForMember(d => d.FromStatus,
                 o => o.MapFrom(s => s.FromStatus.ToString()));
+
+
+            // ── Profile ────────────────────────────────────────────────────
+            CreateMap<ApplicationUser, ProfileResponse>()
+                .ForMember(d => d.Name, o => o.MapFrom(s => $"{s.FirstName} {s.LastName}".Trim()))
+                .ForMember(d => d.Customer, o => o.MapFrom(s => s.CustomerProfile));
+            CreateMap<UpdateProfileRequest, ApplicationUser>();
+            CreateMap<UpdatePasswordRequest, ApplicationUser>();
         }
     }
 }

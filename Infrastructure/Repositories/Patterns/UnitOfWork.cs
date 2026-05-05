@@ -1,4 +1,5 @@
 ﻿using Application.Interfaces.Repositories.Patterns;
+using Application.Interfaces.Repositories.Pricing.Imports;
 using Application.Interfaces.Repositories.Pricing.PricingEngine;
 using Application.Interfaces.Repositories.Pricing.Quotation;
 using Application.Interfaces.Repositories.Shipments.Core;
@@ -25,6 +26,7 @@ namespace Infrastructure.Repositories.Patterns
         public IShipmentItemRepository ShipmentItems { get; }
         public IShipmentChargeRepository ShipmentCharges { get; }
         public IShipmentStatusHistoryRepository StatusHistoryRepositories { get; }
+        public IIntegrationMessageRepository IntegrationMessage { get; }
 
         public UnitOfWork(
             ApplicationDbContext context,
@@ -38,7 +40,8 @@ namespace Infrastructure.Repositories.Patterns
             IShipmentRepository shipmentRepository,
             IShipmentItemRepository shipmentItemRepository,
             IShipmentChargeRepository shipmentChargeRepository,
-            IShipmentStatusHistoryRepository shipmentStatusHistoryRepository)
+            IShipmentStatusHistoryRepository shipmentStatusHistoryRepository,
+            IIntegrationMessageRepository integrationMessage)
         {
             _context = context;
             Carriers = carrierRepository;
@@ -52,6 +55,7 @@ namespace Infrastructure.Repositories.Patterns
             ShipmentItems = shipmentItemRepository;
             ShipmentCharges = shipmentChargeRepository;
             StatusHistoryRepositories = shipmentStatusHistoryRepository;
+            IntegrationMessage = integrationMessage;
         }
 
         public async Task<int> SaveChangesAsync()

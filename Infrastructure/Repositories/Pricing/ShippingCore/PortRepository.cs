@@ -16,7 +16,7 @@ namespace Infrastructure.Repositories.Pricing.ShippingCore
         }
         public async Task<Port?> GetByCodeAsync(string code)
         {
-            var normalizedCode = code.Trim().ToLower();
+            var normalizedCode = code.Replace(" ", "").Trim().ToLower();
             var port = await _context.Ports.FirstOrDefaultAsync(p => EF.Functions.Like(p.Code, normalizedCode));
             return port;
         }

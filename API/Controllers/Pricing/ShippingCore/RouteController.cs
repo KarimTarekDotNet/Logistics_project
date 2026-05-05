@@ -1,6 +1,7 @@
 ﻿using Application.DTOs.ShippingCore;
 using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -63,6 +64,8 @@ namespace API.Controllers.Pricing.ShippingCore
         }
 
         [HttpPost]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreateRoute([FromBody] CreateRouteRequest request)
         {
             var result = await _routeService.CreateAsync(request);
@@ -71,6 +74,8 @@ namespace API.Controllers.Pricing.ShippingCore
         }
 
         [HttpPut("{id:guid}")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdateRoute(Guid id, [FromBody] UpdateRouteRequest request)
         {
             var updated = await _routeService.UpdateAsync(id, request);
@@ -82,12 +87,10 @@ namespace API.Controllers.Pricing.ShippingCore
         }
 
         [HttpDelete("{id:guid}")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteRoute(Guid id)
         {
-            var exists = await _routeService.GetByIdAsync(id);
-            if (exists == null)
-                return NotFound(new { message = "Route not found" });
-
             await _routeService.DeleteAsync(id);
 
             return Ok(new { message = "Route deleted successfully" });

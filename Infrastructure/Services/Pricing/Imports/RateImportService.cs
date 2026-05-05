@@ -2,8 +2,10 @@
 using Application.DTOs.Pricing.Imports;
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Services.Pricing.Imports;
+using Domain.Entities.Pricing.Imports;
 using Domain.Entities.Pricing.PricingEngine;
 using Domain.Entities.ShippingCore;
+using Domain.Enums;
 
 namespace Infrastructure.Services.Pricing.Imports
 {
@@ -29,6 +31,19 @@ namespace Infrastructure.Services.Pricing.Imports
                 {
                     var result = await ExecuteInTransactionAsync(async () =>
                     {
+                        var alreadyProcessed = await _unitOfWork.IntegrationMessage
+                            .ExistsAsync(item.ExternalMessageId, request.Source);
+
+                        if (alreadyProcessed)
+                        {
+                            return new ImportRateItemResult
+                            {
+                                ExternalMessageId = item.ExternalMessageId,
+                                Status = "Skipped",
+                                Message = "Message already processed."
+                            };
+                        }
+
                         var references = await ResolveReferencesAsync(item);
 
                         var existingRate = await GetExistingRateAsync(
@@ -36,11 +51,13 @@ namespace Infrastructure.Services.Pricing.Imports
                             references.Route.Id,
                             references.ContainerType.Id);
 
+                        ImportRateItemResult result;
+
                         if (existingRate == null)
                         {
                             var newRate = await CreateRateAsync(item, references);
 
-                            return new ImportRateItemResult
+                            result = new ImportRateItemResult
                             {
                                 ExternalMessageId = item.ExternalMessageId,
                                 Status = "Imported",
@@ -48,10 +65,9 @@ namespace Infrastructure.Services.Pricing.Imports
                                 RateId = newRate.Id
                             };
                         }
-
-                        if (!HasChanges(existingRate, item))
+                        else if (!HasChanges(existingRate, item))
                         {
-                            return new ImportRateItemResult
+                            result = new ImportRateItemResult
                             {
                                 ExternalMessageId = item.ExternalMessageId,
                                 Status = "Skipped",
@@ -59,20 +75,31 @@ namespace Infrastructure.Services.Pricing.Imports
                                 RateId = existingRate.Id
                             };
                         }
+                        else
+                        {
+                            await UpdateRateAsync(existingRate, item);
 
-                        await UpdateRateAsync(existingRate, item);
+                            result = new ImportRateItemResult
+                            {
+                                ExternalMessageId = item.ExternalMessageId,
+                                Status = "Updated",
+                                Message = "Rate updated successfully.",
+                                RateId = existingRate.Id
+                            };
+                        }
 
-                        return new ImportRateItemResult
+                        await _unitOfWork.IntegrationMessage.AddAsync(new IntegrationMessage
                         {
                             ExternalMessageId = item.ExternalMessageId,
-                            Status = "Updated",
-                            Message = "Rate updated successfully.",
-                            RateId = existingRate.Id
-                        };
+                            Source = request.Source,
+                            Status = Status.Processed,
+                            CreatedAt = DateTimeOffset.UtcNow
+                        });
+
+                        return result;
                     });
 
                     response.Results.Add(result);
-
                     switch (result.Status)
                     {
                         case "Imported":
@@ -86,15 +113,23 @@ namespace Infrastructure.Services.Pricing.Imports
                             break;
                     }
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     response.Failed++;
                     response.Results.Add(new ImportRateItemResult
                     {
                         ExternalMessageId = item.ExternalMessageId,
                         Status = "Failed",
-                        Message = ex.Message
+                        Message = "Failed to import rate item."
                     });
+                    await _unitOfWork.IntegrationMessage.AddAsync(new IntegrationMessage
+                    {
+                        ExternalMessageId = item.ExternalMessageId,
+                        Source = request.Source,
+                        Status = Status.Failed,
+                        CreatedAt = DateTimeOffset.UtcNow
+                    });
+                    await _unitOfWork.SaveChangesAsync();
                 }
             }
 
@@ -108,6 +143,7 @@ namespace Infrastructure.Services.Pricing.Imports
             try
             {
                 var result = await action();
+                await _unitOfWork.SaveChangesAsync();
                 await _unitOfWork.CommitTransactionAsync();
                 return result;
             }
@@ -183,7 +219,6 @@ namespace Infrastructure.Services.Pricing.Imports
             }
 
             await _unitOfWork.Rates.AddAsync(newRate);
-            await _unitOfWork.SaveChangesAsync();
 
             return newRate;
         }
@@ -207,7 +242,6 @@ namespace Infrastructure.Services.Pricing.Imports
             }
 
             _unitOfWork.Rates.Update(existingRate);
-            await _unitOfWork.SaveChangesAsync();
         }
 
         private async Task DeactivateOtherActiveRatesAsync(Guid carrierId, Guid routeId, Guid containerTypeId, Guid? excludeRateId = null)

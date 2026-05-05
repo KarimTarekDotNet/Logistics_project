@@ -37,7 +37,6 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                 }
 
                 await _unitOfWork.Rates.AddAsync(rate);
-                await _unitOfWork.SaveChangesAsync();
 
                 var createdRate = await GetRateWithDetailsOrThrowAsync(rate.Id);
 
@@ -61,7 +60,6 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                 rate.DeletedAt = DateTimeOffset.UtcNow;
 
                 _unitOfWork.Rates.Update(rate);
-                await _unitOfWork.SaveChangesAsync();
 
                 return true;
             });
@@ -104,7 +102,6 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                 }
 
                 _unitOfWork.Rates.Update(rate);
-                await _unitOfWork.SaveChangesAsync();
 
                 return _mapper.Map<RateResponse>(rate);
             });
@@ -150,7 +147,6 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                 }
 
                 _unitOfWork.Rates.Update(rate);
-                await _unitOfWork.SaveChangesAsync();
 
                 return rate.IsActive;
             });
@@ -162,6 +158,7 @@ namespace Infrastructure.Services.Pricing.PricingEngine
             try
             {
                 var result = await action();
+                await _unitOfWork.SaveChangesAsync();
                 await _unitOfWork.CommitTransactionAsync();
                 return result;
             }

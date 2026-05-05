@@ -1,9 +1,9 @@
 ﻿using Application.DTOs.Pricing.PricingEngine;
 using Application.Interfaces.Services.Pricing.PricingEngine;
 using Application.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace API.Controllers.Pricing.PricingEngine
 {
@@ -20,6 +20,7 @@ namespace API.Controllers.Pricing.PricingEngine
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> SearchAsync([FromQuery] RateParameters query)
         {
             var rates = await _rateService.SearchAsync(query);
@@ -32,6 +33,7 @@ namespace API.Controllers.Pricing.PricingEngine
 
         // GET: api/rates/{id}
         [HttpGet("{id:guid}")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetRateById(Guid id)
         {
             var rate = await _rateService.GetByIdAsync(id);
@@ -44,6 +46,8 @@ namespace API.Controllers.Pricing.PricingEngine
 
         // POST: api/rates
         [HttpPost]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreateRate([FromBody] CreateRateRequest request)
         {
             var result = await _rateService.CreateAsync(request);
@@ -55,6 +59,8 @@ namespace API.Controllers.Pricing.PricingEngine
 
         // PUT: api/rates/{id}
         [HttpPut("{id:guid}")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdateRate(Guid id, [FromBody] UpdateRateRequest request)
         {
             var updated = await _rateService.UpdateAsync(id, request);
@@ -64,6 +70,8 @@ namespace API.Controllers.Pricing.PricingEngine
 
         // DELETE: api/rates/{id}
         [HttpDelete("{id:guid}")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteRate(Guid id)
         {
             await _rateService.DeleteAsync(id);
@@ -73,6 +81,8 @@ namespace API.Controllers.Pricing.PricingEngine
 
         // PATCH: api/rates/{id}/active
         [HttpPatch("{id:guid}/active")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> ChangeRateActive(Guid id)
         {
             var result = await _rateService.ChangeRateActive(id);

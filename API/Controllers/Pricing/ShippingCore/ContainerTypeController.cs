@@ -1,6 +1,7 @@
 ﻿using Application.DTOs.ShippingCore;
 using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -41,6 +42,8 @@ namespace API.Controllers.Pricing.ShippingCore
         }
 
         [HttpPost]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreateContainerType([FromBody] CreateContainerTypeRequest request)
         {
             var result = await _containerTypeService.CreateAsync(request);
@@ -49,6 +52,8 @@ namespace API.Controllers.Pricing.ShippingCore
         }
 
         [HttpPut("{id:guid}")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdateContainerType(Guid id, [FromBody] UpdateContainerTypeRequest request)
         {
             var updated = await _containerTypeService.UpdateAsync(id, request);
@@ -60,12 +65,10 @@ namespace API.Controllers.Pricing.ShippingCore
         }
 
         [HttpDelete("{id:guid}")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteContainerType(Guid id)
         {
-            var exists = await _containerTypeService.GetByIdAsync(id);
-            if (exists == null)
-                return NotFound(new { message = "Container type not found" });
-
             await _containerTypeService.DeleteAsync(id);
 
             return Ok(new { message = "Container type deleted successfully" });

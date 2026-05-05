@@ -25,8 +25,5 @@ namespace Application.DTOs.Pricing.Quotation
         public IReadOnlyList<CreateQuoteItemRequest> Items { get; init; } = null!;
     }
 
-    public record UpdateQuoteRequest(
-        string CustomerName,
-        decimal FinalPrice,
-        string Currency);
+    public record UpdateQuoteRequest(string CustomerName, decimal FinalPrice, string Currency);
 }

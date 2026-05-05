@@ -1,6 +1,7 @@
 ﻿using Application.DTOs.ShippingCore;
 using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -9,6 +10,7 @@ namespace API.Controllers.Pricing.ShippingCore
     [ApiController]
     [Route("api/carriers")]
     [EnableRateLimiting("ReadPolicy")]
+    [Authorize]
     public class CarrierController : ControllerBase
     {
         private readonly ICarrierService _carrierService;
@@ -18,6 +20,7 @@ namespace API.Controllers.Pricing.ShippingCore
             _carrierService = carrierService;
         }
 
+        [AllowAnonymous]
         [HttpGet]
         public async Task<IActionResult> GetAllCarriers([FromQuery] QueryParameters query)
         {
@@ -29,6 +32,7 @@ namespace API.Controllers.Pricing.ShippingCore
             return Ok(carriers);
         }
 
+        [AllowAnonymous]
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetCarrierById(Guid id)
         {
@@ -41,6 +45,8 @@ namespace API.Controllers.Pricing.ShippingCore
         }
 
         [HttpPost]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreateCarrier([FromBody] CreateCarrierRequest request)
         {
             var result = await _carrierService.CreateAsync(request);
@@ -49,6 +55,8 @@ namespace API.Controllers.Pricing.ShippingCore
         }
 
         [HttpPut("{id:guid}")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdateCarrier(Guid id, [FromBody] UpdateCarrierRequest request)
         {
             var updated = await _carrierService.UpdateAsync(id, request);
@@ -60,12 +68,10 @@ namespace API.Controllers.Pricing.ShippingCore
         }
 
         [HttpDelete("{id:guid}")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteCarrier(Guid id)
         {
-            var exists = await _carrierService.GetByIdAsync(id);
-            if (exists == null)
-                return NotFound(new { message = "Carrier not found" });
-
             await _carrierService.DeleteAsync(id);
 
             return Ok(new { message = "Carrier deleted successfully" });

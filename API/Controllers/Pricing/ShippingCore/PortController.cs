@@ -1,6 +1,7 @@
 ﻿using Application.DTOs.ShippingCore;
 using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -40,8 +41,8 @@ namespace API.Controllers.Pricing.ShippingCore
             return Ok(port);
         }
 
-        [HttpGet("country/{country}")]
-        public async Task<IActionResult> GetPortsByCountry(string country, [FromQuery] QueryParameters query)
+        [HttpGet("country")]
+        public async Task<IActionResult> GetPortsByCountry([FromQuery] string country, [FromQuery] QueryParameters query)
         {
             var ports = await _portService.GetByCountryAsync(country, query);
 
@@ -52,6 +53,8 @@ namespace API.Controllers.Pricing.ShippingCore
         }
 
         [HttpPost]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreatePort([FromBody] CreatePortRequest request)
         {
             var result = await _portService.CreateAsync(request);
@@ -60,6 +63,8 @@ namespace API.Controllers.Pricing.ShippingCore
         }
 
         [HttpPut("{id:guid}")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdatePort(Guid id, [FromBody] UpdatePortRequest request)
         {
             var updated = await _portService.UpdateAsync(id, request);
@@ -71,12 +76,10 @@ namespace API.Controllers.Pricing.ShippingCore
         }
 
         [HttpDelete("{id:guid}")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeletePort(Guid id)
         {
-            var exists = await _portService.GetByIdAsync(id);
-            if (exists == null)
-                return NotFound(new { message = "Port not found" });
-
             await _portService.DeleteAsync(id);
 
             return Ok(new { message = "Port deleted successfully" });

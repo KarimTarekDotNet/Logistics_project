@@ -1,6 +1,7 @@
 using API.Mapping;
 using API.Middlewares;
 using Application.Interfaces.Repositories.Patterns;
+using Application.Interfaces.Repositories.Pricing.Imports;
 using Application.Interfaces.Repositories.Pricing.PricingEngine;
 using Application.Interfaces.Repositories.Pricing.Quotation;
 using Application.Interfaces.Repositories.Shipments.Core;
@@ -14,6 +15,7 @@ using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Interfaces.Services.Shipments.ApisIntegrations;
 using Application.Interfaces.Services.Shipments.Core;
 using Application.Interfaces.Services.Shipments.User;
+using Application.Interfaces.Services.User;
 using Application.Validations.PricingFeature.Pricing;
 using Domain.Entities.Users;
 using FluentValidation;
@@ -34,6 +36,7 @@ using Infrastructure.Services.Pricing.ShippingCore;
 using Infrastructure.Services.Shipments.Apis;
 using Infrastructure.Services.Shipments.Core;
 using Infrastructure.Services.Shipments.User;
+using Infrastructure.Services.User;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -102,6 +105,7 @@ namespace API
             builder.Services.AddScoped<IShipmentItemRepository, ShipmentItemRepository>();
             builder.Services.AddScoped<IShipmentChargeRepository, ShipmentChargeRepository>();
             builder.Services.AddScoped<IShipmentStatusHistoryRepository, ShipmentStatusHistoryRepository>();
+            builder.Services.AddScoped<IIntegrationMessageRepository, IIntegrationMessageRepository>();
 
             // Unit of Work
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -122,6 +126,7 @@ namespace API
             builder.Services.AddScoped<IShipmentItemService, ShipmentItemService>();
             builder.Services.AddScoped<IShipmentChargeService, ShipmentChargeService>();
             builder.Services.AddScoped<IShipmentStatusHistoryService, ShipmentStatusHistoryService>();
+            builder.Services.AddScoped<IUserService, UserService>();
 
             builder.Services.AddAuthentication(options =>
             {
@@ -146,7 +151,7 @@ namespace API
             });
 
             // APIs Integrations
-            builder.Services.AddHttpClient<ITaxVerificationService, LookuptaxService>();
+            builder.Services.AddHttpClient<ITaxVerificationService, LookuptaxService>(client => { client.Timeout = TimeSpan.FromSeconds(10);} );
             builder.Services.AddScoped<IEmailSender, EmailSender>();
             builder.Services.AddScoped<IPhoneOtpService, TwilioPhoneOtpService>();
 

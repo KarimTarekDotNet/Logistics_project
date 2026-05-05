@@ -1,13 +1,9 @@
 ﻿using Application.DTOs.Auth;
 using Application.Interfaces.Services.Auth;
 using Domain.Entities.Users;
+using Domain.Exceptions;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Configuration;
 using System.Net;
-using System.Net.Http.Json;
-using Twilio;
-using Twilio.Rest.Verify.V2.Service;
-using Twilio.Types;
 
 namespace Infrastructure.Services.Auth
 {
@@ -175,37 +171,66 @@ namespace Infrastructure.Services.Auth
 
             return await SendEmailConfirmationAsync(user.Id);
         }
-    }
 
-    public class TwilioPhoneOtpService : IPhoneOtpService
-    {
-        private readonly IConfiguration _config;
-        public TwilioPhoneOtpService(IConfiguration config)
+        public async Task SendChangeEmailConfirmationAsync(string userId, string newEmail)
         {
-            _config = config;
-            TwilioClient.Init(_config["Twilio:AccountSid"], _config["Twilio:AuthToken"]);
-        }
+            var user = await _userManager.FindByIdAsync(userId);
 
-        public async Task SendOtpAsync(string phoneNumber)
-        {
-            await VerificationResource.CreateAsync(to: phoneNumber, channel: "sms", pathServiceSid: _config["Twilio:VerifyServiceSid"]);
-        }
+            if (user == null)
+                throw new BusinessRuleException("User not found.");
 
-        public async Task<AuthResponse> ResendAsync(string phone)
-        {
-            await VerificationResource.CreateAsync(to: phone, channel: "sms", pathServiceSid: _config["Twilio:VerifyServiceSid"]);
-            return new AuthResponse
-            {
-                Message = "The code was successfully resent."
-            };
-        }
+            if (string.IsNullOrWhiteSpace(newEmail))
+                throw new BusinessRuleException("New email is required.");
 
-        public async Task<bool> VerifyOtpAsync(string phoneNumber, string code)
-        {
-            var result = await VerificationCheckResource.CreateAsync( to: phoneNumber, code: code,
-                pathServiceSid: _config["Twilio:VerifyServiceSid"]);
+            var token = await _userManager.GenerateChangeEmailTokenAsync(user, newEmail);
+            var encodedToken = WebUtility.UrlEncode(token);
 
-            return result.Status == "approved";
+            var confirmationLink =
+                $"https://localhost:7100/api/user/profile/confirm-email-change?userId={user.Id}&token={encodedToken}";
+
+            var subject = "Confirm Your New Email Address";
+
+            var body = $@"
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset='UTF-8'>
+            </head>
+            <body style='font-family: Arial, sans-serif; background-color:#f6f8fb; padding:20px;'>
+                <div style='max-width:600px; margin:auto; background:#ffffff; padding:30px; border-radius:10px; border:1px solid #e5e7eb;'>
+
+                    <h2 style='color:#111827;'>Confirm Your New Email</h2>
+
+                    <p style='color:#374151;'>
+                        Hello {user.UserName},
+                    </p>
+
+                    <p style='color:#374151; line-height:1.6;'>
+                        You requested to change your email address.
+                        Please confirm your new email to complete the update.
+                    </p>
+
+                    <p style='margin:30px 0;'>
+                        <a href='{confirmationLink}'
+                           style='background-color:#2563eb; color:#ffffff; padding:12px 20px; text-decoration:none; border-radius:8px;'>
+                            Confirm New Email
+                        </a>
+                    </p>
+
+                    <p style='color:#6b7280; font-size:13px;'>
+                        If you did not request this change, you can safely ignore this email.
+                    </p>
+
+                    <hr style='margin:25px 0;' />
+
+                    <p style='color:#6b7280; font-size:13px;'>
+                        Logistics System Team
+                    </p>
+                </div>
+            </body>
+            </html>";
+
+            await _emailSender.SendEmailAsync(newEmail, subject, body);
         }
     }
 }

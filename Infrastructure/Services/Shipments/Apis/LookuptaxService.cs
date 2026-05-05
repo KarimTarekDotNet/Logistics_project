@@ -27,7 +27,7 @@ namespace Infrastructure.Services.Shipments.Apis
                 var response = await _httpClient.SendAsync(request, cancellationToken);
 
                 if(!response.IsSuccessStatusCode)
-                    return TaxVerificationResult.Failed($"API call failed with status code: {response.StatusCode}");
+                    return TaxVerificationResult.Failed("Tax verification failed.");
 
                 var data = await response.Content.ReadFromJsonAsync<LookuptaxResponse>(cancellationToken: cancellationToken);
 

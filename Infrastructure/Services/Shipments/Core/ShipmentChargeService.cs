@@ -1,21 +1,26 @@
-﻿using Application.DTOs.Shipments.Core;
+﻿using Application.ApplicationRules.Shipments;
+using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Services.Shipments.Core;
 using AutoMapper;
 using Domain.Entities.Shipments;
+using Domain.Entities.Users;
 using Domain.Enums;
 using Domain.Exceptions;
+using Microsoft.AspNetCore.Identity;
 
 namespace Infrastructure.Services.Shipments.Core
 {
     public class ShipmentChargeService : IShipmentChargeService
     {
+        private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
-        public ShipmentChargeService(IUnitOfWork unitOfWork, IMapper mapper)
+        public ShipmentChargeService(IUnitOfWork unitOfWork, IMapper mapper, UserManager<ApplicationUser> userManager)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _userManager = userManager;
         }
 
         public async Task<ShipmentChargeResponse> CreateAsync(CreateShipmentChargeRequest request)
@@ -25,8 +30,8 @@ namespace Infrastructure.Services.Shipments.Core
             if (shipment == null)
                 throw new KeyNotFoundException("Shipment not found.");
 
-            if (shipment.Status == ShipmentStatus.Delivered || shipment.Status == ShipmentStatus.Closed)
-                throw new BusinessRuleException("Cannot add charges to a delivered/closed shipment.");
+            if (!ShipmentStatusRules.CanModifyCharges(shipment.Status))
+                throw new BusinessRuleException("Cannot modify charges at this stage.");
 
             var charge = new ShipmentCharge
             {
@@ -55,8 +60,8 @@ namespace Infrastructure.Services.Shipments.Core
             if (shipment == null)
                 throw new KeyNotFoundException("Shipment not found.");
 
-            if (shipment.Status == ShipmentStatus.Delivered || shipment.Status == ShipmentStatus.Closed)
-                throw new BusinessRuleException("Cannot delete charges from a delivered/closed shipment.");
+            if (!ShipmentStatusRules.CanModifyCharges(shipment.Status))
+                throw new BusinessRuleException("Cannot modify charges at this stage.");
 
             _unitOfWork.ShipmentCharges.Delete(charge);
 
@@ -65,21 +70,29 @@ namespace Infrastructure.Services.Shipments.Core
             return true;
         }
 
-        public async Task<ShipmentChargeResponse?> GetByIdAsync(Guid id)
+        public async Task<ShipmentChargeResponse?> GetByIdAsync(Guid id, string userId, bool isPrivileged)
         {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.CustomerProfile == null)
+                throw new KeyNotFoundException("User not found.");
+
             var charge = await _unitOfWork.ShipmentCharges.GetByIdAsync(id);
 
-            if (charge == null)
+            if (charge == null || (charge.Shipment.CustomerId != user.CustomerProfile.Id && !isPrivileged))
                 return null;
 
             return _mapper.Map<ShipmentChargeResponse>(charge);
         }
 
-        public async Task<IReadOnlyList<ShipmentChargeResponse>> GetByShipmentIdAsync(Guid shipmentId)
+        public async Task<IReadOnlyList<ShipmentChargeResponse>> GetByShipmentIdAsync(Guid shipmentId, string userId, bool isPrivileged)
         {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || user.CustomerProfile == null)
+                throw new KeyNotFoundException("User not found.");
+
             var charges = await _unitOfWork.ShipmentCharges.GetByShipmentIdAsync(shipmentId);
 
-            if (!charges.Any())
+            if (!charges.Any(x => x.Shipment.CustomerId == user.CustomerProfile.Id || isPrivileged))
                 return new List<ShipmentChargeResponse>();
 
             return _mapper.Map<IReadOnlyList<ShipmentChargeResponse>>(charges);
@@ -97,8 +110,8 @@ namespace Infrastructure.Services.Shipments.Core
             if (shipment == null)
                 throw new KeyNotFoundException("Shipment not found.");
 
-            if (shipment.Status == ShipmentStatus.Delivered || shipment.Status == ShipmentStatus.Closed)
-                throw new BusinessRuleException("Cannot update charges in a delivered/closed shipment.");
+            if (!ShipmentStatusRules.CanModifyCharges(shipment.Status))
+                throw new BusinessRuleException("Cannot modify charges at this stage.");
 
             if (!string.IsNullOrWhiteSpace(request.Description))
                 charge.Description = request.Description;

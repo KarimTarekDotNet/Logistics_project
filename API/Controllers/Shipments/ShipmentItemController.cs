@@ -1,12 +1,17 @@
 ﻿using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Services.Shipments.Core;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace API.Controllers.Shipments
 {
     [Route("api/[controller]")]
     [ApiController]
+    [EnableRateLimiting("ReadPolicy")]
+    [Authorize]
     public class ShipmentItemController : ControllerBase
     {
         private readonly IShipmentItemService _shipmentItemService;
@@ -19,7 +24,9 @@ namespace API.Controllers.Shipments
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            var shipmentItem = await _shipmentItemService.GetByIdAsync(id);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
+            var shipmentItem = await _shipmentItemService.GetByIdAsync(id, userId, isPrivileged);
             if (shipmentItem == null)
                 return NotFound();
 
@@ -29,7 +36,9 @@ namespace API.Controllers.Shipments
         [HttpGet("shipment/{shipmentId}")]
         public async Task<IActionResult> GetByShipmentId(Guid shipmentId)
         {
-            var shipmentItems = await _shipmentItemService.GetByShipmentIdAsync(shipmentId);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
+            var shipmentItems = await _shipmentItemService.GetByShipmentIdAsync(shipmentId, userId, isPrivileged);
             if (!shipmentItems.Any())
                 return NotFound();
 
@@ -37,16 +46,20 @@ namespace API.Controllers.Shipments
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(CreateShipmentItemRequest request)
+        [EnableRateLimiting("HeavyPolicy")]
+        public async Task<IActionResult> Create([FromBody] CreateShipmentItemRequest request)
         {
-            var createdItem = await _shipmentItemService.CreateAsync(request);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var createdItem = await _shipmentItemService.CreateAsync(request, userId);
             return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, createdItem);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(Guid id, UpdateShipmentItemRequest request)
+        [EnableRateLimiting("HeavyPolicy")]
+        public async Task<IActionResult> Update(Guid id, [FromBody] UpdateShipmentItemRequest request)
         {
-            var updatedItem = await _shipmentItemService.UpdateAsync(id, request);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var updatedItem = await _shipmentItemService.UpdateAsync(id, userId, request);
             if (updatedItem == null)
                 return NotFound();
 
@@ -54,9 +67,11 @@ namespace API.Controllers.Shipments
         }
 
         [HttpDelete("{id}")]
+        [EnableRateLimiting("HeavyPolicy")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var success = await _shipmentItemService.DeleteAsync(id);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var success = await _shipmentItemService.DeleteAsync(id, userId);
             if (!success)
                 return NotFound();
 

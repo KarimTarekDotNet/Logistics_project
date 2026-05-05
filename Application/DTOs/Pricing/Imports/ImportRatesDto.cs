@@ -1,8 +1,10 @@
-﻿namespace Application.DTOs.Pricing.Imports
+﻿using Domain.Enums;
+
+namespace Application.DTOs.Pricing.Imports
 {
     public record ImportRatesRequest
     {
-        public string Source { get; set; } = default!;
+        public ExternalSource Source { get; set; } = ExternalSource.n8n;
         public List<ImportRateItemRequest> Rates { get; set; } = new();
     }
 

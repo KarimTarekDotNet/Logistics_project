@@ -1,4 +1,5 @@
-﻿using Domain.Entities.Pricing.PricingEngine;
+﻿using Domain.Entities.Pricing.Imports;
+using Domain.Entities.Pricing.PricingEngine;
 using Domain.Entities.Pricing.Quotation;
 using Domain.Entities.Shipments;
 using Domain.Entities.ShippingCore;
@@ -19,6 +20,7 @@ namespace Infrastructure.Data.Database
 
         // Pricing Engine
         public DbSet<Rate> Rates { get; set; }
+        public DbSet<IntegrationMessage> IntegrationMessages { get; set; }
 
         // Quotation
         public DbSet<Quote> Quotes { get; set; }
@@ -57,6 +59,7 @@ namespace Infrastructure.Data.Database
             modelBuilder.Entity<ApplicationUser>().HasIndex(x => x.PhoneNumber).IsUnique().HasFilter("[PhoneNumber] IS NOT NULL");
             modelBuilder.Entity<RefreshToken>().HasIndex(x => x.HashedToken).IsUnique();
             modelBuilder.Entity<RefreshToken>().HasIndex(x => x.ApplicationUserId);
+            modelBuilder.Entity<IntegrationMessage>().HasIndex(x => new {x.ExternalMessageId, x.Source}).IsUnique();
 
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(RateConfiguration).Assembly);
 

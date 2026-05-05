@@ -38,7 +38,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
         {
             var existing = await _unitOfWork.ContainerTypes.GetByNameAsync(dto.Name);
 
-            if (existing != null)
+            if (existing != null && !existing.IsDeleted)
                 throw new BusinessRuleException($"A container type with name '{dto.Name}' already exists.");
 
             var containerType = _mapper.Map<ContainerType>(dto);
