@@ -64,7 +64,7 @@ namespace API.Controllers.Auth
             return Ok(result);
         }
 
-        [HttpPost("confirm-email")]
+        [HttpGet("confirm-email")]
         public async Task<IActionResult> ConfirmEmail([FromQuery] string userId, [FromQuery] string token)
         {
             var result = await _emailVerificationService.ConfirmEmailAsync(userId, token);

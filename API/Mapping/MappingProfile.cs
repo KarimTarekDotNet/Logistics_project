@@ -1,17 +1,18 @@
-using Application.DTOs.ShippingCore;
-using AutoMapper;
-using DomainRoute = Domain.Entities.ShippingCore.Route;
-using Domain.Entities.ShippingCore;
+using Application.DTOs.Auth;
 using Application.DTOs.Pricing.PricingEngine;
 using Application.DTOs.Pricing.Quotation;
+using Application.DTOs.Shipments.Core;
+using Application.DTOs.Shipments.User;
+using Application.DTOs.ShippingCore;
+using Application.DTOs.User;
+using AutoMapper;
+using Domain.Entities.Pricing.Imports;
 using Domain.Entities.Pricing.PricingEngine;
 using Domain.Entities.Pricing.Quotation;
-using Domain.Entities.Users;
-using Application.DTOs.Auth;
 using Domain.Entities.Shipments;
-using Application.DTOs.Shipments.User;
-using Application.DTOs.Shipments.Core;
-using Application.DTOs.User;
+using Domain.Entities.ShippingCore;
+using Domain.Entities.Users;
+using DomainRoute = Domain.Entities.ShippingCore.Route;
 
 namespace API.Mapping
 {
@@ -109,6 +110,22 @@ namespace API.Mapping
                 .ForMember(d => d.Customer, o => o.MapFrom(s => s.CustomerProfile));
             CreateMap<UpdateProfileRequest, ApplicationUser>();
             CreateMap<UpdatePasswordRequest, ApplicationUser>();
+
+
+            // ── Invoice ────────────────────────────────────────────────────
+            CreateMap<Invoice, InvoiceResponse>();
+            CreateMap<CreateInvoiceRequest, Invoice>();
+
+            // ── Shipment Documents ─────────────────────────────────────
+            CreateMap<ShipmentDocument, ShipmentDocumentResponse>()
+                .ForMember(d => d.Type,
+                    o => o.MapFrom(s => s.Type.ToString()));
+
+            CreateMap<IntegrationMessage, IntegrationMessageResponse>()
+                .ForMember(d => d.Source,
+                    o => o.MapFrom(s => s.Source.ToString()))
+                .ForMember(d => d.ProcessingStatus,
+                    o => o.MapFrom(s => s.ProcessingStatus.ToString()));
         }
     }
 }

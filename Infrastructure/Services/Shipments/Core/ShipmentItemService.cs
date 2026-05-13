@@ -8,6 +8,7 @@ using Domain.Entities.Users;
 using Domain.Enums;
 using Domain.Exceptions;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Services.Shipments.Core
 {
@@ -25,7 +26,8 @@ namespace Infrastructure.Services.Shipments.Core
 
         public async Task<ShipmentItemResponse> CreateAsync(CreateShipmentItemRequest request, string userId)
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _userManager.Users.Include(x => x.CustomerProfile)
+            .FirstOrDefaultAsync(x => x.Id == userId);
             if (user == null || user.CustomerProfile == null)
                 throw new Exception("User not found");
             var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(request.ShipmentId);
@@ -41,7 +43,13 @@ namespace Infrastructure.Services.Shipments.Core
                 CreatedAt = DateTimeOffset.UtcNow,
                 Description = request.Description,
                 Quantity = request.Quantity,
-                Weight = request.Weight
+                ChargeableWeight = request.ChargeableWeight,
+                GrossWeight = request.GrossWeight,
+                VolumeCbm = request.VolumeCbm,
+                NetWeight = request.NetWeight,
+                IsHazardous = request.IsHazardous,
+                MarksAndNumbers = request.MarksAndNumbers,
+                RequiredTemperatureCelsius = request.RequiredTemperatureCelsius
             };
             shipment.Items.Add(shipmentItem);
             await _unitOfWork.SaveChangesAsync();
@@ -51,7 +59,8 @@ namespace Infrastructure.Services.Shipments.Core
 
         public async Task<bool> DeleteAsync(Guid id, string userId)
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _userManager.Users.Include(x => x.CustomerProfile)
+            .FirstOrDefaultAsync(x => x.Id == userId);
             if (user == null || user.CustomerProfile == null)
                 throw new Exception("User not found");
 
@@ -74,7 +83,8 @@ namespace Infrastructure.Services.Shipments.Core
 
         public async Task<ShipmentItemResponse?> GetByIdAsync(Guid id, string userId, bool isPrivileged)
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _userManager.Users.Include(x => x.CustomerProfile)
+            .FirstOrDefaultAsync(x => x.Id == userId);
             if (user == null)
                 throw new Exception("User not found");
 
@@ -96,7 +106,8 @@ namespace Infrastructure.Services.Shipments.Core
 
         public async Task<IReadOnlyList<ShipmentItemResponse>> GetByShipmentIdAsync(Guid shipmentId, string userId, bool isPrivileged)
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _userManager.Users.Include(x => x.CustomerProfile)
+            .FirstOrDefaultAsync(x => x.Id == userId);
             if (user == null )
                 throw new Exception("User not found");
 
@@ -117,49 +128,60 @@ namespace Infrastructure.Services.Shipments.Core
 
         public async Task<ShipmentItemResponse?> UpdateAsync(Guid id, string userId, UpdateShipmentItemRequest request)
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _userManager.Users
+                    .Include(x => x.CustomerProfile)
+                    .FirstOrDefaultAsync(x => x.Id == userId);
+
             if (user == null || user.CustomerProfile == null)
-                throw new Exception("User not found");
+                throw new BusinessRuleException("User not found.");
 
             var shipmentItem = await _unitOfWork.ShipmentItems.GetByIdAsync(id);
             if (shipmentItem == null)
                 return null;
 
-            var currentShipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(shipmentItem.ShipmentId);
+            var currentShipment = await _unitOfWork.Shipments
+                .GetTrackedByIdWithDetailsAsync(shipmentItem.ShipmentId);
 
             if (currentShipment == null || currentShipment.CustomerId != user.CustomerProfile.Id)
                 throw new KeyNotFoundException("Shipment not found.");
 
             if (!ShipmentStatusRules.CanModifyItems(currentShipment.Status))
-                throw new BusinessRuleException("Cannot update items.");
+                throw new BusinessRuleException("Cannot update shipment items in the current shipment status.");
 
-            if (!request.ShipmentId.HasValue)
-                request.ShipmentId = shipmentItem.ShipmentId;
+            var targetShipmentId = request.ShipmentId ?? shipmentItem.ShipmentId;
 
-            if(string.IsNullOrWhiteSpace(request.Description))
-                request.Description = shipmentItem.Description;
-
-            if(!request.Quantity.HasValue)
-                request.Quantity = shipmentItem.Quantity;
-
-            if(!request.Weight.HasValue)
-                request.Weight = shipmentItem.Weight;
-
-            if(request.ShipmentId != shipmentItem.ShipmentId)
+            if (targetShipmentId != shipmentItem.ShipmentId)
             {
-                var newShipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(request.ShipmentId.Value);
-                if(newShipment == null || newShipment.CustomerId != user.CustomerProfile.Id)
-                    throw new KeyNotFoundException($"Shipment with not found.");
+                var newShipment = await _unitOfWork.Shipments
+                    .GetTrackedByIdWithDetailsAsync(targetShipmentId);
 
-                if(!ShipmentStatusRules.CanModifyItems(newShipment.Status))
-                    throw new BusinessRuleException($"Cannot move item to.");
+                if (newShipment == null || newShipment.CustomerId != user.CustomerProfile.Id)
+                    throw new KeyNotFoundException("Target shipment not found.");
 
-                shipmentItem.ShipmentId = request.ShipmentId.Value;
+                if (!ShipmentStatusRules.CanModifyItems(newShipment.Status))
+                    throw new BusinessRuleException("Cannot move item to shipment in the current target shipment status.");
+
+                shipmentItem.ShipmentId = targetShipmentId;
             }
 
-            shipmentItem.Description = request.Description;
-            shipmentItem.Quantity = request.Quantity.Value;
-            shipmentItem.Weight = request.Weight.Value;
+            shipmentItem.Description = string.IsNullOrWhiteSpace(request.Description)
+                ? shipmentItem.Description
+                : request.Description.Trim();
+
+            shipmentItem.Quantity = request.Quantity ?? shipmentItem.Quantity;
+            shipmentItem.ChargeableWeight = request.ChargeableWeight ?? shipmentItem.ChargeableWeight;
+
+            shipmentItem.GrossWeight = request.GrossWeight ?? shipmentItem.GrossWeight;
+            shipmentItem.NetWeight = request.NetWeight ?? shipmentItem.NetWeight;
+            shipmentItem.VolumeCbm = request.VolumeCbm ?? shipmentItem.VolumeCbm;
+            shipmentItem.IsHazardous = request.IsHazardous ?? shipmentItem.IsHazardous;
+            shipmentItem.RequiredTemperatureCelsius =
+                request.RequiredTemperatureCelsius ?? shipmentItem.RequiredTemperatureCelsius;
+
+            shipmentItem.MarksAndNumbers = string.IsNullOrWhiteSpace(request.MarksAndNumbers)
+                ? shipmentItem.MarksAndNumbers
+                : request.MarksAndNumbers.Trim();
+
             shipmentItem.UpdatedAt = DateTimeOffset.UtcNow;
 
             await _unitOfWork.SaveChangesAsync();

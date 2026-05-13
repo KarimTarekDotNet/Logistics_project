@@ -38,9 +38,11 @@ namespace Infrastructure.Services.Pricing.PricingEngine
 
                 await _unitOfWork.Rates.AddAsync(rate);
 
-                var createdRate = await GetRateWithDetailsOrThrowAsync(rate.Id);
+                var newRate = await GetByIdAsync(rate.Id);
+                if (newRate == null)
+                    return _mapper.Map<RateResponse>(rate);
 
-                return _mapper.Map<RateResponse>(createdRate);
+                return newRate;
             });
         }
 

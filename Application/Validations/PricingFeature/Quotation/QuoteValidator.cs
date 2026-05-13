@@ -11,22 +11,8 @@ namespace Application.Validations.PricingFeature.Quotation
             RuleFor(q => q.CustomerId)
                 .NotEmpty().WithMessage("Customer ID is required.");
 
-            RuleFor(q => q.RouteId)
-                .NotEmpty().WithMessage("Route is required.");
-
-            RuleFor(q => q.ContainerTypeId)
+            RuleFor(q => q.RateId)
                 .NotEmpty().WithMessage("Container type is required.");
-
-            RuleFor(q => q.FinalPrice)
-                .GreaterThan(0).WithMessage("Final price must be greater than zero.")
-                .Must((q, finalPrice) => QuoteRules.IsFinalPriceConsistent(finalPrice, q.Items.Select(i => i.Amount)))
-                .WithMessage("Final price must be greater than or equal to the sum of all item amounts.");
-
-            RuleFor(q => q.Currency)
-                .NotEmpty().WithMessage("Currency is required.")
-                .MaximumLength(4).WithMessage("Currency must not exceed 4 characters.")
-                .Must(RateRules.IsValidCurrency)
-                .WithMessage($"Currency must be one of: {string.Join(", ", RateRules.AllowedCurrencies)}.");
 
             RuleFor(q => q.Items)
                 .NotEmpty().WithMessage("Quote must have at least one item.");

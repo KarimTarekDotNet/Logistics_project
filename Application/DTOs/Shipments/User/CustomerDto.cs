@@ -5,7 +5,7 @@ namespace Application.DTOs.Shipments.User
 {
     public record CreateCustomerRequest
     {
-        public string? NationalId { get; set; }
+        public string NationalId { get; set; } = null!;
         public DateOnly? DateOfBirth { get; set; }
         public string? CompanyName { get; set; }
         public string? TaxNumber { get; set; }

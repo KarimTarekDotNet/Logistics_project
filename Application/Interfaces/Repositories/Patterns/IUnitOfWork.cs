@@ -22,6 +22,8 @@ namespace Application.Interfaces.Repositories.Patterns
         IShipmentChargeRepository ShipmentCharges { get; }
         IShipmentStatusHistoryRepository StatusHistoryRepositories { get; }
         IIntegrationMessageRepository IntegrationMessage { get; }
+        IInvoiceRepository Invoices { get; }
+        IShipmentDocumentRepository ShipmentDocuments { get; }
 
         Task<int> SaveChangesAsync();
         Task BeginTransactionAsync();

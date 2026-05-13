@@ -8,6 +8,7 @@ namespace Application.Interfaces.Repositories.Shipments.User
     {
         Task<Customer?> GetByApplicationUserIdAsync(string userId);
         Task<Customer?> GetDetailsByApplicationUserIdAsync(string userId);
+        Task<Customer?> GetDetailsByIdAsync(Guid customerId);
         Task<IEnumerable<Customer>> GetAllAsync(CustomerParameters parameters);
 
         Task<bool> UserExistsAsync(string userId);

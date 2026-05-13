@@ -6,6 +6,8 @@ using Domain.Entities.Pricing.Imports;
 using Domain.Entities.Pricing.PricingEngine;
 using Domain.Entities.ShippingCore;
 using Domain.Enums;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Services.Pricing.Imports
 {
@@ -18,7 +20,8 @@ namespace Infrastructure.Services.Pricing.Imports
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<ImportRatesResponse> ImportAsync(ImportRatesRequest request, CancellationToken cancellationToken = default)
+        public async Task<ImportRatesResponse> ImportAsync(ImportRatesRequest request, IntegrationRequestContext context,
+        CancellationToken cancellationToken = default)
         {
             var response = new ImportRatesResponse
             {
@@ -31,18 +34,17 @@ namespace Infrastructure.Services.Pricing.Imports
                 {
                     var result = await ExecuteInTransactionAsync(async () =>
                     {
-                        var alreadyProcessed = await _unitOfWork.IntegrationMessage
-                            .ExistsAsync(item.ExternalMessageId, request.Source);
-
-                        if (alreadyProcessed)
+                        var integrationMessage = new IntegrationMessage
                         {
-                            return new ImportRateItemResult
-                            {
-                                ExternalMessageId = item.ExternalMessageId,
-                                Status = "Skipped",
-                                Message = "Message already processed."
-                            };
-                        }
+                            ExternalMessageId = item.ExternalMessageId,
+                            Source = context.Source,
+                            ProcessingStatus = Status.Processing,
+                            CreatedAt = DateTimeOffset.UtcNow
+                        };
+
+                        await _unitOfWork.IntegrationMessage.AddAsync(integrationMessage);
+
+                        await _unitOfWork.SaveChangesAsync();
 
                         var references = await ResolveReferencesAsync(item);
 
@@ -88,14 +90,8 @@ namespace Infrastructure.Services.Pricing.Imports
                             };
                         }
 
-                        await _unitOfWork.IntegrationMessage.AddAsync(new IntegrationMessage
-                        {
-                            ExternalMessageId = item.ExternalMessageId,
-                            Source = request.Source,
-                            Status = Status.Processed,
-                            CreatedAt = DateTimeOffset.UtcNow
-                        });
-
+                        integrationMessage.ProcessingStatus = Status.Processed;
+                        integrationMessage.ProcessedAt = DateTimeOffset.UtcNow;
                         return result;
                     });
 
@@ -113,27 +109,51 @@ namespace Infrastructure.Services.Pricing.Imports
                             break;
                     }
                 }
-                catch (Exception)
+                catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+                {
+                    response.Skipped++;
+                    response.Results.Add(new ImportRateItemResult
+                    {
+                        ExternalMessageId = item.ExternalMessageId,
+                        Status = "Skipped",
+                        Message = "Duplicate integration message."
+                    });
+                }
+                catch (Exception ex)
                 {
                     response.Failed++;
+
                     response.Results.Add(new ImportRateItemResult
                     {
                         ExternalMessageId = item.ExternalMessageId,
                         Status = "Failed",
                         Message = "Failed to import rate item."
                     });
-                    await _unitOfWork.IntegrationMessage.AddAsync(new IntegrationMessage
+
+                    await ExecuteInTransactionAsync(async () =>
                     {
-                        ExternalMessageId = item.ExternalMessageId,
-                        Source = request.Source,
-                        Status = Status.Failed,
-                        CreatedAt = DateTimeOffset.UtcNow
+                        var integrationMessage = await _unitOfWork.IntegrationMessage
+                        .GetByExternalMessageIdAndSourceAsync(item.ExternalMessageId, context.Source);
+
+                        if (integrationMessage != null)
+                        {
+                            integrationMessage.ProcessingStatus = Status.Failed;
+                            integrationMessage.FailedAt = DateTimeOffset.UtcNow;
+                            integrationMessage.ErrorMessage = ex.Message;
+                        }
+
+                        return true;
                     });
-                    await _unitOfWork.SaveChangesAsync();
                 }
             }
 
             return response;
+        }
+
+        private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+        {
+            return ex.InnerException is SqlException sqlException
+                   && (sqlException.Number == 2601 || sqlException.Number == 2627);
         }
 
         private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action)

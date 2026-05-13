@@ -1,4 +1,3 @@
-using Application.ApplicationRules;
 using Application.DTOs.Pricing.Quotation;
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Services.Pricing.Quotation;
@@ -6,6 +5,7 @@ using Application.Models;
 using AutoMapper;
 using Domain.Entities.Pricing.Quotation;
 using Domain.Entities.Users;
+using Domain.Exceptions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,7 +26,8 @@ namespace Infrastructure.Services.Pricing.Quotation
 
         public async Task<QuoteResponse?> GetByIdAsync(Guid id, string userId, bool isAdminOrStaff)
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _userManager.Users.Include(x => x.CustomerProfile)
+            .FirstOrDefaultAsync(x => x.Id == userId);
             if (user == null || user.CustomerProfile == null)
                 throw new KeyNotFoundException("User not found.");
 
@@ -66,27 +67,41 @@ namespace Infrastructure.Services.Pricing.Quotation
 
         public async Task<QuoteResponse> CreateAsync(CreateQuoteRequest dto)
         {
-            var route = await _unitOfWork.Routes.GetByIdAsync(dto.RouteId);
-            if (route == null || route.IsDeleted)
-                throw new KeyNotFoundException("Route not found.");
+            var customer = await _unitOfWork.Customers.GetDetailsByIdAsync(dto.CustomerId);
+            if(customer == null)
+                throw new KeyNotFoundException("Customer not found.");
 
-            var containerType = await _unitOfWork.ContainerTypes.GetByIdAsync(dto.ContainerTypeId);
-            if (containerType == null || containerType.IsDeleted)
-                throw new KeyNotFoundException("Container type not found.");
+            var rate = await _unitOfWork.Rates.GetByIdAsync(dto.RateId);
+            if (rate == null || rate.IsDeleted)
+                throw new KeyNotFoundException("Rate not found.");
 
-            if (!QuoteRules.IsFinalPriceConsistent(dto.FinalPrice, dto.Items.Select(i => i.Amount)))
-                throw new ArgumentException("Final price must be greater than or equal to the sum of all item amounts.");
+            var now = DateTimeOffset.UtcNow;
 
-            var quote = _mapper.Map<Quote>(dto);
-            quote.CreatedAt = DateTimeOffset.UtcNow;
+            if (!rate.IsActive)
+                throw new BusinessRuleException("Rate is not active.");
 
-            if (quote.Items != null && quote.Items.Any())
+            if (rate.ValidFrom > now || rate.ValidTo < now)
+                throw new BusinessRuleException("Rate is not valid at the current time.");
+
+            var extraChargesTotal = dto.Items.Sum(x => x.Amount);
+
+            var quote = new Quote
             {
-                foreach (var item in quote.Items)
+                CustomerId = customer.Id,
+                RouteId = rate.RouteId,
+                ContainerTypeId = rate.ContainerTypeId,
+                FinalPrice = rate.Price + extraChargesTotal,
+                Currency = rate.Currency,
+                CreatedAt = now,
+                CarrierId = rate.CarrierId,
+                RateId = rate.Id,
+                Items = dto.Items.Select(item => new QuoteItem
                 {
-                    item.CreatedAt = DateTimeOffset.UtcNow;
-                }
-            }
+                    Description = item.Description,
+                    Amount = item.Amount,
+                    CreatedAt = now
+                }).ToList()
+            };
 
             await _unitOfWork.Quotes.AddAsync(quote);
             await _unitOfWork.SaveChangesAsync();

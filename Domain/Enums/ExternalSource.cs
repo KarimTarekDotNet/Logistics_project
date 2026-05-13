@@ -2,14 +2,15 @@
 {
     public enum ExternalSource
     {
-        n8n,
-        carrier_api,
-        email_import
+        N8N,
+        Carrier_Api,
+        Email_Import
     }
 
     public enum Status
     {
         Pending,
+        Processing,
         Processed,
         Failed
     }

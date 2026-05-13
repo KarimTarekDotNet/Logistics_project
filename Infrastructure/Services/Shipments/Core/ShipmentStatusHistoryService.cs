@@ -5,6 +5,7 @@ using Application.Models;
 using AutoMapper;
 using Domain.Entities.Users;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Services.Shipments.Core
 {
@@ -24,7 +25,8 @@ namespace Infrastructure.Services.Shipments.Core
         public async Task<IReadOnlyList<ShipmentStatusHistoryResponse>>GetByShipmentIdAsync(Guid shipmentId, string userId,
         bool isPrivileged, QueryParameters parameters)
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _userManager.Users.Include(x => x.CustomerProfile)
+            .FirstOrDefaultAsync(x => x.Id == userId);
             if (user == null)
                 throw new UnauthorizedAccessException("User not found.");
 

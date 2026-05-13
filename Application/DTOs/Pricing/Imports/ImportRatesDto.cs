@@ -4,9 +4,9 @@ namespace Application.DTOs.Pricing.Imports
 {
     public record ImportRatesRequest
     {
-        public ExternalSource Source { get; set; } = ExternalSource.n8n;
         public List<ImportRateItemRequest> Rates { get; set; } = new();
     }
+    public sealed record IntegrationRequestContext(ExternalSource Source);
 
     public record ImportRateItemRequest
     {

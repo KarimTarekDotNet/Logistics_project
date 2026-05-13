@@ -1,4 +1,5 @@
 ﻿using Domain.Entities.Pricing.PricingEngine;
+using Domain.Entities.Pricing.Quotation;
 using Domain.Entities.Shipments;
 
 namespace Domain.Entities.ShippingCore
@@ -8,6 +9,8 @@ namespace Domain.Entities.ShippingCore
         public Guid Id { get; set; }
         public string Name { get; set; } = null!;
         public string Code { get; set; } = null!;
+
+        public ICollection<Quote> Quotes { get; set; } = new List<Quote>();
 
         public ICollection<Rate> Rates { get; set; } = new List<Rate>();
 

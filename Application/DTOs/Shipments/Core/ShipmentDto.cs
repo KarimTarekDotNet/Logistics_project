@@ -1,16 +1,33 @@
-﻿using Domain.Enums;
-
-namespace Application.DTOs.Shipments.Core
+﻿namespace Application.DTOs.Shipments.Core
 {
     public record CreateShipmentRequest
     {
         public Guid QuoteId { get; set; }
-        public Guid CarrierId { get; set; }
     }
     public record UpdateShipmentRequest
     {
-        public Guid? QuoteId { get; set; }
-        public Guid? CarrierId { get; set; }
+        public string? BookingNumber { get; set; }
+        public string? VesselName { get; set; }
+        public string? VoyageNumber { get; set; }
+        public string? CurrentCheckpoint { get; set; }
+
+        public DateTimeOffset? EstimatedDeparture { get; set; }
+        public DateTimeOffset? EstimatedArrival { get; set; }
+        public DateTimeOffset? ActualDeparture { get; set; }
+        public DateTimeOffset? ActualArrival { get; set; }
+    }
+
+    public record UpdateShipmentTrackingRequest
+    {
+        public string? BookingNumber { get; set; }
+        public string? VesselName { get; set; }
+        public string? VoyageNumber { get; set; }
+        public string? CurrentCheckpoint { get; set; }
+
+        public DateTimeOffset? EstimatedDeparture { get; set; }
+        public DateTimeOffset? EstimatedArrival { get; set; }
+        public DateTimeOffset? ActualDeparture { get; set; }
+        public DateTimeOffset? ActualArrival { get; set; }
     }
 
     public record ShipmentResponse
@@ -19,6 +36,9 @@ namespace Application.DTOs.Shipments.Core
 
         public Guid QuoteId { get; set; }
         public Guid RouteId { get; set; }
+        public Guid CarrierId { get; set; }
+        public Guid ContainerTypeId { get; set; }
+        public Guid CustomerId { get; set; }
 
         public string CustomerName { get; set; } = null!;
         public string ContainerTypeName { get; set; } = null!;
@@ -34,7 +54,25 @@ namespace Application.DTOs.Shipments.Core
         public DateTimeOffset? ClientConfirmedAt { get; set; }
         public DateTimeOffset? BookingRequestedAt { get; set; }
         public DateTimeOffset? BookingConfirmedAt { get; set; }
+        public DateTimeOffset? ShippingInstructionsSubmittedAt { get; set; }
+        public DateTimeOffset? DraftBlReceivedAt { get; set; }
+        public DateTimeOffset? DraftBlApprovedAt { get; set; }
+        public DateTimeOffset? PaymentPendingAt { get; set; }
+        public DateTimeOffset? PaymentConfirmedAt { get; set; }
+        public DateTimeOffset? TelexReleasedAt { get; set; }
         public DateTimeOffset? DeliveredAt { get; set; }
+        public DateTimeOffset? ClosedAt { get; set; }
+        public string? BookingNumber { get; set; }
+        public string? VesselName { get; set; }
+        public string? VoyageNumber { get; set; }
+        public string? CancellationReason { get; set; }
+        public string? HoldReason { get; set; }
+        public string? CurrentCheckpoint { get; set; }
+        public DateTimeOffset? EstimatedDeparture { get; set; }
+        public DateTimeOffset? EstimatedArrival { get; set; }
+        public DateTimeOffset? ActualDeparture { get; set; }
+        public DateTimeOffset? ActualArrival { get; set; }
+
 
         public ICollection<ShipmentItemResponse> Items { get; set; } = new List<ShipmentItemResponse>();
         public ICollection<ShipmentChargeResponse> Charges { get; set; } = new List<ShipmentChargeResponse>();
@@ -43,7 +81,6 @@ namespace Application.DTOs.Shipments.Core
 
     public record ChangeShipmentStatusRequest
     {
-        public ShipmentStatus ToStatus { get; set; }
         public string? Reason { get; set; }
     }
 }

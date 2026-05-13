@@ -32,8 +32,8 @@ namespace Infrastructure.Repositories.Shipments.Core
 
         public async Task<ShipmentCharge?> GetByIdAsync(Guid id)
         {
-            var charge = await _context.ShipmentCharges.FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
-            return charge;
+            return await _context.ShipmentCharges
+            .Include(x => x.Shipment).FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
         }
 
         public async Task<IReadOnlyList<ShipmentCharge>> GetByShipmentIdAsync(Guid shipmentId)

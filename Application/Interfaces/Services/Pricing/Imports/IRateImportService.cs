@@ -4,6 +4,6 @@ namespace Application.Interfaces.Services.Pricing.Imports
 {
     public interface IRateImportService
     {
-        Task<ImportRatesResponse> ImportAsync(ImportRatesRequest request, CancellationToken cancellationToken = default);
+        Task<ImportRatesResponse> ImportAsync(ImportRatesRequest request, IntegrationRequestContext context, CancellationToken cancellationToken = default);
     }
 }

@@ -24,5 +24,10 @@ namespace Infrastructure.Repositories.Pricing.Imports
         {
             return await _context.IntegrationMessages.AnyAsync(im => im.ExternalMessageId == externalMessageId && im.Source == source);
         }
+
+        public async Task<IntegrationMessage?> GetByExternalMessageIdAndSourceAsync(string externalMessageId, ExternalSource source)
+        {
+            return await _context.IntegrationMessages.FirstOrDefaultAsync(x => x.ExternalMessageId == externalMessageId && x.Source == source);
+        }
     }
 }

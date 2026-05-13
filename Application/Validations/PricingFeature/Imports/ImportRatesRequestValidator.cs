@@ -7,9 +7,6 @@ namespace Application.Validations.PricingFeature.Imports
     {
         public ImportRatesRequestValidator()
         {
-            RuleFor(x => x.Source)
-                .NotEmpty().IsInEnum().WithMessage("Source is required.");
-
             RuleFor(x => x.Rates)
                 .NotNull().WithMessage("Rates list cannot be null.")
                 .NotEmpty().WithMessage("At least one rate is required.");

@@ -1,6 +1,7 @@
 ﻿using Application.Interfaces.Repositories.Shipments.Core;
 using Application.Models;
 using Domain.Entities.Shipments;
+using Domain.Enums;
 using Infrastructure.Data.Database;
 using Microsoft.EntityFrameworkCore;
 
@@ -124,13 +125,26 @@ namespace Infrastructure.Repositories.Shipments.Core
 
             if (!string.IsNullOrWhiteSpace(parameters.Search))
             {
-                var term = $"%{parameters.Search.Trim()}%";
+                var search = parameters.Search.Trim();
+                var term = $"%{search}%";
+
+                var hasStatus = Enum.TryParse<ShipmentStatus>(search, ignoreCase: true, out var status);
 
                 query = query.Where(c =>
                     EF.Functions.Like(c.Carrier.Name!, term) ||
                     EF.Functions.Like(c.Carrier.Code!, term) ||
                     EF.Functions.Like(c.Currency!, term) ||
-                    EF.Functions.Like(c.ContainerType.Name!, term));
+                    EF.Functions.Like(c.ContainerType.Name!, term) ||
+
+                    EF.Functions.Like(c.BookingNumber!, term) ||
+                    EF.Functions.Like(c.VesselName!, term) ||
+                    EF.Functions.Like(c.VoyageNumber!, term) ||
+                    EF.Functions.Like(c.CancellationReason!, term) ||
+                    EF.Functions.Like(c.HoldReason!, term) ||
+                    EF.Functions.Like(c.CurrentCheckpoint!, term) ||
+
+                    (hasStatus && c.Status == status)
+                );
             }
 
             query = parameters.SortBy?.ToLower() switch

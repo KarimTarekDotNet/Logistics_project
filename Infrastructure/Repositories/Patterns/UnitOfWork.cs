@@ -27,6 +27,8 @@ namespace Infrastructure.Repositories.Patterns
         public IShipmentChargeRepository ShipmentCharges { get; }
         public IShipmentStatusHistoryRepository StatusHistoryRepositories { get; }
         public IIntegrationMessageRepository IntegrationMessage { get; }
+        public IInvoiceRepository Invoices { get; }
+        public IShipmentDocumentRepository ShipmentDocuments { get; }
 
         public UnitOfWork(
             ApplicationDbContext context,
@@ -41,7 +43,9 @@ namespace Infrastructure.Repositories.Patterns
             IShipmentItemRepository shipmentItemRepository,
             IShipmentChargeRepository shipmentChargeRepository,
             IShipmentStatusHistoryRepository shipmentStatusHistoryRepository,
-            IIntegrationMessageRepository integrationMessage)
+            IIntegrationMessageRepository integrationMessage,
+            IInvoiceRepository invoiceRepository,
+            IShipmentDocumentRepository shipmentDocuments)
         {
             _context = context;
             Carriers = carrierRepository;
@@ -56,6 +60,8 @@ namespace Infrastructure.Repositories.Patterns
             ShipmentCharges = shipmentChargeRepository;
             StatusHistoryRepositories = shipmentStatusHistoryRepository;
             IntegrationMessage = integrationMessage;
+            Invoices = invoiceRepository;
+            ShipmentDocuments = shipmentDocuments;
         }
 
         public async Task<int> SaveChangesAsync()

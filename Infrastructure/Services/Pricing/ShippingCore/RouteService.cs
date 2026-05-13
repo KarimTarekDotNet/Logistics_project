@@ -6,7 +6,6 @@ using Application.Models;
 using AutoMapper;
 using Domain.Entities.ShippingCore;
 using Domain.Exceptions;
-using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
 {

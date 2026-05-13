@@ -27,7 +27,7 @@ namespace Infrastructure.Data.Configuration.Seeding
             // =========================
             // 2. Users
             // =========================
-            async Task<ApplicationUser> CreateUserIfNotExists(string email, string firstName, string lastName, string role, string? fixedId = null)
+            async Task<ApplicationUser> CreateUserIfNotExists(string email, string username , string firstName, string lastName, string role, string? fixedId = null)
             {
                 var user = await userManager.FindByEmailAsync(email);
                 if (user == null)
@@ -35,7 +35,7 @@ namespace Infrastructure.Data.Configuration.Seeding
                     user = new ApplicationUser
                     {
                         Id = fixedId ?? Guid.NewGuid().ToString(),
-                        UserName = email,
+                        UserName = username,
                         Email = email,
                         FirstName = firstName,
                         LastName = lastName,
@@ -47,12 +47,12 @@ namespace Infrastructure.Data.Configuration.Seeding
                 return user;
             }
 
-            await CreateUserIfNotExists("admin@system.com", "System", "Admin", "Admin");
-            await CreateUserIfNotExists("staff@system.com", "System", "Staff", "Staff");
+            await CreateUserIfNotExists("admin@system.com", "admin@system", "System", "Admin", "Admin");
+            await CreateUserIfNotExists("staff@system.com", "staff@ystem", "Staff", "Staff", "Staff");
 
-            var customerUser = await CreateUserIfNotExists("user@system.com", "System", "User", "User");
+            var customerUser = await CreateUserIfNotExists("user@system.com", "user@system", "System", "User", "User");
 
-            await CreateUserIfNotExists("integration@system.com", "System", "Integration", "Integration");
+            await CreateUserIfNotExists("integration@system.com", "System", "integration@system",  "Integration", "Integration");
 
             // =========================
             // 3. Ports
@@ -175,6 +175,10 @@ namespace Infrastructure.Data.Configuration.Seeding
                 {
                     Id = quoteAlphaId,
                     CustomerId = customer.Id,
+
+                    CarrierId = carrierMaerskId,
+                    RateId = rate1Id,
+
                     RouteId = routeShanghaiRotterdamId,
                     ContainerTypeId = container20FtId,
                     FinalPrice = 1650.00m,
@@ -195,12 +199,16 @@ namespace Infrastructure.Data.Configuration.Seeding
                 {
                     Id = quoteBetaId,
                     CustomerId = customer.Id,
-                    RouteId = routeShanghaiDubaiId,
+
+                    CarrierId = carrierMaerskId,
+                    RateId = rate2Id,
+
+                    RouteId = routeShanghaiRotterdamId,
                     ContainerTypeId = container40FtId,
                     FinalPrice = 3100.00m,
                     Currency = "USD",
                     IsDeleted = false,
-                    CreatedAt = new DateTimeOffset(2025, 2, 15, 0, 0, 0, TimeSpan.Zero)
+                    CreatedAt = new DateTimeOffset(2025, 2, 1, 0, 0, 0, TimeSpan.Zero)
                 });
 
                 db.QuoteItems.AddRange(
@@ -245,7 +253,7 @@ namespace Infrastructure.Data.Configuration.Seeding
                     Id = new Guid("00000000-0000-0000-0000-000000000083"),
                     Description = "Textile Goods",
                     Quantity = 20,
-                    Weight = 500,
+                    ChargeableWeight = 500,
                     CreatedAt = DateTimeOffset.UtcNow,
                     IsDeleted = false
                 });
@@ -255,6 +263,10 @@ namespace Infrastructure.Data.Configuration.Seeding
                     Id = new Guid("00000000-0000-0000-0000-000000000081"),
                     Description = "Ocean Freight",
                     Amount = 1500,
+                    TaxAmount = 0,
+                    Currency = "USD",
+                    ChargeType = ChargeType.OceanFreight,
+                    PayerType = PayerType.Shipper,
                     CreatedAt = DateTimeOffset.UtcNow,
                     IsDeleted = false
                 });
@@ -264,6 +276,10 @@ namespace Infrastructure.Data.Configuration.Seeding
                     Id = new Guid("00000000-0000-0000-0000-000000000082"),
                     Description = "Bunker Adjustment Factor",
                     Amount = 150,
+                    TaxAmount = 0,
+                    Currency = "USD",
+                    ChargeType = ChargeType.Other,
+                    PayerType = PayerType.Shipper,
                     CreatedAt = DateTimeOffset.UtcNow,
                     IsDeleted = false
                 });
@@ -279,6 +295,55 @@ namespace Infrastructure.Data.Configuration.Seeding
                 });
 
                 db.Shipments.Add(shipment);
+                await db.SaveChangesAsync();
+            }
+
+            // =========================
+            // 11. Invoice
+            // =========================
+
+            var invoiceId = new Guid("00000000-0000-0000-0000-000000000090");
+
+            if (!await db.Invoices.AnyAsync(x => x.Id == invoiceId))
+            {
+                var charges = await db.ShipmentCharges
+                    .Where(x =>
+                        x.Id == new Guid("00000000-0000-0000-0000-000000000081") ||
+                        x.Id == new Guid("00000000-0000-0000-0000-000000000082"))
+                    .ToListAsync();
+
+                var invoice = new Invoice
+                {
+                    Id = invoiceId,
+                    ShipmentId = shipmentId,
+
+                    InvoiceNumber = "INV-2026-0001",
+
+                    Currency = "USD",
+
+                    SubTotal = 1650.00m,
+                    TaxAmount = 0,
+                    TotalAmount = 1650.00m,
+
+                    PaymentStatus = PaymentStatus.Pending,
+
+                    IssuedAt = DateTimeOffset.UtcNow,
+                    DueDate = DateTimeOffset.UtcNow.AddDays(14),
+
+                    PayerType = PayerType.Shipper,
+
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    IsDeleted = false
+                };
+
+                foreach (var charge in charges)
+                {
+                    charge.InvoiceId = invoice.Id;
+                    invoice.Charges.Add(charge);
+                }
+
+                db.Invoices.Add(invoice);
+
                 await db.SaveChangesAsync();
             }
         }

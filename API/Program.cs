@@ -1,3 +1,5 @@
+#region Using namespaces
+
 using API.Mapping;
 using API.Middlewares;
 using Application.Interfaces.Repositories.Patterns;
@@ -23,6 +25,7 @@ using FluentValidation.AspNetCore;
 using Infrastructure.Data.Configuration.Seeding;
 using Infrastructure.Data.Database;
 using Infrastructure.Repositories.Patterns;
+using Infrastructure.Repositories.Pricing.Imports;
 using Infrastructure.Repositories.Pricing.PricingEngine;
 using Infrastructure.Repositories.Pricing.Quotation;
 using Infrastructure.Repositories.Pricing.ShippingCore;
@@ -35,6 +38,7 @@ using Infrastructure.Services.Pricing.Quotation;
 using Infrastructure.Services.Pricing.ShippingCore;
 using Infrastructure.Services.Shipments.Apis;
 using Infrastructure.Services.Shipments.Core;
+using Infrastructure.Services.Shipments.Core.Shipment;
 using Infrastructure.Services.Shipments.User;
 using Infrastructure.Services.User;
 using Microsoft.AspNetCore.Identity;
@@ -42,6 +46,8 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+
+#endregion
 
 namespace API
 {
@@ -105,7 +111,9 @@ namespace API
             builder.Services.AddScoped<IShipmentItemRepository, ShipmentItemRepository>();
             builder.Services.AddScoped<IShipmentChargeRepository, ShipmentChargeRepository>();
             builder.Services.AddScoped<IShipmentStatusHistoryRepository, ShipmentStatusHistoryRepository>();
-            builder.Services.AddScoped<IIntegrationMessageRepository, IIntegrationMessageRepository>();
+            builder.Services.AddScoped<IIntegrationMessageRepository, IntegrationMessageRepository>();
+            builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+            builder.Services.AddScoped<IShipmentDocumentRepository, ShipmentDocumentRepository>();
 
             // Unit of Work
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -122,11 +130,21 @@ namespace API
             builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();
             builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
             builder.Services.AddScoped<ICustomerService, CustomerService>();
-            builder.Services.AddScoped<IShipmentService, ShipmentService>();
+            builder.Services.AddScoped<IShipmentQueryService, ShipmentQueryService>();
+            builder.Services.AddScoped<IShipmentCommandService, ShipmentCommandService>();
+            builder.Services.AddScoped<IShipmentLifecycleService, ShipmentLifecycleService>();
+            builder.Services.AddScoped<IShipmentHoldService, ShipmentHoldService>();
+            builder.Services.AddScoped<IShipmentCancellationService, ShipmentCancellationService>();
+            builder.Services.AddScoped<IShipmentTrackingService, ShipmentTrackingService>();
             builder.Services.AddScoped<IShipmentItemService, ShipmentItemService>();
             builder.Services.AddScoped<IShipmentChargeService, ShipmentChargeService>();
             builder.Services.AddScoped<IShipmentStatusHistoryService, ShipmentStatusHistoryService>();
             builder.Services.AddScoped<IUserService, UserService>();
+            builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+            builder.Services.AddScoped<IShipmentTimelineService, ShipmentTimelineService>();
+            builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
+            builder.Services.AddScoped<IFileSecurityService, ClamAvFileScanner>();
+            builder.Services.AddScoped<IShipmentDocumentService, ShipmentDocumentService>();
 
             builder.Services.AddAuthentication(options =>
             {
@@ -186,6 +204,9 @@ namespace API
                 app.UseSwaggerUI();
             }
 
+            app.UseHttpsRedirection();
+
+            app.UseStaticFiles();
             app.UseAuthentication();
 
             app.UseMiddleware<GlobalHandleExceptionMiddleware>();
@@ -193,8 +214,6 @@ namespace API
             app.UseRateLimiter();
 
             app.UseAuthorization();
-
-            app.UseHttpsRedirection();
 
             app.MapControllers();
             app.Run();

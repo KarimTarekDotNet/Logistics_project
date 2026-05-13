@@ -10,7 +10,7 @@ namespace Application.Validations.Shipments.Users
             RuleFor(x => x.NationalId)
                 .MaximumLength(50)
                 .Matches(@"^[A-Za-z0-9\-]+$")
-                .When(x => !string.IsNullOrWhiteSpace(x.NationalId))
+                .NotEmpty()
                 .WithMessage("National Id contains invalid characters.");
 
             RuleFor(x => x.DateOfBirth)

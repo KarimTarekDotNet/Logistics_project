@@ -9,11 +9,14 @@ namespace Domain.Entities.Shipments
         public Guid ShipmentId { get; set; }
         public Shipment Shipment { get; set; } = null!;
 
+
         public ShipmentStatus FromStatus { get; set; }
         public ShipmentStatus ToStatus { get; set; }
 
         public DateTimeOffset ChangedAt { get; set; }
 
+        public string? ChangedByUserId { get; set; }
+        public string? ChangedByRole { get; set; }
         public string? ChangedBy { get; set; }
         public string? Reason { get; set; }
     }

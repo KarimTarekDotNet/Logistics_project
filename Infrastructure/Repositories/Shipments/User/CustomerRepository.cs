@@ -32,6 +32,12 @@ namespace Infrastructure.Repositories.Shipments
                 .FirstOrDefaultAsync(c => c.ApplicationUserId == userId && !c.IsDeleted);
         }
 
+        public async Task<Customer?> GetDetailsByIdAsync(Guid customerId)
+        {
+            return await _context.Customers
+                .FirstOrDefaultAsync(c => c.Id == customerId && !c.IsDeleted);
+        }
+
         public async Task<Customer?> GetDetailsByApplicationUserIdAsync(string userId)
         {
             return await _context.Customers

@@ -16,13 +16,32 @@ namespace Infrastructure.Data.Configuration.Shipments
                 .HasMaxLength(300);
 
             builder.Property(x => x.Amount)
-                .HasColumnType("decimal(18,2)")
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            builder.Property(x => x.TaxAmount)
+                .HasPrecision(18, 2)
                 .IsRequired();
 
             builder.Property(x => x.CreatedAt)
                 .IsRequired();
 
+            builder.Property(x => x.PayerType)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .IsRequired();
+
+            builder.Property(x => x.ChargeType)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .IsRequired();
+
             builder.HasIndex(x => x.ShipmentId);
+
+            builder.HasOne(x => x.Invoice)
+                .WithMany(x => x.Charges)
+                .HasForeignKey(x => x.InvoiceId)
+                .OnDelete(DeleteBehavior.NoAction);
         }
     }
 }

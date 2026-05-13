@@ -46,6 +46,11 @@ namespace Infrastructure.Data.Configuration.Pricing
                 .WithMany()
                 .HasForeignKey(q => q.ContainerTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.HasOne(x => x.Carrier)
+                .WithMany(x => x.Quotes)
+                .HasForeignKey(x => x.CarrierId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260504122310_AddPendingFields")]
-    partial class AddPendingFields
+    [Migration("20260511163242_EditCancelledAt")]
+    partial class EditCancelledAt
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,6 +24,33 @@ namespace Infrastructure.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("Domain.Entities.Pricing.Imports.IntegrationMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ExternalMessageId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("ProcessingStatus")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExternalMessageId", "Source")
+                        .IsUnique();
+
+                    b.ToTable("IntegrationMessages");
+                });
 
             modelBuilder.Entity("Domain.Entities.Pricing.PricingEngine.Rate", b =>
                 {
@@ -92,6 +119,9 @@ namespace Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("CarrierId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("ContainerTypeId")
                         .HasColumnType("uniqueidentifier");
 
@@ -117,6 +147,9 @@ namespace Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<Guid>("RateId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("RouteId")
                         .HasColumnType("uniqueidentifier");
 
@@ -124,6 +157,8 @@ namespace Infrastructure.Migrations
                         .HasColumnType("datetimeoffset");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CarrierId");
 
                     b.HasIndex("ContainerTypeId");
 
@@ -172,11 +207,109 @@ namespace Infrastructure.Migrations
                     b.ToTable("QuoteItems");
                 });
 
+            modelBuilder.Entity("Domain.Entities.Shipments.Invoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CancelledByUserId")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("DueDate")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("InvoiceNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PayerType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("ShipmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("SubTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DueDate");
+
+                    b.HasIndex("InvoiceNumber")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PaymentStatus");
+
+                    b.HasIndex("ShipmentId");
+
+                    b.HasIndex("ShipmentId", "PaymentStatus");
+
+                    b.HasIndex("IsDeleted", "PaymentStatus", "DueDate");
+
+                    b.ToTable("Invoices");
+                });
+
             modelBuilder.Entity("Domain.Entities.Shipments.Shipment", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("ActualArrival")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("ActualDeparture")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<decimal>("AgreedPrice")
                         .HasColumnType("decimal(18,2)");
@@ -184,13 +317,22 @@ namespace Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("BookingConfirmedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("BookingNumber")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTimeOffset?>("BookingRequestedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CancellationReason")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid>("CarrierId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset?>("ClientConfirmedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<Guid>("ContainerTypeId")
@@ -204,6 +346,9 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("nvarchar(3)");
 
+                    b.Property<string>("CurrentCheckpoint")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
@@ -213,8 +358,29 @@ namespace Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("DeliveredAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateTimeOffset?>("DraftBlApprovedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("DraftBlReceivedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("EstimatedArrival")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("EstimatedDeparture")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("HoldReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("PaymentConfirmedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("PaymentPendingAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<Guid>("QuoteId")
                         .HasColumnType("uniqueidentifier");
@@ -222,13 +388,25 @@ namespace Infrastructure.Migrations
                     b.Property<Guid>("RouteId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("ShippingInstructionsSubmittedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<DateTimeOffset?>("TelexReleasedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("VesselName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("VoyageNumber")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -267,10 +445,20 @@ namespace Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ChargeType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("datetimeoffset");
@@ -280,16 +468,30 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("PayerType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<Guid>("ShipmentId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId");
 
                     b.HasIndex("ShipmentId");
 
@@ -302,6 +504,10 @@ namespace Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal>("ChargeableWeight")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -313,11 +519,29 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<decimal>("GrossWeight")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsHazardous")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MarksAndNumbers")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("NetWeight")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("RequiredTemperatureCelsius")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<Guid>("ShipmentId")
                         .HasColumnType("uniqueidentifier");
@@ -325,8 +549,9 @@ namespace Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<decimal>("Weight")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<decimal>("VolumeCbm")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.HasKey("Id");
 
@@ -345,6 +570,14 @@ namespace Infrastructure.Migrations
                         .HasColumnType("datetimeoffset");
 
                     b.Property<string>("ChangedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ChangedByRole")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ChangedByUserId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
@@ -864,6 +1097,12 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Domain.Entities.Pricing.Quotation.Quote", b =>
                 {
+                    b.HasOne("Domain.Entities.ShippingCore.Carrier", "Carrier")
+                        .WithMany("Quotes")
+                        .HasForeignKey("CarrierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Domain.Entities.ShippingCore.ContainerType", "ContainerType")
                         .WithMany()
                         .HasForeignKey("ContainerTypeId")
@@ -882,6 +1121,8 @@ namespace Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.Navigation("Carrier");
+
                     b.Navigation("ContainerType");
 
                     b.Navigation("Customer");
@@ -898,6 +1139,17 @@ namespace Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Quote");
+                });
+
+            modelBuilder.Entity("Domain.Entities.Shipments.Invoice", b =>
+                {
+                    b.HasOne("Domain.Entities.Shipments.Shipment", "Shipment")
+                        .WithMany("Invoices")
+                        .HasForeignKey("ShipmentId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Shipment");
                 });
 
             modelBuilder.Entity("Domain.Entities.Shipments.Shipment", b =>
@@ -945,11 +1197,18 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Domain.Entities.Shipments.ShipmentCharge", b =>
                 {
+                    b.HasOne("Domain.Entities.Shipments.Invoice", "Invoice")
+                        .WithMany("Charges")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Domain.Entities.Shipments.Shipment", "Shipment")
                         .WithMany("Charges")
                         .HasForeignKey("ShipmentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Invoice");
 
                     b.Navigation("Shipment");
                 });
@@ -1075,9 +1334,16 @@ namespace Infrastructure.Migrations
                     b.Navigation("Shipment");
                 });
 
+            modelBuilder.Entity("Domain.Entities.Shipments.Invoice", b =>
+                {
+                    b.Navigation("Charges");
+                });
+
             modelBuilder.Entity("Domain.Entities.Shipments.Shipment", b =>
                 {
                     b.Navigation("Charges");
+
+                    b.Navigation("Invoices");
 
                     b.Navigation("Items");
 
@@ -1086,6 +1352,8 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Domain.Entities.ShippingCore.Carrier", b =>
                 {
+                    b.Navigation("Quotes");
+
                     b.Navigation("Rates");
 
                     b.Navigation("Shipments");

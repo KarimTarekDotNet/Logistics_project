@@ -31,6 +31,8 @@ namespace Infrastructure.Data.Database
         public DbSet<ShipmentItem> ShipmentItems { get; set; }
         public DbSet<ShipmentStatusHistory> ShipmentStatusHistories { get; set; }
         public DbSet<ShipmentCharge> ShipmentCharges { get; set; }
+        public DbSet<Invoice> Invoices { get; set; }
+        public DbSet<ShipmentDocument> ShipmentDocuments { get; set; }
         public DbSet<Customer> Customers { get; set; }
 
         // Users
@@ -54,6 +56,8 @@ namespace Infrastructure.Data.Database
             modelBuilder.Entity<ShipmentCharge>().HasQueryFilter(r => !r.IsDeleted);
             modelBuilder.Entity<ShipmentStatusHistory>().HasQueryFilter(r => !r.Shipment.IsDeleted);
             modelBuilder.Entity<Customer>().HasQueryFilter(r => !r.IsDeleted);
+            modelBuilder.Entity<Invoice>().HasQueryFilter(r => !r.IsDeleted);
+            modelBuilder.Entity<ShipmentDocument>().HasQueryFilter(r => !r.IsDeleted);
 
             // indexes
             modelBuilder.Entity<ApplicationUser>().HasIndex(x => x.PhoneNumber).IsUnique().HasFilter("[PhoneNumber] IS NOT NULL");

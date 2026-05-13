@@ -5,9 +5,9 @@ using Application.Interfaces.Services.Shipments.Core;
 using AutoMapper;
 using Domain.Entities.Shipments;
 using Domain.Entities.Users;
-using Domain.Enums;
 using Domain.Exceptions;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Services.Shipments.Core
 {
@@ -38,6 +38,10 @@ namespace Infrastructure.Services.Shipments.Core
                 ShipmentId = shipment.Id,
                 Description = request.Description,
                 Amount = request.Amount,
+                ChargeType = request.ChargeType,
+                Currency = request.Currency,
+                TaxAmount = request.TaxAmount,
+                PayerType = request.PayerType,
                 CreatedAt = DateTimeOffset.UtcNow
             };
 
@@ -72,13 +76,19 @@ namespace Infrastructure.Services.Shipments.Core
 
         public async Task<ShipmentChargeResponse?> GetByIdAsync(Guid id, string userId, bool isPrivileged)
         {
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user == null || user.CustomerProfile == null)
+            var user = await _userManager.Users.Include(x => x.CustomerProfile).FirstOrDefaultAsync(x => x.Id == userId);
+            if (user == null)
                 throw new KeyNotFoundException("User not found.");
+
+            if (!isPrivileged && user.CustomerProfile == null)
+                throw new KeyNotFoundException("Customer profile not found.");
 
             var charge = await _unitOfWork.ShipmentCharges.GetByIdAsync(id);
 
-            if (charge == null || (charge.Shipment.CustomerId != user.CustomerProfile.Id && !isPrivileged))
+            if (charge == null)
+                return null;
+
+            if (!isPrivileged && charge.Shipment.CustomerId != user.CustomerProfile!.Id)
                 return null;
 
             return _mapper.Map<ShipmentChargeResponse>(charge);
@@ -86,7 +96,7 @@ namespace Infrastructure.Services.Shipments.Core
 
         public async Task<IReadOnlyList<ShipmentChargeResponse>> GetByShipmentIdAsync(Guid shipmentId, string userId, bool isPrivileged)
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _userManager.Users.Include(x => x.CustomerProfile).FirstOrDefaultAsync(x => x.Id == userId);
             if (user == null || user.CustomerProfile == null)
                 throw new KeyNotFoundException("User not found.");
 
@@ -118,6 +128,18 @@ namespace Infrastructure.Services.Shipments.Core
 
             if (request.Amount.HasValue)
                 charge.Amount = request.Amount.Value;
+
+            if (request.TaxAmount.HasValue)
+                charge.TaxAmount = request.TaxAmount.Value;
+
+            if (!string.IsNullOrWhiteSpace(request.Currency))
+                charge.Currency = request.Currency;
+
+            if (request.ChargeType.HasValue)
+                charge.ChargeType = request.ChargeType.Value;
+
+            if (request.PayerType.HasValue)
+                charge.PayerType = request.PayerType.Value;
 
             charge.UpdatedAt = DateTimeOffset.UtcNow;
 

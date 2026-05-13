@@ -27,6 +27,12 @@ namespace Infrastructure.Data.Configuration.Shipments
             builder.Property(x => x.ChangedBy)
                 .HasMaxLength(100);
 
+            builder.Property(x => x.ChangedByUserId)
+                .HasMaxLength(100);
+
+            builder.Property(x => x.ChangedByRole)
+                .HasMaxLength(100);
+
             builder.Property(x => x.Reason)
                 .HasMaxLength(500);
 

@@ -1,13 +1,12 @@
 ﻿using Domain.Entities.Shipments;
-using Infrastructure.Data.Configuration.Seeding;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Infrastructure.Data.Configuration.Shipments
 {
-    public class ShipmentConfiguration : IEntityTypeConfiguration<Domain.Entities.Shipments.Shipment>
+    public class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
     {
-        public void Configure(EntityTypeBuilder<Domain.Entities.Shipments.Shipment> builder)
+        public void Configure(EntityTypeBuilder<Shipment> builder)
         {
             builder.HasKey(x => x.Id);
 
@@ -29,7 +28,7 @@ namespace Infrastructure.Data.Configuration.Shipments
 
             builder.HasOne(x => x.Quote)
                 .WithOne(x => x.Shipment)
-                .HasForeignKey<Domain.Entities.Shipments.Shipment>(x => x.QuoteId)
+                .HasForeignKey<Shipment>(x => x.QuoteId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasOne(x => x.Route)
@@ -61,6 +60,16 @@ namespace Infrastructure.Data.Configuration.Shipments
                 .WithOne(x => x.Shipment)
                 .HasForeignKey(x => x.ShipmentId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasMany(x => x.Invoices)
+                .WithOne(x => x.Shipment)
+                .HasForeignKey(x => x.ShipmentId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            builder.HasMany(x => x.ShipmentDocuments)
+                .WithOne(x => x.Shipment)
+                .HasForeignKey(x => x.ShipmentId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasIndex(x => x.QuoteId).IsUnique();
 

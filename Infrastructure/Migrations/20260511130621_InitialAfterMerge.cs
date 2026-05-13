@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class FirstInitialAfterMargeMigration : Migration
+    public partial class InitialAfterMerge : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -32,6 +32,8 @@ namespace Infrastructure.Migrations
                     Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     FirstName = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     LastName = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    PendingEmail = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PendingPhoneNumber = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     UserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
                     NormalizedUserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
                     Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
@@ -83,6 +85,21 @@ namespace Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ContainerTypes", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "IntegrationMessages",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ExternalMessageId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    Source = table.Column<int>(type: "int", nullable: false),
+                    ProcessingStatus = table.Column<int>(type: "int", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_IntegrationMessages", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -296,8 +313,10 @@ namespace Infrastructure.Migrations
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     CustomerId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CarrierId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     RouteId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     ContainerTypeId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    RateId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     FinalPrice = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     Currency = table.Column<string>(type: "nvarchar(4)", maxLength: 4, nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false, defaultValueSql: "GETUTCDATE()"),
@@ -308,6 +327,12 @@ namespace Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Quotes", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Quotes_Carriers_CarrierId",
+                        column: x => x.CarrierId,
+                        principalTable: "Carriers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_Quotes_ContainerTypes_ContainerTypeId",
                         column: x => x.ContainerTypeId,
@@ -410,7 +435,24 @@ namespace Infrastructure.Migrations
                     ClientConfirmedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     BookingRequestedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     BookingConfirmedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    ShippingInstructionsSubmittedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    DraftBlReceivedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    DraftBlApprovedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    PaymentPendingAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    PaymentConfirmedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    TelexReleasedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     DeliveredAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    ClosedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    BookingNumber = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    VesselName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    VoyageNumber = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CancellationReason = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    HoldReason = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CurrentCheckpoint = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    EstimatedDeparture = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    EstimatedArrival = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    ActualDeparture = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    ActualArrival = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
                     DeletedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true)
@@ -482,7 +524,13 @@ namespace Infrastructure.Migrations
                     ShipmentId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Description = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: false),
                     Quantity = table.Column<int>(type: "int", nullable: false),
-                    Weight = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    ChargeableWeight = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    GrossWeight = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    NetWeight = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    VolumeCbm = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    IsHazardous = table.Column<bool>(type: "bit", nullable: false),
+                    RequiredTemperatureCelsius = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    MarksAndNumbers = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
@@ -508,6 +556,8 @@ namespace Infrastructure.Migrations
                     FromStatus = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     ToStatus = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     ChangedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    ChangedByUserId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    ChangedByRole = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     ChangedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true)
                 },
@@ -595,6 +645,12 @@ namespace Infrastructure.Migrations
                 filter: "[TaxNumber] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
+                name: "IX_IntegrationMessages_ExternalMessageId_Source",
+                table: "IntegrationMessages",
+                columns: new[] { "ExternalMessageId", "Source" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Ports_Code",
                 table: "Ports",
                 column: "Code",
@@ -604,6 +660,11 @@ namespace Infrastructure.Migrations
                 name: "IX_QuoteItems_QuoteId",
                 table: "QuoteItems",
                 column: "QuoteId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Quotes_CarrierId",
+                table: "Quotes",
+                column: "CarrierId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Quotes_ContainerTypeId",
@@ -788,6 +849,9 @@ namespace Infrastructure.Migrations
                 name: "AspNetUserTokens");
 
             migrationBuilder.DropTable(
+                name: "IntegrationMessages");
+
+            migrationBuilder.DropTable(
                 name: "QuoteItems");
 
             migrationBuilder.DropTable(
@@ -812,10 +876,10 @@ namespace Infrastructure.Migrations
                 name: "Shipments");
 
             migrationBuilder.DropTable(
-                name: "Carriers");
+                name: "Quotes");
 
             migrationBuilder.DropTable(
-                name: "Quotes");
+                name: "Carriers");
 
             migrationBuilder.DropTable(
                 name: "ContainerTypes");

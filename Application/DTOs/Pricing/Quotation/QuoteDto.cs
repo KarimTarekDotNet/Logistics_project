@@ -18,11 +18,8 @@ namespace Application.DTOs.Pricing.Quotation
     public record CreateQuoteRequest
     {
         public Guid CustomerId { get; init; }
-        public Guid RouteId { get; init; }
-        public Guid ContainerTypeId { get; init; }
-        public decimal FinalPrice { get; init; }
-        public string Currency { get; init; } = null!;
-        public IReadOnlyList<CreateQuoteItemRequest> Items { get; init; } = null!;
+        public Guid RateId { get; init; }
+        public IReadOnlyList<CreateQuoteItemRequest> Items { get; init; } = [];
     }
 
     public record UpdateQuoteRequest(string CustomerName, decimal FinalPrice, string Currency);
