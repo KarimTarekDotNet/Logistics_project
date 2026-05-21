@@ -4768,6 +4768,9 @@ html {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
+  direction: ltr;
+  overflow: hidden;
 }
 
 :root.light .landing-nav {
@@ -4780,7 +4783,8 @@ html {
   gap: 10px;
   text-decoration: none;
   color: var(--text-primary);
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  max-width: min(320px, 34vw);
   min-width: 0;
 }
 
@@ -4864,6 +4868,7 @@ html {
 .landing-nav-theme {
   width: 34px;
   height: 34px;
+  flex: 0 0 34px;
   display: grid;
   place-items: center;
   background: var(--bg-elevated);
@@ -5779,12 +5784,12 @@ html {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1100px) {
   .landing-nav {
     min-height: 56px;
     height: auto;
-    padding: 8px 16px;
-    gap: 10px;
+    padding: 8px 20px;
+    gap: 12px;
   }
 
   .landing-nav-links {
@@ -5793,6 +5798,7 @@ html {
 
   .landing-brand {
     flex: 1 1 auto;
+    max-width: none;
   }
 
   .landing-brand span {
@@ -5810,6 +5816,14 @@ html {
   .landing-nav-actions .ghost-button {
     min-height: 34px;
     padding: 0 12px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 768px) {
+  .landing-nav {
+    padding: 8px 16px;
+    gap: 10px;
   }
 
   .landing-hero {
