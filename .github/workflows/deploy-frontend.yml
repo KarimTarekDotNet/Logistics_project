@@ -37,7 +37,11 @@ jobs:
           VITE_API_BASE_URL: "https://unmultipliable-kelsey-unloyal.ngrok-free.dev"
 
       - name: Add SPA fallback
-        run: cp dist/index.html dist/404.html
+        run: |
+          cp dist/index.html dist/404.html
+          mkdir -p dist/confirm-email dist/confirm-email-change
+          cp dist/index.html dist/confirm-email/index.html
+          cp dist/index.html dist/confirm-email-change/index.html
         working-directory: Frontend
 
       - name: Publish to gh-pages

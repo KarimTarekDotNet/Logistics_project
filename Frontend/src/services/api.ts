@@ -143,6 +143,49 @@ function notifySessionRefresh(session: AuthSession | null) {
   window.dispatchEvent(new CustomEvent<AuthSession | null>(SESSION_REFRESHED_EVENT, { detail: session }));
 }
 
+export function getApiAssetUrl(path: string) {
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_BASE_URL}/${path.replace(/^\/+/, "")}`;
+}
+
+export async function openApiAsset(path: string, filename = "document") {
+  const url = getApiAssetUrl(path);
+  const popup = window.open("about:blank", "_blank");
+  if (popup) popup.opener = null;
+
+  try {
+    const response = await fetch(url, {
+      headers: SKIP_NGROK_WARNING ? { "ngrok-skip-browser-warning": "true" } : {},
+      credentials: "same-origin",
+      referrerPolicy: "strict-origin-when-cross-origin"
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, `Could not open ${filename}`, await parseResponse(response));
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+
+    if (popup) {
+      popup.location.href = objectUrl;
+    } else {
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  } catch (error) {
+    popup?.close();
+    throw error;
+  }
+}
+
 async function refreshStoredSession() {
   if (refreshPromise) return refreshPromise;
 

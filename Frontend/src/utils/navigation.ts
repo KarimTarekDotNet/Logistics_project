@@ -15,7 +15,8 @@ export function getAppPath() {
 }
 
 export function getAppPathname(path = getAppPath()) {
-  return path.split("?")[0] || "/";
+  const pathname = path.split("?")[0] || "/";
+  return pathname === "/" ? pathname : pathname.replace(/\/+$/, "") || "/";
 }
 
 export function toBrowserPath(path: string) {

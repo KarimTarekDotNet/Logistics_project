@@ -1,27 +1,30 @@
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+const isGitHubPages = process.env.GITHUB_PAGES === "true";
+const devApiTarget = process.env.VITE_DEV_API_BASE_URL ?? "https://localhost:7100";
 
 export default defineConfig({
-  base: process.env.GITHUB_PAGES === 'true' ? '/Logistics_project/' : '/',
+  base: isGitHubPages ? "/Logistics_project/" : "/",
   plugins: [react(), tailwindcss()],
   server: {
-    host: '0.0.0.0',
+    host: "0.0.0.0",
     proxy: {
-      '/api': {
-        target: 'https://localhost:7100',
+      "/api": {
+        target: devApiTarget,
         changeOrigin: true,
-        secure: false
+        secure: false,
       },
-      '/shipments': {
-        target: 'https://localhost:7100',
+      "/shipments": {
+        target: devApiTarget,
         changeOrigin: true,
-        secure: false
-      }
+        secure: false,
+      },
     },
     allowedHosts: [
-      'ingrainedly-hyperdemocratic-joleen.ngrok-free.dev',
-      'unmultipliable-kelsey-unloyal.ngrok-free.dev'
-    ]
-  }
-})
+      "ingrainedly-hyperdemocratic-joleen.ngrok-free.dev",
+      "unmultipliable-kelsey-unloyal.ngrok-free.dev",
+    ],
+  },
+});

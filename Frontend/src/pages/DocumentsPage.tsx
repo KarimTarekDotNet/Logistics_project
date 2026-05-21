@@ -3,8 +3,9 @@ import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import { ConfirmDialog, EmptyState, EntityActions, Field, PanelTitle, SectionHeader } from "../components/ui";
 import { documentTypes } from "../constants/logistics";
 import { ShipmentContextPanel } from "../features/shipments/ShipmentContextPanel";
-import { api } from "../services/api";
+import { openApiAsset } from "../services/api";
 import type { Shipment, ShipmentDocument } from "../types";
+import { getFriendlyErrorMessage } from "../utils/errors";
 import { formatDate } from "../utils/format";
 
 export function DocumentsPage(props: {
@@ -18,6 +19,8 @@ export function DocumentsPage(props: {
 }) {
   const { selectedShipment, documents, busy, draft, setDraft, onUpload, onDeleteDocument } = props;
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function assignFile(file?: File | null) {
@@ -28,6 +31,20 @@ export function DocumentsPage(props: {
   function handleDrop(event: DragEvent<HTMLButtonElement>) {
     event.preventDefault();
     assignFile(event.dataTransfer.files?.[0]);
+  }
+
+  async function openDocument(document: ShipmentDocument) {
+    if (!document.storagePath || openingId) return;
+
+    setOpeningId(document.id);
+    setOpenError(null);
+    try {
+      await openApiAsset(document.storagePath, document.fileName);
+    } catch (error) {
+      setOpenError(getFriendlyErrorMessage(error));
+    } finally {
+      setOpeningId(null);
+    }
   }
 
   return (
@@ -88,31 +105,35 @@ export function DocumentsPage(props: {
 
             <section className="panel">
               <PanelTitle icon={<FileText size={18} />} title="Shipment documents" meta={`${documents.length} files`} />
+              {openError && <p className="field-error">{openError}</p>}
               <div className="compact-list">
-                {documents.map((document) => {
-                  const href = document.storagePath ? `${api.baseUrl}/${document.storagePath.replace(/^\/+/, "")}` : undefined;
-                  return (
-                    <div className="list-row document-row" key={document.id}>
-                      <div>
-                        <strong>{document.fileName}</strong>
-                        <small>
-                          {document.type} - {formatDate(document.uploadedAt)} - {document.uploadedByUsername}
-                        </small>
-                      </div>
-                      <span>{document.contentType}</span>
-                      <EntityActions>
-                        {href && (
-                          <a className="icon-mini" href={href} target="_blank" rel="noopener noreferrer" title="Open document">
-                            <Download size={14} />
-                          </a>
-                        )}
-                        <button className="icon-mini danger" type="button" title="Delete document" onClick={() => setDeleteId(document.id)}>
-                          <Trash2 size={14} />
-                        </button>
-                      </EntityActions>
+                {documents.map((document) => (
+                  <div className="list-row document-row" key={document.id}>
+                    <div>
+                      <strong>{document.fileName}</strong>
+                      <small>
+                        {document.type} - {formatDate(document.uploadedAt)} - {document.uploadedByUsername}
+                      </small>
                     </div>
-                  );
-                })}
+                    <span>{document.contentType}</span>
+                    <EntityActions>
+                      {document.storagePath && (
+                        <button
+                          className="icon-mini"
+                          type="button"
+                          disabled={openingId === document.id}
+                          title="Open document"
+                          onClick={() => void openDocument(document)}
+                        >
+                          <Download size={14} />
+                        </button>
+                      )}
+                      <button className="icon-mini danger" type="button" title="Delete document" onClick={() => setDeleteId(document.id)}>
+                        <Trash2 size={14} />
+                      </button>
+                    </EntityActions>
+                  </div>
+                ))}
                 {documents.length === 0 && <EmptyState icon={<FileText size={24} />} title="No documents uploaded" />}
               </div>
             </section>
