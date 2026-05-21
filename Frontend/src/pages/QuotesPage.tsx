@@ -1,16 +1,13 @@
-import { CheckCircle2, ClipboardList, ExternalLink, Eye, Plus, Search, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, ClipboardList, Eye, Plus, Search, Trash2, XCircle } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { ConfirmDialog, EmptyState, EntityActions, Field, PanelTitle, SectionHeader, StatusBadge } from "../components/ui";
-import type { Customer, Quote, QuoteDraft, QuoteRequest, Rate, Route } from "../types";
+import { RateDetailsPage } from "./RateDetailsPage";
+import type { AuthSession, Customer, Quote, QuoteDraft, QuoteRequest, Rate, Route } from "../types";
 import { formatDate, formatMoney } from "../utils/format";
 import { includesSearch } from "../utils/search";
 
 function isPendingQuote(status: Quote["status"]) {
   return status === "Pending" || status === 0;
-}
-
-function rateDetailsHref(rateId: string) {
-  return `/rates/${rateId}`;
 }
 
 export function QuotesPage(props: {
@@ -19,10 +16,12 @@ export function QuotesPage(props: {
   rates: Rate[];
   routes: Route[];
   customers: Customer[];
+  session: AuthSession;
   isPrivileged: boolean;
   isAdmin: boolean;
   isUser: boolean;
   busy: boolean;
+  theme: "light" | "dark";
   draft: QuoteDraft;
   setDraft: (draft: QuoteDraft) => void;
   onCreateQuote: (event: FormEvent) => void;
@@ -32,6 +31,8 @@ export function QuotesPage(props: {
   onOpenQuoteRequestDetails: (id: string) => void;
   onFilterByCustomer: (customerName: string) => void;
   onFilterByRoute: (routeId: string) => void;
+  onToggleTheme: () => void;
+  onRateRequestCreated: (request: QuoteRequest) => void;
 }) {
   const {
     quotes,
@@ -39,10 +40,12 @@ export function QuotesPage(props: {
     rates,
     routes,
     customers,
+    session,
     isPrivileged,
     isAdmin,
     isUser,
     busy,
+    theme,
     draft,
     setDraft,
     onCreateQuote
@@ -54,6 +57,7 @@ export function QuotesPage(props: {
   const [routeLookup, setRouteLookup] = useState("");
   const [rejectTarget, setRejectTarget] = useState<{ kind: "quote"; id: string } | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [selectedRateId, setSelectedRateId] = useState<string | null>(null);
 
   const filteredQuotes = useMemo(
     () =>
@@ -94,6 +98,12 @@ export function QuotesPage(props: {
       ),
     [quoteRequests, requestQuery]
   );
+  const selectedRate = useMemo(() => rates.find((rate) => rate.id === selectedRateId) ?? null, [rates, selectedRateId]);
+
+  function openRateDetails(rateId: string) {
+    setSelectedRateId(rateId);
+    window.setTimeout(() => document.getElementById("quote-rate-details-inline")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
 
   function submitRejection(event: FormEvent) {
     event.preventDefault();
@@ -217,6 +227,22 @@ export function QuotesPage(props: {
         </section>
       )}
 
+      {selectedRateId && (
+        <div id="quote-rate-details-inline" className="inline-rate-details">
+          <RateDetailsPage
+            rateId={selectedRateId}
+            session={session}
+            isUser={isUser}
+            theme={theme}
+            onToggleTheme={props.onToggleTheme}
+            initialRate={selectedRate ?? undefined}
+            embedded
+            onBack={() => setSelectedRateId(null)}
+            onRequestCreated={props.onRateRequestCreated}
+          />
+        </div>
+      )}
+
       <section className="panel">
         <PanelTitle icon={<ClipboardList size={18} />} title="Quote requests" meta={`${filteredRequests.length} shown`} />
         <div className="toolbar">
@@ -315,9 +341,9 @@ export function QuotesPage(props: {
                     {(isAdmin || isUser) && (
                       <td>
                         <EntityActions>
-                          <a className="icon-mini" href={rateDetailsHref(quote.rateId)} target="_blank" rel="noopener noreferrer" title="Open rate details">
-                            <ExternalLink size={14} />
-                          </a>
+                          <button className="icon-mini" type="button" title="Open rate details" disabled={busy} onClick={() => openRateDetails(quote.rateId)}>
+                            <Eye size={14} />
+                          </button>
                           {isUser && isPendingQuote(quote.status) && (
                             <>
                               <button className="icon-mini" type="button" title="Accept quote" disabled={busy} onClick={() => props.onAcceptQuote(quote.id)}>

@@ -1,7 +1,8 @@
-import { BarChart3, Box, CheckCircle2, CircleDollarSign, ExternalLink, Pencil, Plus, RotateCcw, Search, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
+import { BarChart3, Box, CheckCircle2, CircleDollarSign, Eye, Pencil, Plus, RotateCcw, Search, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ConfirmDialog, EmptyState, EntityActions, Field, MetricLine, PanelTitle, SectionHeader, StatusBadge } from "../components/ui";
-import type { Carrier, ContainerType, MarketAnalytics, Rate, RateBookFilterDraft, RateDraft, RateRecommendationDraft, RateRecommendationResponse, RecommendationPriority, Route } from "../types";
+import { RateDetailsPage } from "./RateDetailsPage";
+import type { AuthSession, Carrier, ContainerType, MarketAnalytics, QuoteRequest, Rate, RateBookFilterDraft, RateDraft, RateRecommendationDraft, RateRecommendationResponse, RecommendationPriority, Route } from "../types";
 import { formatMoney, formatShortDate, isoToLocalDateTime } from "../utils/format";
 
 export type AnalyticsDraft = {
@@ -55,18 +56,17 @@ function draftFromRate(rate: Rate): RateDraft {
   };
 }
 
-function rateDetailsHref(rateId: string) {
-  return `/rates/${rateId}`;
-}
-
 export function PricingPage(props: {
   rates: Rate[];
   carriers: Carrier[];
   routes: Route[];
   containerTypes: ContainerType[];
+  session: AuthSession;
   isPrivileged: boolean;
   isAdmin: boolean;
+  isUser: boolean;
   busy: boolean;
+  theme: "light" | "dark";
   draft: RateDraft;
   setDraft: (draft: RateDraft) => void;
   analyticsDraft: AnalyticsDraft;
@@ -84,15 +84,20 @@ export function PricingPage(props: {
   onResetRateFilters: () => void;
   onLoadAnalytics: (event: FormEvent) => void;
   onLoadRecommendations: (event: FormEvent) => void;
+  onToggleTheme: () => void;
+  onRateRequestCreated: (request: QuoteRequest) => void;
 }) {
   const {
     rates,
     carriers,
     routes,
     containerTypes,
+    session,
     isPrivileged,
     isAdmin,
+    isUser,
     busy,
+    theme,
     draft,
     setDraft,
     analyticsDraft,
@@ -109,12 +114,15 @@ export function PricingPage(props: {
     onApplyRateFilters,
     onResetRateFilters,
     onLoadAnalytics,
-    onLoadRecommendations
+    onLoadRecommendations,
+    onToggleTheme,
+    onRateRequestCreated
   } = props;
   const [filterDraft, setFilterDraft] = useState<RateBookFilterDraft>(rateFilters);
   const [editingRate, setEditingRate] = useState<Rate | null>(null);
   const [editDraft, setEditDraft] = useState<RateDraft | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedRateId, setSelectedRateId] = useState<string | null>(null);
 
   useEffect(() => {
     setFilterDraft(rateFilters);
@@ -147,10 +155,16 @@ export function PricingPage(props: {
     const start = Math.max(1, currentPage - 2);
     return Array.from({ length: 5 }, (_, index) => start + index);
   }, [currentPage]);
+  const selectedRate = useMemo(() => rates.find((rate) => rate.id === selectedRateId) ?? null, [rates, selectedRateId]);
 
   function applyFilterDraft(nextDraft: RateBookFilterDraft) {
     setFilterDraft(nextDraft);
     onApplyRateFilters(nextDraft);
+  }
+
+  function openRateDetails(rateId: string) {
+    setSelectedRateId(rateId);
+    window.setTimeout(() => document.getElementById("rate-details-inline")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
   }
 
   async function submitEdit(event: FormEvent) {
@@ -541,10 +555,10 @@ export function PricingPage(props: {
                         <span>{item.score}/100 score</span>
                         {item.transitDays != null && <span>{item.transitDays} transit days</span>}
                         <span>Valid to {formatShortDate(item.rate.validTo)}</span>
-                        <a className="inline-link" href={rateDetailsHref(item.rate.id)} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink size={13} />
+                        <button className="inline-link inline-action" type="button" onClick={() => openRateDetails(item.rate.id)}>
+                          <Eye size={13} />
                           Details
-                        </a>
+                        </button>
                       </div>
                       <p>{item.recommendationReason}</p>
                     </article>
@@ -559,6 +573,22 @@ export function PricingPage(props: {
           )}
         </section>
       </div>
+
+      {selectedRateId && (
+        <div id="rate-details-inline" className="inline-rate-details">
+          <RateDetailsPage
+            rateId={selectedRateId}
+            session={session}
+            isUser={isUser}
+            theme={theme}
+            onToggleTheme={onToggleTheme}
+            initialRate={selectedRate ?? undefined}
+            embedded
+            onBack={() => setSelectedRateId(null)}
+            onRequestCreated={onRateRequestCreated}
+          />
+        </div>
+      )}
 
       <section className="panel">
         <PanelTitle icon={<Box size={18} />} title="Rate book" meta={`${rates.length} shown`} />
@@ -715,10 +745,10 @@ export function PricingPage(props: {
                 <div className="rate-list-right">
                   <b className="rate-price">{formatMoney(rate.price, rate.currency)}</b>
                   <StatusBadge status={rate.isActive ? "Active" : "Inactive"} />
-                  <a className="mini-button" href={rateDetailsHref(rate.id)} target="_blank" rel="noopener noreferrer" title="Open rate details">
-                    <ExternalLink size={14} />
+                  <button className="mini-button" type="button" onClick={() => openRateDetails(rate.id)} title="Open rate details">
+                    <Eye size={14} />
                     Details
-                  </a>
+                  </button>
                   {isPrivileged && (
                     <EntityActions>
                       {isAdmin && (
@@ -802,6 +832,7 @@ export function PricingPage(props: {
         onConfirm={() => {
           if (!deleteId) return;
           onDeleteRate(deleteId);
+          if (selectedRateId === deleteId) setSelectedRateId(null);
           setDeleteId(null);
         }}
       />

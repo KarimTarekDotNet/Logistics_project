@@ -3497,11 +3497,28 @@ tbody td {
   font-weight: 600;
 }
 
+.inline-link.inline-action {
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.inline-rate-details {
+  scroll-margin-top: 76px;
+}
+
 .rate-detail-page {
   min-height: 100vh;
   background:
     linear-gradient(180deg, rgba(137, 206, 255, 0.04), transparent 280px),
     var(--bg-base);
+}
+
+.rate-detail-page.embedded {
+  min-height: auto;
+  background: transparent;
 }
 
 .rate-detail-topbar {
@@ -3549,6 +3566,11 @@ tbody td {
   width: min(1180px, calc(100% - 48px));
   margin: 0 auto;
   padding: 42px 0 56px;
+}
+
+.rate-detail-page.embedded .rate-detail-shell {
+  width: 100%;
+  padding: 0;
 }
 
 .rate-detail-hero {

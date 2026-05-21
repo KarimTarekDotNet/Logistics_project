@@ -49,30 +49,39 @@ export function RateDetailsPage(props: {
   isUser: boolean;
   theme: "light" | "dark";
   onToggleTheme: () => void;
+  initialRate?: Rate;
+  embedded?: boolean;
+  onBack?: () => void;
   onRequestCreated?: (request: QuoteRequest) => void;
 }) {
-  const [rate, setRate] = useState<Rate | null>(null);
+  const isEmbedded = Boolean(props.embedded);
+  const [rate, setRate] = useState<Rate | null>(() => props.initialRate ?? null);
   const [draft, setDraft] = useState<QuoteRequestDraft>({ ...initialRequestDraft, rateId: props.rateId });
   const [createdRequest, setCreatedRequest] = useState<QuoteRequest | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !props.initialRate);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft((current) => ({ ...current, rateId: props.rateId }));
+    setCreatedRequest(null);
   }, [props.rateId]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadRate() {
-      setLoading(true);
+      setRate(props.initialRate ?? null);
+      setLoading(!props.initialRate);
       setError(null);
       try {
         const result = await api.getRate(props.session.accessToken, props.rateId);
         if (!cancelled) setRate(result);
       } catch (loadError) {
-        if (!cancelled) setError(getFriendlyErrorMessage(loadError));
+        if (!cancelled) {
+          setError(getFriendlyErrorMessage(loadError));
+          if (!props.initialRate) setRate(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -82,7 +91,9 @@ export function RateDetailsPage(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.rateId, props.session.accessToken]);
+  }, [props.initialRate, props.rateId, props.session.accessToken]);
+
+  const handleBack = props.onBack ?? leaveDetailPage;
 
   const validationMessage = useMemo(() => {
     if (!rate) return null;
@@ -139,25 +150,27 @@ export function RateDetailsPage(props: {
   }
 
   return (
-    <main className="rate-detail-page">
-      <header className="rate-detail-topbar">
-        <a className="rate-detail-brand" href={toBrowserPath("/")} target="_blank" rel="noopener noreferrer">
-          <BrandLogo />
-          <div>
-            <strong>{BRAND_NAME}</strong>
-            <span>Rate detail</span>
+    <section className={`rate-detail-page ${isEmbedded ? "embedded" : ""}`}>
+      {!isEmbedded && (
+        <header className="rate-detail-topbar">
+          <a className="rate-detail-brand" href={toBrowserPath("/")} target="_blank" rel="noopener noreferrer">
+            <BrandLogo />
+            <div>
+              <strong>{BRAND_NAME}</strong>
+              <span>Rate detail</span>
+            </div>
+          </a>
+          <div className="rate-detail-actions">
+            <button className="icon-button" type="button" onClick={props.onToggleTheme} title="Toggle theme" aria-label="Toggle theme">
+              {props.theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <button className="secondary-button compact" type="button" onClick={handleBack}>
+              <ArrowLeft size={16} />
+              Back to workspace
+            </button>
           </div>
-        </a>
-        <div className="rate-detail-actions">
-          <button className="icon-button" type="button" onClick={props.onToggleTheme} title="Toggle theme" aria-label="Toggle theme">
-            {props.theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-          <button className="secondary-button compact" type="button" onClick={leaveDetailPage}>
-            <ArrowLeft size={16} />
-            Back to workspace
-          </button>
-        </div>
-      </header>
+        </header>
+      )}
 
       {loading && (
         <section className="rate-detail-shell">
@@ -168,7 +181,19 @@ export function RateDetailsPage(props: {
       {!loading && error && !rate && (
         <section className="rate-detail-shell">
           <div className="panel">
-            <EmptyState icon={<ShieldCheck size={28} />} title="Rate could not be loaded" description={error} />
+            <EmptyState
+              icon={<ShieldCheck size={28} />}
+              title="Rate could not be loaded"
+              description={error}
+              action={
+                isEmbedded ? (
+                  <button className="secondary-button compact" type="button" onClick={handleBack}>
+                    <ArrowLeft size={16} />
+                    Back to rates
+                  </button>
+                ) : undefined
+              }
+            />
           </div>
         </section>
       )}
@@ -188,6 +213,12 @@ export function RateDetailsPage(props: {
             <div className="rate-detail-price">
               <strong>{formatMoney(rate.price, rate.currency)}</strong>
               <StatusBadge status={rate.isActive ? "Active" : "Inactive"} />
+              {isEmbedded && (
+                <button className="secondary-button compact" type="button" onClick={handleBack}>
+                  <ArrowLeft size={16} />
+                  Back to rates
+                </button>
+              )}
             </div>
           </div>
 
@@ -301,15 +332,17 @@ export function RateDetailsPage(props: {
               <div className="quote-request-locked">
                 <ShieldCheck size={22} />
                 <p>Quote requests from a rate are available to customer users. Staff can review submitted requests from the Quotes workspace.</p>
-                <a href={toBrowserPath("/")} target="_blank" rel="noopener noreferrer">
-                  Open workspace
-                  <ExternalLink size={14} />
-                </a>
+                {!isEmbedded && (
+                  <a href={toBrowserPath("/")} target="_blank" rel="noopener noreferrer">
+                    Open workspace
+                    <ExternalLink size={14} />
+                  </a>
+                )}
               </div>
             )}
           </section>
         </section>
       )}
-    </main>
+    </section>
   );
 }

@@ -1884,9 +1884,12 @@ export default function App() {
           carriers={data.carriers}
           routes={data.routes}
           containerTypes={data.containerTypes}
+          session={session!}
           isPrivileged={isPrivileged}
           isAdmin={isAdmin}
+          isUser={isUser}
           busy={busy}
+          theme={theme}
           draft={rateDraft}
           setDraft={setRateDraft}
           analyticsDraft={analyticsDraft}
@@ -1904,6 +1907,11 @@ export default function App() {
           onResetRateFilters={handleResetRateFilters}
           onLoadAnalytics={handleLoadAnalytics}
           onLoadRecommendations={handleLoadRecommendations}
+          onToggleTheme={handleToggleTheme}
+          onRateRequestCreated={(request) => {
+            setData((current) => ({ ...current, quoteRequests: [request, ...current.quoteRequests] }));
+            pushToast("success", "Quote request submitted", "The request has been sent for review.");
+          }}
         />
       );
     }
@@ -1964,10 +1972,12 @@ export default function App() {
           rates={data.rates}
           routes={data.routes}
           customers={data.customers}
+          session={session!}
           isPrivileged={isPrivileged}
           isAdmin={isAdmin}
           isUser={isUser}
           busy={busy}
+          theme={theme}
           draft={quoteDraft}
           setDraft={setQuoteDraft}
           onCreateQuote={handleCreateQuote}
@@ -1977,6 +1987,11 @@ export default function App() {
           onOpenQuoteRequestDetails={handleOpenQuoteRequestDetails}
           onFilterByCustomer={handleFilterQuotesByCustomer}
           onFilterByRoute={handleFilterQuotesByRoute}
+          onToggleTheme={handleToggleTheme}
+          onRateRequestCreated={(request) => {
+            setData((current) => ({ ...current, quoteRequests: [request, ...current.quoteRequests] }));
+            pushToast("success", "Quote request submitted", "The request has been sent for review.");
+          }}
         />
       );
     }
