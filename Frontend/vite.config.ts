@@ -20,7 +20,8 @@ export default defineConfig({
       }
     },
     allowedHosts: [
-      'ingrainedly-hyperdemocratic-joleen.ngrok-free.dev'
+      'ingrainedly-hyperdemocratic-joleen.ngrok-free.dev',
+      'unmultipliable-kelsey-unloyal.ngrok-free.dev'
     ]
   }
 })
