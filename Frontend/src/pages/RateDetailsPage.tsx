@@ -7,6 +7,7 @@ import { api } from "../services/api";
 import type { AuthSession, QuoteRequest, QuoteRequestDraft, Rate } from "../types";
 import { getFriendlyErrorMessage } from "../utils/errors";
 import { formatDate, formatMoney, formatShortDate } from "../utils/format";
+import { toBrowserPath } from "../utils/navigation";
 
 const initialRequestDraft: QuoteRequestDraft = {
   rateId: "",
@@ -39,7 +40,7 @@ function leaveDetailPage() {
     return;
   }
 
-  window.location.assign("/");
+  window.location.assign(toBrowserPath("/"));
 }
 
 export function RateDetailsPage(props: {
@@ -140,7 +141,7 @@ export function RateDetailsPage(props: {
   return (
     <main className="rate-detail-page">
       <header className="rate-detail-topbar">
-        <a className="rate-detail-brand" href="/" target="_blank" rel="noopener noreferrer">
+        <a className="rate-detail-brand" href={toBrowserPath("/")} target="_blank" rel="noopener noreferrer">
           <BrandLogo />
           <div>
             <strong>{BRAND_NAME}</strong>
@@ -300,7 +301,7 @@ export function RateDetailsPage(props: {
               <div className="quote-request-locked">
                 <ShieldCheck size={22} />
                 <p>Quote requests from a rate are available to customer users. Staff can review submitted requests from the Quotes workspace.</p>
-                <a href="/" target="_blank" rel="noopener noreferrer">
+                <a href={toBrowserPath("/")} target="_blank" rel="noopener noreferrer">
                   Open workspace
                   <ExternalLink size={14} />
                 </a>

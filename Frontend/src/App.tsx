@@ -60,6 +60,7 @@ import type {
 import { getFriendlyErrorMessage, isNotFoundError, safe } from "./utils/errors";
 import { getLocalDateTime, isoToLocalDateTime, toIso } from "./utils/format";
 import { isValidId } from "./utils/ids";
+import { getAppPath, getAppPathname, toBrowserPath } from "./utils/navigation";
 import { loadPendingVerification, loadStoredSession, persistSession, sessionFromAuth } from "./utils/session";
 
 const initialData: AppData = {
@@ -191,12 +192,8 @@ function buildRateQuery(filters: RateBookFilterDraft): QueryParams {
   };
 }
 
-function currentPath() {
-  return `${window.location.pathname}${window.location.search}`;
-}
-
 export default function App() {
-  const [path, setPath] = useState(() => currentPath());
+  const [path, setPath] = useState(() => getAppPath());
   const [session, setSession] = useState<AuthSession | null>(() => loadStoredSession());
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     return (localStorage.getItem(THEME_KEY) as "dark" | "light" | null) ?? "dark";
@@ -299,15 +296,16 @@ export default function App() {
   const appliedRateBookFiltersRef = useRef<RateBookFilterDraft>(initialRateBookFilters);
 
   const navigate = useCallback((nextPath: string, options: { replace?: boolean; scroll?: boolean } = {}) => {
-    const normalized = nextPath || "/";
-    if (window.location.pathname + window.location.search !== normalized) {
+    const normalized = nextPath.startsWith("/") ? nextPath : `/${nextPath || ""}`;
+    if (getAppPath() !== normalized) {
+      const browserPath = toBrowserPath(normalized);
       if (options.replace) {
-        window.history.replaceState(null, "", normalized);
+        window.history.replaceState(null, "", browserPath);
       } else {
-        window.history.pushState(null, "", normalized);
+        window.history.pushState(null, "", browserPath);
       }
     }
-    setPath(currentPath());
+    setPath(getAppPath());
     if (options.scroll !== false) window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
@@ -463,7 +461,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    const onPopState = () => setPath(currentPath());
+    const onPopState = () => setPath(getAppPath());
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
@@ -542,13 +540,13 @@ export default function App() {
 
   useEffect(() => {
     if (session || authMode === "verify") return;
-    const pathname = window.location.pathname.toLowerCase();
+    const pathname = getAppPathname(path).toLowerCase();
     if (pathname === "/auth/register") setAuthMode("register");
     if (pathname === "/auth/login") setAuthMode("login");
   }, [authMode, path, session]);
 
   useEffect(() => {
-    const url = new URL(window.location.href);
+    const url = new URL(path, window.location.origin);
     const pathname = url.pathname.toLowerCase();
     const isEmailConfirmation = pathname === "/confirm-email";
     const isEmailChangeConfirmation = pathname === "/confirm-email-change";
@@ -2109,11 +2107,12 @@ export default function App() {
     );
   }
 
-  const rateDetailMatch = /^\/rates\/([0-9a-f-]{36})$/i.exec(window.location.pathname);
+  const pathname = getAppPathname(path);
+  const rateDetailMatch = /^\/rates\/([0-9a-f-]{36})$/i.exec(pathname);
 
   if (!session) {
-    const pathname = window.location.pathname.toLowerCase();
-    const showAuth = pathname === "/auth/login" || pathname === "/auth/register" || Boolean(rateDetailMatch);
+    const lowerPathname = pathname.toLowerCase();
+    const showAuth = lowerPathname === "/auth/login" || lowerPathname === "/auth/register" || Boolean(rateDetailMatch);
 
     return (
       <>
