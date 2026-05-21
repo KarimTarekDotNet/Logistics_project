@@ -24,8 +24,7 @@ namespace API.Controllers.Shipments
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
+            (string userId, bool isPrivileged) = GetCurrentUserContext();
             var shipmentItem = await _shipmentItemService.GetByIdAsync(id, userId, isPrivileged);
             if (shipmentItem == null)
                 return NotFound();
@@ -36,8 +35,7 @@ namespace API.Controllers.Shipments
         [HttpGet("shipment/{shipmentId}")]
         public async Task<IActionResult> GetByShipmentId(Guid shipmentId)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
+            (string userId, bool isPrivileged) = GetCurrentUserContext();
             var shipmentItems = await _shipmentItemService.GetByShipmentIdAsync(shipmentId, userId, isPrivileged);
             if (!shipmentItems.Any())
                 return NotFound();
@@ -49,8 +47,8 @@ namespace API.Controllers.Shipments
         [EnableRateLimiting("HeavyPolicy")]
         public async Task<IActionResult> Create([FromBody] CreateShipmentItemRequest request)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var createdItem = await _shipmentItemService.CreateAsync(request, userId);
+            (string userId, bool isPrivileged) = GetCurrentUserContext();
+            var createdItem = await _shipmentItemService.CreateAsync(request, userId, isPrivileged);
             return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, createdItem);
         }
 
@@ -58,8 +56,8 @@ namespace API.Controllers.Shipments
         [EnableRateLimiting("HeavyPolicy")]
         public async Task<IActionResult> Update(Guid id, [FromBody] UpdateShipmentItemRequest request)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var updatedItem = await _shipmentItemService.UpdateAsync(id, userId, request);
+            (string userId, bool isPrivileged) = GetCurrentUserContext();
+            var updatedItem = await _shipmentItemService.UpdateAsync(id, userId, isPrivileged, request);
             if (updatedItem == null)
                 return NotFound();
 
@@ -70,12 +68,20 @@ namespace API.Controllers.Shipments
         [EnableRateLimiting("HeavyPolicy")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var success = await _shipmentItemService.DeleteAsync(id, userId);
+            (string userId, bool isPrivileged) = GetCurrentUserContext();
+            var success = await _shipmentItemService.DeleteAsync(id, userId, isPrivileged);
             if (!success)
                 return NotFound();
 
             return Ok("Shipment item deleted successfully.");
+        }
+
+        private (string userId, bool isPrivileged) GetCurrentUserContext()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
+
+            return (userId, isPrivileged);
         }
     }
 }

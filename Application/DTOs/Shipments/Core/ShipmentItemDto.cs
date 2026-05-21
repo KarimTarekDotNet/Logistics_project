@@ -5,7 +5,6 @@
         public Guid ShipmentId { get; set; }
         public string Description { get; set; } = null!;
         public int Quantity { get; set; }
-        public decimal ChargeableWeight { get; set; }
 
         public decimal GrossWeight { get; set; }
         public decimal NetWeight { get; set; }
@@ -20,7 +19,6 @@
         public Guid? ShipmentId { get; set; }
         public string? Description { get; set; }
         public int? Quantity { get; set; }
-        public decimal? ChargeableWeight { get; set; }
 
         public decimal? GrossWeight { get; set; }
         public decimal? NetWeight { get; set; }

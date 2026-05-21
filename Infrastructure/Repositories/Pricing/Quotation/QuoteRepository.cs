@@ -21,7 +21,6 @@ namespace Infrastructure.Repositories.Pricing.Quotation
             return await _context.Quotes
                 .AsNoTracking()
                 .Include(x => x.Customer).ThenInclude(c => c.ApplicationUser)
-                .Include(q => q.Items)
                 .Include(q => q.Route).ThenInclude(r => r.FromPort)
                 .Include(q => q.Route).ThenInclude(r => r.ToPort)
                 .Include(q => q.ContainerType)
@@ -33,7 +32,6 @@ namespace Infrastructure.Repositories.Pricing.Quotation
             var quotesQuery = _context.Quotes
                 .AsNoTracking()
                 .Include(x => x.Customer).ThenInclude(c => c.ApplicationUser)
-                .Include(x => x.Items)
                 .Include(q => q.Route).ThenInclude(r => r.FromPort)
                 .Include(q => q.Route).ThenInclude(r => r.ToPort)
                 .Include(q => q.ContainerType)
@@ -45,13 +43,12 @@ namespace Infrastructure.Repositories.Pricing.Quotation
         {
             var quotesQuery = _context.Quotes
                 .AsNoTracking()
-                .Include(x => x.Items)
                 .Include(x => x.Customer).ThenInclude(c => c.ApplicationUser)
                 .Include(q => q.Route).ThenInclude(r => r.FromPort)
                 .Include(q => q.Route).ThenInclude(r => r.ToPort)
                 .Include(q => q.ContainerType)
-                .Where(q => EF.Functions.Like(q.Customer.ApplicationUser.FirstName, $"%{customerName}%") ||
-                EF.Functions.Like(q.Customer.ApplicationUser.LastName, $"%{customerName}%"))
+                .Where(q => EF.Functions.Like(q.Customer.ApplicationUser.FirstName, $"%{customerName.Trim()}%") ||
+                EF.Functions.Like(q.Customer.ApplicationUser.LastName, $"%{customerName.Trim()}%"))
                 .AsQueryable();
 
             return await Pagination(quotesQuery, query);
@@ -61,7 +58,6 @@ namespace Infrastructure.Repositories.Pricing.Quotation
         {
             var quotesQuery = _context.Quotes
                 .AsNoTracking()
-                .Include(x => x.Items)
                 .Include(x => x.Customer).ThenInclude(c => c.ApplicationUser)
                 .Include(q => q.Route).ThenInclude(r => r.FromPort)
                 .Include(q => q.Route).ThenInclude(r => r.ToPort)
@@ -72,11 +68,35 @@ namespace Infrastructure.Repositories.Pricing.Quotation
             return await Pagination(quotesQuery, query);
         }
 
+        public async Task<IEnumerable<Quote>> GetByCustomerIdAsync(Guid customerId, QueryParameters query)
+        {
+            var quotesQuery = _context.Quotes
+                .AsNoTracking()
+                .Include(x => x.Customer).ThenInclude(c => c.ApplicationUser)
+                .Include(q => q.Route).ThenInclude(r => r.FromPort)
+                .Include(q => q.Route).ThenInclude(r => r.ToPort)
+                .Include(q => q.ContainerType)
+                .Where(q => q.CustomerId == customerId && !q.IsDeleted)
+                .AsQueryable();
+
+            return await Pagination(quotesQuery, query);
+        }
+        public async Task<Quote?> GetByIdAndCustomerIdAsync(Guid quoteId, Guid customerId)
+        {
+            var quote = await _context.Quotes
+                .Include(x => x.Customer).ThenInclude(c => c.ApplicationUser)
+                .Include(q => q.Route).ThenInclude(r => r.FromPort)
+                .Include(q => q.Route).ThenInclude(r => r.ToPort)
+                .Include(q => q.ContainerType)
+                .FirstOrDefaultAsync(q => q.CustomerId == customerId && !q.IsDeleted && q.Id == quoteId);
+            return quote;
+        }
+
         private async Task<IEnumerable<Quote>> Pagination(IQueryable<Quote> quotesQuery, QueryParameters query)
         {
             if (!string.IsNullOrEmpty(query.Search))
             {
-                var searchTerm = $"%{query.Search}%";
+                var searchTerm = $"%{query.Search.Trim()}%";
                 quotesQuery = quotesQuery
                     .Where(q => EF.Functions.Like(q.Customer.ApplicationUser.FirstName, searchTerm)
                     || EF.Functions.Like(q.Customer.ApplicationUser.LastName, searchTerm)

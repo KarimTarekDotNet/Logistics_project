@@ -17,12 +17,14 @@ namespace Domain.Entities.Shipments
         public decimal SubTotal { get; set; }
         public decimal TaxAmount { get; set; }
         public decimal TotalAmount { get; set; }
+        public decimal? PaidPart { get; set; }
 
-        public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending;
+        public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Draft;
 
         public DateTimeOffset IssuedAt { get; set; }
         public DateTimeOffset DueDate { get; set; }
         public DateTimeOffset? PaidAt { get; set; }
+        public DateTimeOffset? PaidPartAt { get; set; }
 
         public PayerType PayerType { get; set; }
 

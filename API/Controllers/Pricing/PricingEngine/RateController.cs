@@ -1,4 +1,5 @@
-﻿using Application.DTOs.Pricing.PricingEngine;
+﻿using Application.DTOs.Pricing.PricingEngine.Rates;
+using Application.DTOs.Pricing.Recommendations;
 using Application.Interfaces.Services.Pricing.PricingEngine;
 using Application.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -10,6 +11,7 @@ namespace API.Controllers.Pricing.PricingEngine
     [ApiController]
     [Route("api/rates")]
     [EnableRateLimiting("ReadPolicy")]
+    [Authorize]
     public class RateController : ControllerBase
     {
         private readonly IRateService _rateService;
@@ -19,21 +21,48 @@ namespace API.Controllers.Pricing.PricingEngine
             _rateService = rateService;
         }
 
-        [HttpGet]
+        [HttpGet("count")]
         [AllowAnonymous]
+        public async Task<IActionResult> Count()
+        {
+            return Ok(await _rateService.CountAsync());
+        }
+
+        [HttpGet]
         public async Task<IActionResult> SearchAsync([FromQuery] RateParameters query)
         {
             var rates = await _rateService.SearchAsync(query);
 
             if (rates == null || !rates.Any())
-                return NotFound(new { message = "No rates found for the given criteria" });
+                return NotFound(new { message = "No rates found for the given criteria." });
 
             return Ok(rates);
         }
 
+        [HttpGet("market-analytics")]
+        public async Task<IActionResult> GetMarketAnalyticsAsync([FromQuery] QueryMarketRequest request)
+        {
+            var rates = await _rateService.GetMarketAnalyticsAsync
+            (request.RouteId, request.ContainerId, request.Currency);
+
+            if (rates == null)
+                return NotFound(new { message = "No rates found." });
+
+            return Ok(rates);
+        }
+
+        [HttpPost("recommended")]
+        public async Task<IActionResult> RecommendationAsync([FromQuery] RateRecommendationRequest request)
+        {
+            var recommended = await _rateService.RecommendationAsync(request);
+            if (recommended == null)
+                return NotFound(new { message = "No recommended rates found." });
+
+            return Ok(recommended);
+        }
+
         // GET: api/rates/{id}
         [HttpGet("{id:guid}")]
-        [AllowAnonymous]
         public async Task<IActionResult> GetRateById(Guid id)
         {
             var rate = await _rateService.GetByIdAsync(id);

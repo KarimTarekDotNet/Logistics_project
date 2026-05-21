@@ -7,6 +7,7 @@ using Domain.Entities.Shipments;
 using Domain.Entities.Users;
 using Domain.Enums;
 using Domain.Exceptions;
+using Infrastructure.Helper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,55 +26,79 @@ namespace Infrastructure.Services.Shipments.Core
             _userManager = userManager;
         }
 
-        public async Task<InvoiceResponse> CreateAsync(CreateInvoiceRequest request)
+        public async Task<InvoiceResponse> CreateOrUpdateDraftInvoiceAsync(Guid shipmentId, string userId)
         {
+            var user = await _userManager.Users.Include(x => x.CustomerProfile)
+            .FirstOrDefaultAsync(x => x.Id == userId);
+
+            if (user == null || user.CustomerProfile == null)
+                throw new KeyNotFoundException("user not found.");
+
             var shipment = await _unitOfWork.Shipments
-                .GetTrackedByIdWithDetailsAsync(request.ShipmentId);
+                .GetTrackedByIdWithDetailsAsync(shipmentId);
 
             if (shipment == null)
                 throw new KeyNotFoundException("Shipment not found.");
+
+            if (shipment.CustomerId != user.CustomerProfile.Id)
+                throw new UnauthorizedAccessException("You do not have access to this invoice.");
 
             if (!ShipmentStatusRules.CanCreateInvoice(shipment.Status))
                 throw new BusinessRuleException("Cannot create invoice for the current shipment status.");
 
             if (shipment.Customer == null)
-                throw new BusinessRuleException("Shipment customer data is required to create invoice.");
+                throw new BusinessRuleException("Shipment customer data is required.");
 
             if (string.IsNullOrWhiteSpace(shipment.Customer.NationalId))
-                throw new BusinessRuleException("Customer national id is required to generate invoice number.");
+                throw new BusinessRuleException("Customer national id is required.");
 
-            var shipmentCharges = new List<ShipmentCharge>();
+            var charges = shipment.Charges
+                .Where(x => !x.IsDeleted)
+                .ToList();
 
-            foreach (var id in request.ShipmentChargeIds)
+            if (!charges.Any())
+                throw new BusinessRuleException("No charges found to create invoice.");
+
+            var draftInvoice = shipment.Invoices
+                .FirstOrDefault(x =>
+                    x.PaymentStatus == PaymentStatus.Draft &&
+                    !x.IsDeleted);
+
+            if (draftInvoice == null)
             {
-                var charge = await _unitOfWork.ShipmentCharges.GetByIdAsync(id);
+                draftInvoice = new Invoice
+                {
+                    ShipmentId = shipment.Id,
+                    InvoiceNumber = InvoiceHelper.GenerateInvoiceNumber(shipment.Customer.NationalId),
+                    Currency = InvoiceHelper.NormalizeAndValidateCurrency(shipment.Currency),
+                    PaymentStatus = PaymentStatus.Draft,
+                    IssuedAt = DateTimeOffset.UtcNow,
+                    DueDate = DateTimeOffset.UtcNow.AddDays(7),
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    PayerType = charges.First().PayerType
+                };
 
-                if (charge == null)
-                    throw new KeyNotFoundException($"Shipment charge '{id}' not found.");
-
-                if (charge.ShipmentId != shipment.Id)
-                    throw new BusinessRuleException("All charges must belong to the selected shipment.");
-
-                shipmentCharges.Add(charge);
+                await _unitOfWork.Invoices.AddAsync(draftInvoice);
+            }
+            else
+            {
+                draftInvoice.UpdatedAt = DateTimeOffset.UtcNow;
+                draftInvoice.Charges.Clear();
             }
 
-            var currency = NormalizeAndValidateCurrency(request.Currency);
+            foreach (var charge in charges)
+            {
+                draftInvoice.Charges.Add(charge);
+            }
 
-            var invoice = _mapper.Map<Invoice>(request);
+            draftInvoice.SubTotal = charges.Sum(x => x.Amount);
+            draftInvoice.TaxAmount = charges.Sum(x => x.TaxAmount);
+            draftInvoice.TotalAmount = draftInvoice.SubTotal + draftInvoice.TaxAmount;
+            draftInvoice.Currency = shipment.Currency;
 
-            invoice.Currency = currency;
-            invoice.Charges = shipmentCharges;
-            invoice.SubTotal = shipmentCharges.Sum(x => x.Amount);
-            invoice.TaxAmount = shipmentCharges.Sum(x => x.TaxAmount);
-            invoice.TotalAmount = invoice.SubTotal + invoice.TaxAmount;
-            invoice.InvoiceNumber = GenerateInvoiceNumber(shipment.Customer.NationalId);
-            invoice.IssuedAt = DateTimeOffset.UtcNow;
-            invoice.DueDate = request.DueDate;
-
-            await _unitOfWork.Invoices.AddAsync(invoice);
             await _unitOfWork.SaveChangesAsync();
 
-            return _mapper.Map<InvoiceResponse>(invoice);
+            return _mapper.Map<InvoiceResponse>(draftInvoice);
         }
 
         public async Task<bool> DeleteAsync(Guid id)
@@ -146,176 +171,103 @@ namespace Infrastructure.Services.Shipments.Core
         }
         public async Task<InvoiceResponse?> GetByIdAsync(Guid id, string userId, bool isPrivileged)
         {
-            var user = await _userManager.Users.Include(x => x.CustomerProfile)
-            .FirstOrDefaultAsync(x => x.Id == userId);
+            var context = await InvoiceHelper
+            .GetInvoiceContextAsync(id, userId, isPrivileged, _userManager, _unitOfWork);
 
-            if (user == null)
-                throw new KeyNotFoundException("User not found.");
-
-            var invoice = await _unitOfWork.Invoices.GetByIdAsync(id);
-            if (invoice == null)
-                throw new KeyNotFoundException("Invoice not found.");
-
-            var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(invoice.ShipmentId);
-            if (shipment == null)
-                throw new KeyNotFoundException("Shipment not found.");
-
-            if (!isPrivileged)
-            {
-                if (user.CustomerProfile == null)
-                    throw new KeyNotFoundException("Customer profile not found.");
-
-                if (shipment.CustomerId != user.CustomerProfile.Id)
-                    throw new UnauthorizedAccessException("You do not have access to this shipment.");
-            }
-
-            return _mapper.Map<InvoiceResponse>(invoice);
+            return _mapper.Map<InvoiceResponse>(context.Invoice);
         }
 
         public async Task<IReadOnlyList<InvoiceResponse>> GetByShipmentIdAsync(Guid shipmentId, string userId, bool isPrivileged)
         {
-            var user = await _userManager.Users.Include(x => x.CustomerProfile)
-                .FirstOrDefaultAsync(x => x.Id == userId);
+            var user = await InvoiceHelper.GetUserOrThrowAsync(userId, _userManager);
 
-            if (user == null)
-                throw new KeyNotFoundException("User not found.");
-
-            var invoices = await _unitOfWork.Invoices.GetByShipmentIdAsync(shipmentId);
-            if (!invoices.Any())
-                throw new KeyNotFoundException("Invoice not found.");
-
-            var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(shipmentId);
-            if (shipment == null)
-                throw new KeyNotFoundException("Shipment not found.");
+            var shipment = await InvoiceHelper.GetShipmentOrThrowAsync(shipmentId, _unitOfWork);
 
             if (!isPrivileged)
-            {
-                if (user.CustomerProfile == null)
-                    throw new KeyNotFoundException("Customer profile not found.");
+                InvoiceHelper.EnsureCustomerOwnsShipment(user, shipment);
 
-                if (shipment.CustomerId != user.CustomerProfile.Id)
-                    throw new UnauthorizedAccessException("You do not have access to this shipment.");
-            }
+            var invoices = await _unitOfWork.Invoices.GetByShipmentIdAsync(shipmentId);
+
+            if (!invoices.Any())
+                throw new KeyNotFoundException("Invoice not found.");
 
             return _mapper.Map<IReadOnlyList<InvoiceResponse>>(invoices);
         }
 
         public async Task<InvoiceResponse?> MarkAsPaidAsync(Guid id, string userId, bool isPrivileged)
         {
-            var user = await _userManager.Users.Include(x => x.CustomerProfile)
-            .FirstOrDefaultAsync(x => x.Id == userId);
+            var (_, invoice, shipment) = await InvoiceHelper
+            .GetInvoiceContextAsync(id, userId, isPrivileged, _userManager, _unitOfWork);
 
-            if (user == null)
-                throw new KeyNotFoundException("User not found.");
-
-            var invoice = await _unitOfWork.Invoices.GetByIdAsync(id);
-            if (invoice == null)
-                throw new KeyNotFoundException("Invoice not found.");
-
-            var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(invoice.ShipmentId);
-            if (shipment == null)
-                throw new KeyNotFoundException("Shipment not found.");
-
-            if(!ShipmentStatusRules.CanPayInvoice(shipment.Status))
+            if (!ShipmentStatusRules.CanPayInvoice(shipment.Status))
                 throw new BusinessRuleException("Cannot pay invoice for the current shipment status.");
 
-            if (invoice.PaymentStatus is PaymentStatus.Paid or PaymentStatus.PartiallyPaid)
-                throw new BusinessRuleException("Invoice is already paid/partially paid.");
-
-            if (invoice.PaymentStatus == PaymentStatus.Cancelled)
-                throw new BusinessRuleException("Invoice is cancelled.");
+            InvoiceHelper.EnsureInvoiceCanBePaid(invoice);
 
             invoice.PaidAt = DateTimeOffset.UtcNow;
             invoice.UpdatedAt = DateTimeOffset.UtcNow;
             invoice.PaymentStatus = PaymentStatus.Paid;
+
             await _unitOfWork.SaveChangesAsync();
+
             return _mapper.Map<InvoiceResponse>(invoice);
         }
-        public async Task<InvoiceResponse?> MarkAsPartiallyPaidAsync(Guid id)
-        {
-            var invoice = await _unitOfWork.Invoices.GetByIdAsync(id);
-            if (invoice == null)
-                throw new KeyNotFoundException("Invoice not found.");
 
-            var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(invoice.ShipmentId);
-            if (shipment == null)
-                throw new KeyNotFoundException("Shipment not found.");
+        public async Task<InvoiceResponse?> ConfirmAsync(Guid id, string userId)
+        {
+            var (_, invoice, shipment) = await InvoiceHelper
+            .GetInvoiceContextAsync(id, userId, isPrivileged: false, _userManager, _unitOfWork);
+
+            if (!ShipmentStatusRules.CanPayInvoice(shipment.Status))
+                throw new BusinessRuleException("Cannot confirm invoice for the current shipment status.");
+
+            InvoiceHelper.EnsureInvoiceCanBeConfirmed(invoice);
+
+            invoice.UpdatedAt = DateTimeOffset.UtcNow;
+            invoice.PaymentStatus = PaymentStatus.Pending;
+
+            await _unitOfWork.SaveChangesAsync();
+
+            return _mapper.Map<InvoiceResponse>(invoice);
+        }
+
+        public async Task<InvoiceResponse?> MarkAsPartiallyPaidAsync(Guid id, decimal price)
+        {
+            var invoice = await InvoiceHelper.GetInvoiceOrThrowAsync(id, _unitOfWork);
+
+            var shipment = await InvoiceHelper.GetShipmentOrThrowAsync(invoice.ShipmentId, _unitOfWork);
 
             if (!ShipmentStatusRules.CanPartiallyPayInvoice(shipment.Status))
                 throw new BusinessRuleException("Cannot partially pay invoice for the current shipment status.");
 
-            if (invoice.PaymentStatus is PaymentStatus.Paid or PaymentStatus.PartiallyPaid)
-                throw new BusinessRuleException("Invoice is already paid/partially paid.");
+            InvoiceHelper.EnsureInvoiceCanBePartiallyPaid(invoice);
 
-            if (invoice.PaymentStatus == PaymentStatus.Cancelled)
-                throw new BusinessRuleException("Invoice is cancelled.");
+            InvoiceHelper.EnsurePartialPaymentAmountIsValid(invoice, price);
 
-            invoice.PaidAt = DateTimeOffset.UtcNow;
-            invoice.UpdatedAt = DateTimeOffset.UtcNow;
-            invoice.PaymentStatus = PaymentStatus.PartiallyPaid;
+            InvoiceHelper.ApplyPartialPayment(invoice, price);
+
             await _unitOfWork.SaveChangesAsync();
+
             return _mapper.Map<InvoiceResponse>(invoice);
         }
+
         public async Task<InvoiceResponse?> MarkAsRefundedAsync(Guid id)
         {
-            var invoice = await _unitOfWork.Invoices.GetByIdAsync(id);
-            if (invoice == null)
-                throw new KeyNotFoundException("Invoice not found.");
+            var invoice = await InvoiceHelper.GetInvoiceOrThrowAsync(id, _unitOfWork);
 
-            var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(invoice.ShipmentId);
-            if (shipment == null)
-                throw new KeyNotFoundException("Shipment not found.");
+            var shipment = await InvoiceHelper.GetShipmentOrThrowAsync(invoice.ShipmentId, _unitOfWork);
 
             if (!ShipmentStatusRules.CanRefundInvoice(shipment.Status))
                 throw new BusinessRuleException("Cannot refund invoice for the current shipment status.");
 
-            if (invoice.PaymentStatus is PaymentStatus.Paid or PaymentStatus.PartiallyPaid)
-                throw new BusinessRuleException("Invoice is paid/partially paid.");
+            InvoiceHelper.EnsureInvoiceCanBeRefunded(invoice);
 
-            if (invoice.PaymentStatus is PaymentStatus.Refunded)
-                throw new BusinessRuleException("Invoice is already refunded.");
-
-            if (invoice.PaymentStatus == PaymentStatus.Cancelled)
-                throw new BusinessRuleException("Invoice is cancelled.");
-
-            invoice.PaidAt = DateTimeOffset.UtcNow;
             invoice.UpdatedAt = DateTimeOffset.UtcNow;
             invoice.PaymentStatus = PaymentStatus.Refunded;
+
             await _unitOfWork.SaveChangesAsync();
+
             return _mapper.Map<InvoiceResponse>(invoice);
-        }
-
-        private static string NormalizeAndValidateCurrency(string currency)
-        {
-            if (string.IsNullOrWhiteSpace(currency))
-                throw new BusinessRuleException("Currency is required.");
-
-            var normalizedCurrency = currency.Trim().ToUpperInvariant();
-
-            var allowedCurrencies = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "USD",
-                "EGP",
-                "EUR"
-            };
-
-            if (!allowedCurrencies.Contains(normalizedCurrency))
-                throw new BusinessRuleException("Unsupported currency.");
-
-            return normalizedCurrency;
-        }
-
-        private string GenerateInvoiceNumber(string nationalId)
-        {
-            var now = DateTimeOffset.UtcNow;
-
-            var customerPart = nationalId[..3];
-
-            var datePart = now.ToString("MMdd");
-
-            var randomPart = Random.Shared.Next(1000, 9999);
-
-            return $"INV-{customerPart}-{datePart}-{randomPart}";
         }
     }
 }

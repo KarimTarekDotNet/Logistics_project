@@ -18,6 +18,10 @@ namespace Infrastructure.Repositories.Shipments.Core
         {
             await _context.ShipmentCharges.AddAsync(charge);
         }
+        public async Task AddRangeAsync(List<ShipmentCharge> charges)
+        {
+            await _context.ShipmentCharges.AddRangeAsync(charges);
+        }
 
         public void Delete(ShipmentCharge charge)
         {
@@ -38,7 +42,7 @@ namespace Infrastructure.Repositories.Shipments.Core
 
         public async Task<IReadOnlyList<ShipmentCharge>> GetByShipmentIdAsync(Guid shipmentId)
         {
-            var charges = await _context.ShipmentCharges.Where(c => c.ShipmentId == shipmentId && !c.IsDeleted).ToListAsync();
+            var charges = await _context.ShipmentCharges.Include(x => x.Shipment).Where(c => c.ShipmentId == shipmentId && !c.IsDeleted).ToListAsync();
             return charges;
         }
 

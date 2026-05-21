@@ -7,6 +7,7 @@ using Domain.Entities.Shipments;
 using Domain.Entities.Users;
 using Domain.Enums;
 using Domain.Exceptions;
+using Infrastructure.Helper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,49 +25,99 @@ namespace Infrastructure.Services.Shipments.Core
             _userManager = userManager;
         }
 
-        public async Task<ShipmentItemResponse> CreateAsync(CreateShipmentItemRequest request, string userId)
+        public async Task<ShipmentItemResponse> CreateAsync(CreateShipmentItemRequest request, string userId, bool isPrivileged)
         {
-            var user = await _userManager.Users.Include(x => x.CustomerProfile)
-            .FirstOrDefaultAsync(x => x.Id == userId);
-            if (user == null || user.CustomerProfile == null)
-                throw new Exception("User not found");
-            var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(request.ShipmentId);
-            if(shipment == null || shipment.CustomerId != user.CustomerProfile.Id)
-                throw new KeyNotFoundException($"Shipment with not found.");
+            if (isPrivileged)
+                throw new BusinessRuleException("Privileged users cannot modify shipment cargo items.");
 
-            if(!ShipmentStatusRules.CanModifyItems(shipment.Status))
-                throw new BusinessRuleException($"Cannot add items.");
+            var user = await _userManager.Users
+                .Include(x => x.CustomerProfile)
+                .FirstOrDefaultAsync(x => x.Id == userId);
+
+            if (user == null)
+                throw new KeyNotFoundException("User not found.");
+
+            if (user.CustomerProfile == null)
+                throw new BusinessRuleException("Customer profile not found.");
+
+            var shipment = await _unitOfWork.Shipments
+                .GetTrackedByIdWithDetailsAsync(request.ShipmentId);
+
+            if (shipment == null)
+                throw new KeyNotFoundException("Shipment not found.");
+
+            if (shipment.CustomerId != user.CustomerProfile.Id)
+                throw new BusinessRuleException("You do not have permission to modify this shipment.");
+
+            var hasLockedInvoice = shipment.Invoices.Any(x =>
+                !x.IsDeleted &&
+                (x.PaymentStatus == PaymentStatus.Pending ||
+                 x.PaymentStatus == PaymentStatus.PartiallyPaid ||
+                 x.PaymentStatus == PaymentStatus.Paid));
+            
+            if (hasLockedInvoice)
+                throw new BusinessRuleException("Cannot modify shipment items after invoice confirmation.");
+
+            if (!ShipmentStatusRules.CanModifyItems(shipment.Status))
+                throw new BusinessRuleException("Cannot add items at the current shipment status.");
+
+            if (request.NetWeight > request.GrossWeight)
+                throw new BusinessRuleException("Net weight cannot be greater than gross weight.");
+
+            if (request.IsHazardous && !shipment.IsHazardousAllowed)
+                throw new BusinessRuleException("Hazardous cargo is not allowed for this shipment.");
+
+            var itemChargeableWeight = ShipmentWeightCalculator
+            .CalculateItemChargeableWeight(request.GrossWeight,request.VolumeCbm);
+            EnsureShipmentItemWithinAllowedLimits(shipment, oldGrossWeight: 0, oldVolumeCbm: 0,
+            newGrossWeight: request.GrossWeight, newVolumeCbm: request.VolumeCbm);
 
             var shipmentItem = new ShipmentItem
             {
                 ShipmentId = shipment.Id,
                 CreatedAt = DateTimeOffset.UtcNow,
-                Description = request.Description,
+                Description = request.Description.Trim(),
+                MarksAndNumbers = request.MarksAndNumbers?.Trim(),
                 Quantity = request.Quantity,
-                ChargeableWeight = request.ChargeableWeight,
+                ChargeableWeight = itemChargeableWeight,
                 GrossWeight = request.GrossWeight,
                 VolumeCbm = request.VolumeCbm,
                 NetWeight = request.NetWeight,
                 IsHazardous = request.IsHazardous,
-                MarksAndNumbers = request.MarksAndNumbers,
                 RequiredTemperatureCelsius = request.RequiredTemperatureCelsius
             };
+
+            RecalculateShipmentTotals(shipment);
+
             shipment.Items.Add(shipmentItem);
+
             await _unitOfWork.SaveChangesAsync();
 
             return _mapper.Map<ShipmentItemResponse>(shipmentItem);
         }
 
-        public async Task<bool> DeleteAsync(Guid id, string userId)
+        public async Task<bool> DeleteAsync(Guid id, string userId, bool isPrivileged)
         {
+            if (isPrivileged)
+                throw new BusinessRuleException("Privileged users cannot modify cargo items.");
+
             var user = await _userManager.Users.Include(x => x.CustomerProfile)
             .FirstOrDefaultAsync(x => x.Id == userId);
-            if (user == null || user.CustomerProfile == null)
+            if (user == null)
+                throw new Exception("User not found");
+
+            if (user.CustomerProfile == null)
                 throw new Exception("User not found");
 
             var shipmentItem = await _unitOfWork.ShipmentItems.GetByIdAsync(id);
             if (shipmentItem == null || shipmentItem.Shipment.CustomerId != user.CustomerProfile.Id)
                 return false;
+
+            if (user.CustomerProfile == null)
+                throw new Exception("User not found");
+
+            if (user.CustomerProfile.Id != shipmentItem.Shipment.CustomerId)
+                throw new Exception("no access for this shipment");
 
             var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(shipmentItem.ShipmentId);
 
@@ -76,6 +127,17 @@ namespace Infrastructure.Services.Shipments.Core
             if (!ShipmentStatusRules.CanModifyItems(shipment.Status))
                 throw new BusinessRuleException("Cannot delete items from a delivered/closed shipment.");
 
+            var hasLockedInvoice = shipment.Invoices.Any(x =>
+                !x.IsDeleted &&
+                (x.PaymentStatus == PaymentStatus.Pending ||
+                 x.PaymentStatus == PaymentStatus.PartiallyPaid ||
+                 x.PaymentStatus == PaymentStatus.Paid));
+
+            if (hasLockedInvoice)
+                throw new BusinessRuleException("Cannot modify shipment items after invoice confirmation.");
+
+            RecalculateShipmentTotals(shipment);
+
             _unitOfWork.ShipmentItems.Delete(shipmentItem);
             await _unitOfWork.SaveChangesAsync();
             return true;
@@ -83,22 +145,24 @@ namespace Infrastructure.Services.Shipments.Core
 
         public async Task<ShipmentItemResponse?> GetByIdAsync(Guid id, string userId, bool isPrivileged)
         {
-            var user = await _userManager.Users.Include(x => x.CustomerProfile)
-            .FirstOrDefaultAsync(x => x.Id == userId);
+            var user = await _userManager.Users
+                .Include(x => x.CustomerProfile)
+                .FirstOrDefaultAsync(x => x.Id == userId);
+
             if (user == null)
-                throw new Exception("User not found");
+                throw new KeyNotFoundException("User not found.");
 
             var shipmentItem = await _unitOfWork.ShipmentItems.GetByIdAsync(id);
-            if(shipmentItem == null)
+            if (shipmentItem == null)
                 return null;
 
-            if(isPrivileged)
+            if (isPrivileged)
                 return _mapper.Map<ShipmentItemResponse>(shipmentItem);
 
-            if(user.CustomerProfile == null)
-                throw new Exception("User not found");
+            if (user.CustomerProfile == null)
+                throw new BusinessRuleException("Customer profile not found.");
 
-            if (user.CustomerProfile.Id != shipmentItem.Shipment.CustomerId)
+            if (shipmentItem.Shipment.CustomerId != user.CustomerProfile.Id)
                 return null;
 
             return _mapper.Map<ShipmentItemResponse>(shipmentItem);
@@ -106,28 +170,34 @@ namespace Infrastructure.Services.Shipments.Core
 
         public async Task<IReadOnlyList<ShipmentItemResponse>> GetByShipmentIdAsync(Guid shipmentId, string userId, bool isPrivileged)
         {
-            var user = await _userManager.Users.Include(x => x.CustomerProfile)
-            .FirstOrDefaultAsync(x => x.Id == userId);
-            if (user == null )
-                throw new Exception("User not found");
+            var user = await _userManager.Users
+                .Include(x => x.CustomerProfile)
+                .FirstOrDefaultAsync(x => x.Id == userId);
+
+            if (user == null)
+                throw new KeyNotFoundException("User not found.");
 
             var shipment = await _unitOfWork.Shipments.GetByIdWithDetailsAsync(shipmentId);
-
             if (shipment == null)
                 return new List<ShipmentItemResponse>();
 
             if (!isPrivileged)
             {
-                if (user.CustomerProfile == null || shipment.CustomerId != user.CustomerProfile.Id)
+                if (user.CustomerProfile == null)
+                    throw new BusinessRuleException("Customer profile not found.");
+
+                if (shipment.CustomerId != user.CustomerProfile.Id)
                     return new List<ShipmentItemResponse>();
             }
 
-            var shipmentItems = await _unitOfWork.ShipmentItems.GetByShipmentIdAsync(shipmentId);
-            return _mapper.Map<IReadOnlyList<ShipmentItemResponse>>(shipmentItems);
+            return _mapper.Map<IReadOnlyList<ShipmentItemResponse>>(shipment.Items);
         }
 
-        public async Task<ShipmentItemResponse?> UpdateAsync(Guid id, string userId, UpdateShipmentItemRequest request)
+        public async Task<ShipmentItemResponse?> UpdateAsync(Guid id, string userId, bool isPrivileged, UpdateShipmentItemRequest request)
         {
+            if (isPrivileged)
+                throw new BusinessRuleException("Privileged users cannot modify cargo items.");
+
             var user = await _userManager.Users
                     .Include(x => x.CustomerProfile)
                     .FirstOrDefaultAsync(x => x.Id == userId);
@@ -148,32 +218,41 @@ namespace Infrastructure.Services.Shipments.Core
             if (!ShipmentStatusRules.CanModifyItems(currentShipment.Status))
                 throw new BusinessRuleException("Cannot update shipment items in the current shipment status.");
 
-            var targetShipmentId = request.ShipmentId ?? shipmentItem.ShipmentId;
+            if (request.ShipmentId.HasValue && request.ShipmentId.Value != shipmentItem.ShipmentId)
+                throw new BusinessRuleException("Moving cargo items between shipments is not supported.");
 
-            if (targetShipmentId != shipmentItem.ShipmentId)
-            {
-                var newShipment = await _unitOfWork.Shipments
-                    .GetTrackedByIdWithDetailsAsync(targetShipmentId);
+            var hasLockedInvoice = currentShipment.Invoices.Any(x =>
+                !x.IsDeleted &&
+                (x.PaymentStatus == PaymentStatus.Pending ||
+                 x.PaymentStatus == PaymentStatus.PartiallyPaid ||
+                 x.PaymentStatus == PaymentStatus.Paid));
 
-                if (newShipment == null || newShipment.CustomerId != user.CustomerProfile.Id)
-                    throw new KeyNotFoundException("Target shipment not found.");
+            if (hasLockedInvoice)
+                throw new BusinessRuleException("Cannot modify shipment items after invoice confirmation.");
 
-                if (!ShipmentStatusRules.CanModifyItems(newShipment.Status))
-                    throw new BusinessRuleException("Cannot move item to shipment in the current target shipment status.");
+            var newGrossWeight = request.GrossWeight ?? shipmentItem.GrossWeight;
+            var newNetWeight = request.NetWeight ?? shipmentItem.NetWeight;
+            var newVolumeCbm = request.VolumeCbm ?? shipmentItem.VolumeCbm;
 
-                shipmentItem.ShipmentId = targetShipmentId;
-            }
+            if (newNetWeight > newGrossWeight)
+                throw new BusinessRuleException("Net weight cannot be greater than gross weight.");
+
+            var newItemChargeableWeight = ShipmentWeightCalculator.CalculateItemChargeableWeight(newGrossWeight, newVolumeCbm);
+            EnsureShipmentItemWithinAllowedLimits( currentShipment, oldGrossWeight: shipmentItem.GrossWeight, oldVolumeCbm: shipmentItem.VolumeCbm,
+            newGrossWeight: newGrossWeight, newVolumeCbm: newVolumeCbm);
+
+
 
             shipmentItem.Description = string.IsNullOrWhiteSpace(request.Description)
                 ? shipmentItem.Description
                 : request.Description.Trim();
 
             shipmentItem.Quantity = request.Quantity ?? shipmentItem.Quantity;
-            shipmentItem.ChargeableWeight = request.ChargeableWeight ?? shipmentItem.ChargeableWeight;
+            shipmentItem.GrossWeight = newGrossWeight;
+            shipmentItem.NetWeight = newNetWeight;
+            shipmentItem.VolumeCbm = newVolumeCbm;
+            shipmentItem.ChargeableWeight = newItemChargeableWeight;
 
-            shipmentItem.GrossWeight = request.GrossWeight ?? shipmentItem.GrossWeight;
-            shipmentItem.NetWeight = request.NetWeight ?? shipmentItem.NetWeight;
-            shipmentItem.VolumeCbm = request.VolumeCbm ?? shipmentItem.VolumeCbm;
             shipmentItem.IsHazardous = request.IsHazardous ?? shipmentItem.IsHazardous;
             shipmentItem.RequiredTemperatureCelsius =
                 request.RequiredTemperatureCelsius ?? shipmentItem.RequiredTemperatureCelsius;
@@ -184,9 +263,56 @@ namespace Infrastructure.Services.Shipments.Core
 
             shipmentItem.UpdatedAt = DateTimeOffset.UtcNow;
 
+            RecalculateShipmentTotals(currentShipment);
+
             await _unitOfWork.SaveChangesAsync();
 
             return _mapper.Map<ShipmentItemResponse>(shipmentItem);
+        }
+
+        private static void EnsureShipmentItemWithinAllowedLimits(Domain.Entities.Shipments.Shipment shipment, decimal oldGrossWeight,
+        decimal oldVolumeCbm, decimal newGrossWeight, decimal newVolumeCbm)
+        {
+            var totalGrossAfterChange =
+                shipment.Items.Sum(x => x.GrossWeight)
+                - oldGrossWeight
+                + newGrossWeight;
+
+            var totalVolumeAfterChange =
+                shipment.Items.Sum(x => x.VolumeCbm)
+                - oldVolumeCbm
+                + newVolumeCbm;
+
+            var totalChargeableAfterChange =
+                ShipmentWeightCalculator.CalculateShipmentChargeableWeight(
+                    totalGrossAfterChange,
+                    totalVolumeAfterChange);
+
+            if (totalGrossAfterChange > shipment.AllowedGrossWeightKg)
+                throw new BusinessRuleException("Gross weight exceeds the approved shipment limit.");
+
+            if (totalVolumeAfterChange > shipment.AllowedVolumeCbm)
+                throw new BusinessRuleException("Volume exceeds the approved shipment limit.");
+
+            if (totalChargeableAfterChange > shipment.AllowedChargeableWeightKg)
+                throw new BusinessRuleException("Chargeable weight exceeds the approved shipment limit.");
+        }
+
+        private static void RecalculateShipmentTotals(Domain.Entities.Shipments.Shipment shipment)
+        {
+            shipment.TotalGrossWeightKg =
+                shipment.Items.Sum(x => x.GrossWeight);
+
+            shipment.TotalNetWeightKg =
+                shipment.Items.Sum(x => x.NetWeight);
+
+            shipment.TotalVolumeCbm =
+                shipment.Items.Sum(x => x.VolumeCbm);
+
+            shipment.TotalChargeableWeightKg =
+                ShipmentWeightCalculator.CalculateShipmentChargeableWeight(
+                    shipment.TotalGrossWeightKg,
+                    shipment.TotalVolumeCbm);
         }
     }
 }

@@ -10,5 +10,7 @@ namespace Application.Interfaces.Repositories.Pricing.Quotation
         Task<IEnumerable<Quote>> GetByCustomerNameAsync(string customerName, QueryParameters query);
         Task<IEnumerable<Quote>> GetByRouteAsync(Guid routeId, QueryParameters query);
         Task<IEnumerable<Quote>> GetAllWithDetailsAsync(QueryParameters query);
+        Task<IEnumerable<Quote>> GetByCustomerIdAsync(Guid customerId, QueryParameters query);
+        Task<Quote?> GetByIdAndCustomerIdAsync(Guid quoteId, Guid customerId);
     }
 }

@@ -43,7 +43,7 @@ namespace Infrastructure.Helper
                 ChangedByRole = _userManager.GetRolesAsync(user).Result.FirstOrDefault(),
                 ChangedBy = user.UserName,
                 ShipmentId = shipment.Id,
-                FromStatus = ShipmentStatus.OnHold,
+                FromStatus = oldStatus,
                 ToStatus = targetStatus,
                 ChangedAt = now,
                 Reason = reason

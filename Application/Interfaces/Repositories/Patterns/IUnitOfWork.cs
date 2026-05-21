@@ -1,4 +1,5 @@
-﻿using Application.Interfaces.Repositories.Pricing.Imports;
+﻿using Application.Interfaces.Repositories.Aliases;
+using Application.Interfaces.Repositories.Pricing.Imports;
 using Application.Interfaces.Repositories.Pricing.PricingEngine;
 using Application.Interfaces.Repositories.Pricing.Quotation;
 using Application.Interfaces.Repositories.Shipments.Core;
@@ -24,6 +25,9 @@ namespace Application.Interfaces.Repositories.Patterns
         IIntegrationMessageRepository IntegrationMessage { get; }
         IInvoiceRepository Invoices { get; }
         IShipmentDocumentRepository ShipmentDocuments { get; }
+        IAliasRepository Alias { get; }
+        IQuoteRequestRepository QuoteRequest { get; }
+        IShipmentChargeRuleRepository ShipmentChargeRule { get; }
 
         Task<int> SaveChangesAsync();
         Task BeginTransactionAsync();

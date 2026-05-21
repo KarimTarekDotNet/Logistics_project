@@ -23,11 +23,6 @@ namespace Infrastructure.Data.Configuration.Pricing
                 .HasDefaultValueSql("GETUTCDATE()")
                 .ValueGeneratedOnAdd();
 
-            builder.HasMany(x => x.Items)
-                .WithOne(i => i.Quote)
-                .HasForeignKey(i => i.QuoteId)
-                .OnDelete(DeleteBehavior.Cascade);
-
             builder.HasIndex(r => r.RouteId);
             builder.HasIndex(r => r.ContainerTypeId);
             builder.HasIndex(r => r.CreatedAt);

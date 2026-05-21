@@ -6,6 +6,7 @@ using Domain.Entities.Pricing.Imports;
 using Domain.Entities.Pricing.PricingEngine;
 using Domain.Entities.ShippingCore;
 using Domain.Enums;
+using Domain.Exceptions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
@@ -127,7 +128,7 @@ namespace Infrastructure.Services.Pricing.Imports
                     {
                         ExternalMessageId = item.ExternalMessageId,
                         Status = "Failed",
-                        Message = "Failed to import rate item."
+                        Message = ex.Message
                     });
 
                     await ExecuteInTransactionAsync(async () =>
@@ -148,6 +149,33 @@ namespace Infrastructure.Services.Pricing.Imports
             }
 
             return response;
+        }
+
+        private static void ValidateRateConstraints(
+        decimal? maxGrossWeightKg,
+        decimal? maxNetWeightKg,
+        decimal? maxVolumeCbm,
+        decimal? minTemperatureCelsius,
+        decimal? maxTemperatureCelsius)
+        {
+            if (maxGrossWeightKg.HasValue && maxGrossWeightKg <= 0)
+                throw new BusinessRuleException("Max gross weight must be greater than zero.");
+
+            if (maxNetWeightKg.HasValue && maxNetWeightKg <= 0)
+                throw new BusinessRuleException("Max net weight must be greater than zero.");
+
+            if (maxVolumeCbm.HasValue && maxVolumeCbm <= 0)
+                throw new BusinessRuleException("Max volume CBM must be greater than zero.");
+
+            if (maxGrossWeightKg.HasValue &&
+                maxNetWeightKg.HasValue &&
+                maxNetWeightKg > maxGrossWeightKg)
+                throw new BusinessRuleException("Max net weight cannot be greater than max gross weight.");
+
+            if (minTemperatureCelsius.HasValue &&
+                maxTemperatureCelsius.HasValue &&
+                minTemperatureCelsius > maxTemperatureCelsius)
+                throw new BusinessRuleException("Minimum temperature cannot be greater than maximum temperature.");
         }
 
         private static bool IsUniqueConstraintViolation(DbUpdateException ex)
@@ -217,6 +245,13 @@ namespace Infrastructure.Services.Pricing.Imports
 
         private async Task<Rate> CreateRateAsync(ImportRateItemRequest item, ImportReferences references)
         {
+            ValidateRateConstraints(
+                item.MaxGrossWeightKg,
+                item.MaxNetWeightKg,
+                item.MaxVolumeCbm,
+                item.MinTemperatureCelsius,
+                item.MaxTemperatureCelsius);
+
             var newRate = new Rate
             {
                 CarrierId = references.Carrier.Id,
@@ -227,7 +262,13 @@ namespace Infrastructure.Services.Pricing.Imports
                 ValidFrom = item.ValidFrom,
                 ValidTo = item.ValidTo,
                 IsActive = RateRules.ShouldBeActive(item.ValidFrom, item.ValidTo),
-                CreatedAt = DateTimeOffset.UtcNow
+                CreatedAt = DateTimeOffset.UtcNow,
+                AllowsHazardous = item.AllowsHazardous,
+                MaxGrossWeightKg = item.MaxGrossWeightKg,
+                MaxNetWeightKg = item.MaxNetWeightKg,
+                MaxTemperatureCelsius = item.MaxTemperatureCelsius,
+                MaxVolumeCbm = item.MaxVolumeCbm,
+                MinTemperatureCelsius = item.MinTemperatureCelsius
             };
 
             if (newRate.IsActive)
@@ -235,7 +276,9 @@ namespace Infrastructure.Services.Pricing.Imports
                 await DeactivateOtherActiveRatesAsync(
                     references.Carrier.Id,
                     references.Route.Id,
-                    references.ContainerType.Id);
+                    references.ContainerType.Id,
+                    newRate.ValidFrom,
+                    newRate.ValidTo);
             }
 
             await _unitOfWork.Rates.AddAsync(newRate);
@@ -245,11 +288,25 @@ namespace Infrastructure.Services.Pricing.Imports
 
         private async Task UpdateRateAsync(Rate existingRate, ImportRateItemRequest item)
         {
+            ValidateRateConstraints(
+            item.MaxGrossWeightKg,
+            item.MaxNetWeightKg,
+            item.MaxVolumeCbm,
+            item.MinTemperatureCelsius,
+            item.MaxTemperatureCelsius);
+
+            existingRate.MaxGrossWeightKg = item.MaxGrossWeightKg;
+            existingRate.MaxNetWeightKg = item.MaxNetWeightKg;
+            existingRate.MaxVolumeCbm = item.MaxVolumeCbm;
+            existingRate.AllowsHazardous = item.AllowsHazardous;
+            existingRate.MinTemperatureCelsius = item.MinTemperatureCelsius;
+            existingRate.MaxTemperatureCelsius = item.MaxTemperatureCelsius;
+
             existingRate.Price = item.Price;
             existingRate.Currency = item.Currency.Trim().ToUpper();
             existingRate.ValidFrom = item.ValidFrom;
             existingRate.ValidTo = item.ValidTo;
-            existingRate.IsActive = RateRules.ShouldBeActive(item.ValidFrom, item.ValidTo);
+            existingRate.IsActive = RateRules.ShouldBeActive(existingRate.ValidFrom, existingRate.ValidTo);
             existingRate.UpdatedAt = DateTimeOffset.UtcNow;
 
             if (existingRate.IsActive)
@@ -258,16 +315,19 @@ namespace Infrastructure.Services.Pricing.Imports
                     existingRate.CarrierId,
                     existingRate.RouteId,
                     existingRate.ContainerTypeId,
+                    existingRate.ValidFrom,
+                    existingRate.ValidTo,
                     existingRate.Id);
             }
 
             _unitOfWork.Rates.Update(existingRate);
         }
 
-        private async Task DeactivateOtherActiveRatesAsync(Guid carrierId, Guid routeId, Guid containerTypeId, Guid? excludeRateId = null)
+        private async Task DeactivateOtherActiveRatesAsync(Guid carrierId, Guid routeId, Guid containerTypeId, DateTimeOffset validFrom,
+        DateTimeOffset validTo, Guid? excludeRateId = null)
         {
             var activeRates = await _unitOfWork.Rates
-                .GetAvailableRatesByCarrierRouteAndContainerTypeAsync(carrierId, routeId, containerTypeId);
+                .GetAvailableRatesByCarrierRouteAndContainerTypeAsync(carrierId, routeId, containerTypeId, validFrom, validTo);
 
             foreach (var activeRate in activeRates)
             {
@@ -284,7 +344,13 @@ namespace Infrastructure.Services.Pricing.Imports
             return existingRate.Price != item.Price
                 || existingRate.Currency != item.Currency.Trim().ToUpper()
                 || existingRate.ValidFrom != item.ValidFrom
-                || existingRate.ValidTo != item.ValidTo;
+                || existingRate.ValidTo != item.ValidTo
+                || existingRate.MaxGrossWeightKg != item.MaxGrossWeightKg
+                || existingRate.MaxNetWeightKg != item.MaxNetWeightKg
+                || existingRate.MaxVolumeCbm != item.MaxVolumeCbm
+                || existingRate.AllowsHazardous != item.AllowsHazardous
+                || existingRate.MinTemperatureCelsius != item.MinTemperatureCelsius
+                || existingRate.MaxTemperatureCelsius != item.MaxTemperatureCelsius;
         }
 
         private sealed class ImportReferences

@@ -5,7 +5,7 @@
         Pending,
         PartiallyPaid,
         Paid,
-        Overdue,
+        Draft,
         Cancelled,
         Refunded
     }

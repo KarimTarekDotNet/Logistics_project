@@ -17,6 +17,14 @@ namespace Application.DTOs.Pricing.Imports
         public string ContainerTypeName { get; set; } = default!;
         public decimal Price { get; set; }
         public string Currency { get; set; } = default!;
+        public decimal? MaxGrossWeightKg { get; init; }
+        public decimal? MaxNetWeightKg { get; init; }
+        public decimal? MaxVolumeCbm { get; init; }
+
+        public bool AllowsHazardous { get; init; }
+
+        public decimal? MinTemperatureCelsius { get; init; }
+        public decimal? MaxTemperatureCelsius { get; init; }
         public DateTimeOffset ValidFrom { get; set; }
         public DateTimeOffset ValidTo { get; set; }
         public string? RawSubject { get; set; }

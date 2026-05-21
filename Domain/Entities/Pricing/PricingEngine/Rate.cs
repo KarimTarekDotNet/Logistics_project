@@ -21,6 +21,13 @@ namespace Domain.Entities.Pricing.PricingEngine
         public DateTimeOffset ValidFrom { get; set; }
         public DateTimeOffset ValidTo { get; set; }
 
+        public decimal? MaxGrossWeightKg { get; set; }
+        public decimal? MaxNetWeightKg { get; set; }
+        public decimal? MaxVolumeCbm { get; set; }
+        public bool AllowsHazardous { get; set; }
+        public decimal? MinTemperatureCelsius { get; set; }
+        public decimal? MaxTemperatureCelsius { get; set; }
+
         public DateTimeOffset CreatedAt { get; set; }
         public bool IsActive { get; set; } = false;
 

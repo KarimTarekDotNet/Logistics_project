@@ -30,6 +30,16 @@ namespace Infrastructure.Services.Shipments.Core.Shipment
             return _mapper.Map<IReadOnlyList<ShipmentResponse>>(shipments);
         }
 
+        public async Task<int> CountAsync()
+        {
+            var count = await _unitOfWork.Shipments.CountAsync();
+            if (count >= 0)
+                return count.Value;
+
+            else
+                return 0;
+        }
+
         public async Task<IReadOnlyList<ShipmentResponse>> GetAllForUserAsync(string userId, ShipmentParameters parameters)
         {
             var user = await _userManager.Users.Include(x => x.CustomerProfile).FirstOrDefaultAsync(x => x.Id == userId);

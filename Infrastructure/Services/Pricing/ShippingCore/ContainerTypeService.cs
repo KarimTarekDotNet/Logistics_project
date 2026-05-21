@@ -1,9 +1,12 @@
+using Application.DTOs.Aliases;
 using Application.DTOs.ShippingCore;
 using Application.Interfaces.Repositories.Patterns;
+using Application.Interfaces.Services.Aliases;
 using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
 using AutoMapper;
 using Domain.Entities.ShippingCore;
+using Domain.Enums;
 using Domain.Exceptions;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
@@ -11,12 +14,14 @@ namespace Infrastructure.Services.Pricing.ShippingCore
     public class ContainerTypeService : IContainerTypeService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IAliasService _aliasService;
         private readonly IMapper _mapper;
 
-        public ContainerTypeService(IUnitOfWork unitOfWork, IMapper mapper)
+        public ContainerTypeService(IUnitOfWork unitOfWork, IMapper mapper, IAliasService aliasService)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _aliasService = aliasService;
         }
 
         public async Task<ContainerTypeResponse?> GetByIdAsync(Guid id)
@@ -43,12 +48,17 @@ namespace Infrastructure.Services.Pricing.ShippingCore
 
             var containerType = _mapper.Map<ContainerType>(dto);
             containerType.CreatedAt = DateTimeOffset.UtcNow;
-            containerType.UpdatedAt = null;
             containerType.IsDeleted = false;
-            containerType.DeletedAt = null;
 
             await _unitOfWork.ContainerTypes.AddAsync(containerType);
             await _unitOfWork.SaveChangesAsync();
+
+            await _aliasService.CreateAsync(new CreateAliasRequest
+            {
+                AliasName = containerType.Name,
+                EntityId = containerType.Id,
+                Type = AliasType.ContainerType
+            });
 
             return _mapper.Map<ContainerTypeResponse>(containerType);
         }
@@ -68,8 +78,15 @@ namespace Infrastructure.Services.Pricing.ShippingCore
             containerType.Name = dto.Name;
             containerType.UpdatedAt = DateTimeOffset.UtcNow;
 
-            _unitOfWork.ContainerTypes.Update(containerType);
             await _unitOfWork.SaveChangesAsync();
+
+
+            await _aliasService.CreateAsync(new CreateAliasRequest
+            {
+                AliasName = containerType.Name,
+                EntityId = containerType.Id,
+                Type = AliasType.ContainerType
+            });
 
             return _mapper.Map<ContainerTypeResponse>(containerType);
         }
@@ -84,7 +101,6 @@ namespace Infrastructure.Services.Pricing.ShippingCore
             containerType.DeletedAt = DateTimeOffset.UtcNow;
             containerType.UpdatedAt = DateTimeOffset.UtcNow;
 
-            _unitOfWork.ContainerTypes.Update(containerType);
             await _unitOfWork.SaveChangesAsync();
         }
     }

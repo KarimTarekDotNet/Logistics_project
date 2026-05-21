@@ -1,4 +1,5 @@
-﻿using Application.Interfaces.Repositories.Patterns;
+﻿using Application.Interfaces.Repositories.Aliases;
+using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Repositories.Pricing.Imports;
 using Application.Interfaces.Repositories.Pricing.PricingEngine;
 using Application.Interfaces.Repositories.Pricing.Quotation;
@@ -29,6 +30,9 @@ namespace Infrastructure.Repositories.Patterns
         public IIntegrationMessageRepository IntegrationMessage { get; }
         public IInvoiceRepository Invoices { get; }
         public IShipmentDocumentRepository ShipmentDocuments { get; }
+        public IAliasRepository Alias { get; }
+        public IQuoteRequestRepository QuoteRequest { get; }
+        public IShipmentChargeRuleRepository ShipmentChargeRule { get; }
 
         public UnitOfWork(
             ApplicationDbContext context,
@@ -45,7 +49,10 @@ namespace Infrastructure.Repositories.Patterns
             IShipmentStatusHistoryRepository shipmentStatusHistoryRepository,
             IIntegrationMessageRepository integrationMessage,
             IInvoiceRepository invoiceRepository,
-            IShipmentDocumentRepository shipmentDocuments)
+            IShipmentDocumentRepository shipmentDocuments,
+            IAliasRepository alias,
+            IQuoteRequestRepository quoteRequest,
+            IShipmentChargeRuleRepository shipmentChargeRule)
         {
             _context = context;
             Carriers = carrierRepository;
@@ -62,6 +69,9 @@ namespace Infrastructure.Repositories.Patterns
             IntegrationMessage = integrationMessage;
             Invoices = invoiceRepository;
             ShipmentDocuments = shipmentDocuments;
+            Alias = alias;
+            QuoteRequest = quoteRequest;
+            ShipmentChargeRule = shipmentChargeRule;
         }
 
         public async Task<int> SaveChangesAsync()

@@ -46,13 +46,13 @@ namespace API.Controllers.Shipments
             return Ok(charges);
         }
 
-        [HttpPost]
+        [HttpPost("generate")]
         [EnableRateLimiting("HeavyPolicy")]
-        [Authorize(Roles = "Admin,Staff")]
-        public async Task<IActionResult> Create(CreateShipmentChargeRequest request)
+        public async Task<IActionResult> Generate(GenerateShipmentChargesRequest request)
         {
-            var createdCharge = await shipmentChargeService.CreateAsync(request);
-            return CreatedAtAction(nameof(GetById), new { id = createdCharge.Id }, createdCharge);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var createdCharges = await shipmentChargeService.GenerateAsync(request, userId);
+            return Ok(createdCharges);
         }
 
         [HttpPut("{id}")]

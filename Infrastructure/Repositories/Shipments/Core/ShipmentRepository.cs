@@ -42,6 +42,11 @@ namespace Infrastructure.Repositories.Shipments.Core
             return await _context.Shipments.AnyAsync(s => s.QuoteId == quoteId && s.Id != shipmentId);
         }
 
+        public async Task<int?> CountAsync()
+        {
+            return await _context.Shipments.CountAsync();
+        }
+
         public async Task<IReadOnlyList<Shipment>> GetAllAsync(ShipmentParameters parameters)
         {
             var query = _context.Shipments
@@ -93,6 +98,7 @@ namespace Infrastructure.Repositories.Shipments.Core
         public Task<Shipment?> GetTrackedByIdWithDetailsAsync(Guid id)
         {
             return _context.Shipments
+                .Include(s => s.Invoices)
                 .Include(s => s.Quote)
                 .Include(s => s.Customer).ThenInclude(c => c.ApplicationUser)
                 .Include(s => s.Route)

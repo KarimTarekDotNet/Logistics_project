@@ -24,6 +24,20 @@ namespace Domain.Entities.Shipments
         public Guid CarrierId { get; set; }
         public Carrier Carrier { get; set; } = null!;
 
+        public decimal AllowedGrossWeightKg { get; set; }
+        public decimal AllowedNetWeightKg { get; set; }
+        public decimal AllowedVolumeCbm { get; set; }
+        public decimal AllowedChargeableWeightKg { get; set; }
+        public bool IsHazardousAllowed { get; set; }
+
+        public decimal TotalGrossWeightKg { get; set; }
+
+        public decimal TotalNetWeightKg { get; set; }
+
+        public decimal TotalVolumeCbm { get; set; }
+
+        public decimal TotalChargeableWeightKg { get; set; }
+
         public decimal AgreedPrice { get; set; }
         public string Currency { get; set; } = null!;
         public ShipmentStatus Status { get; set; } = ShipmentStatus.Created;

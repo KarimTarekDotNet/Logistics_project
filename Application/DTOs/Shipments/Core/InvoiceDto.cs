@@ -12,6 +12,7 @@ namespace Application.DTOs.Shipments.Core
         public PayerType PayerType { get; set; }
         public DateTimeOffset DueDate { get; set; }
     }
+    public record PriceRequest(decimal Price);
     public record InvoiceResponse
     {
         public Guid Id { get; set; }
@@ -26,6 +27,8 @@ namespace Application.DTOs.Shipments.Core
         public decimal SubTotal { get; set; }
         public decimal TaxAmount { get; set; }
         public decimal TotalAmount { get; set; }
+
+        public decimal? PaidPart { get; set; }
 
         public string PaymentStatus { get; set; } = null!;
 

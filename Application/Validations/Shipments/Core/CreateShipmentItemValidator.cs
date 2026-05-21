@@ -21,10 +21,6 @@ namespace Application.Validations.Shipments.Core
                 .GreaterThan(0)
                 .WithMessage("Quantity must be greater than 0.");
 
-            RuleFor(x => x.ChargeableWeight)
-                .GreaterThan(0)
-                .WithMessage("ChargeableWeight must be greater than 0.");
-
             RuleFor(x => x.GrossWeight)
                 .GreaterThan(0)
                 .WithMessage("GrossWeight must be greater than 0.");

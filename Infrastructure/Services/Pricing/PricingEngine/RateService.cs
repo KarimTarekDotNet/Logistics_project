@@ -1,10 +1,12 @@
 ﻿using Application.ApplicationRules;
-using Application.DTOs.Pricing.PricingEngine;
+using Application.DTOs.Pricing.PricingEngine.Rates;
+using Application.DTOs.Pricing.Recommendations;
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Services.Pricing.PricingEngine;
 using Application.Models;
 using AutoMapper;
 using Domain.Entities.Pricing.PricingEngine;
+using Domain.Enums;
 using Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,28 +23,53 @@ namespace Infrastructure.Services.Pricing.PricingEngine
             _mapper = mapper;
         }
 
+        public async Task<int> CountAsync()
+        {
+            var count = await _unitOfWork.Rates.CountAsync();
+            if (count >= 0)
+                return count.Value;
+
+            else
+                return 0;
+        }
+
         public async Task<RateResponse> CreateAsync(CreateRateRequest dto)
         {
             return await ExecuteInTransactionAsync(async () =>
             {
                 await EnsureReferencesExistAsync(dto.CarrierId, dto.RouteId, dto.ContainerTypeId);
 
+                ValidateRateConstraints(
+                dto.MaxGrossWeightKg,
+                dto.MaxNetWeightKg,
+                dto.MaxVolumeCbm,
+                dto.MinTemperatureCelsius,
+                dto.MaxTemperatureCelsius);
+
                 var rate = _mapper.Map<Rate>(dto);
                 rate.IsActive = RateRules.ShouldBeActive(rate.ValidFrom, rate.ValidTo);
                 rate.CreatedAt = DateTimeOffset.UtcNow;
 
+                var containerType = await _unitOfWork.ContainerTypes.GetByIdAsync(dto.ContainerTypeId);
+
+                if (containerType == null)
+                    throw new KeyNotFoundException("Container type not found.");
+
+                if (dto.AllowsHazardous == true && !containerType.Name
+                .Contains("Reefer", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new BusinessRuleException("Temperature-controlled cargo requires a reefer container.");
+                }
+
                 if (rate.IsActive)
                 {
-                    await DeactivateOtherActiveRatesAsync(rate.CarrierId, rate.RouteId, rate.ContainerTypeId);
+                    await DeactivateOtherActiveRatesAsync(rate.CarrierId, rate.RouteId,
+                    rate.ContainerTypeId, dto.ValidFrom, dto.ValidTo);
                 }
 
                 await _unitOfWork.Rates.AddAsync(rate);
-
-                var newRate = await GetByIdAsync(rate.Id);
-                if (newRate == null)
-                    return _mapper.Map<RateResponse>(rate);
-
-                return newRate;
+                await _unitOfWork.SaveChangesAsync();
+                return _mapper.Map<RateResponse>(rate);
             });
         }
 
@@ -62,7 +89,7 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                 rate.DeletedAt = DateTimeOffset.UtcNow;
 
                 _unitOfWork.Rates.Update(rate);
-
+                await _unitOfWork.SaveChangesAsync();
                 return true;
             });
         }
@@ -85,7 +112,20 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                 if (dto.ValidTo == default)
                     dto.ValidTo = rate.ValidTo;
 
-                if(!RateRules.IsValidDateRange(dto.ValidFrom, dto.ValidTo))
+                dto.MaxGrossWeightKg ??= rate.MaxGrossWeightKg;
+                dto.MaxNetWeightKg ??= rate.MaxNetWeightKg;
+                dto.MaxVolumeCbm ??= rate.MaxVolumeCbm;
+                dto.MinTemperatureCelsius ??= rate.MinTemperatureCelsius;
+                dto.MaxTemperatureCelsius ??= rate.MaxTemperatureCelsius;
+
+                ValidateRateConstraints(
+                dto.MaxGrossWeightKg,
+                dto.MaxNetWeightKg,
+                dto.MaxVolumeCbm,
+                dto.MinTemperatureCelsius,
+                dto.MaxTemperatureCelsius);
+
+                if (!RateRules.IsValidDateRange(dto.ValidFrom, dto.ValidTo))
                     throw new BusinessRuleException("Invalid date range.");
 
                 if(!RateRules.IsValidCurrency(dto.Currency))
@@ -100,11 +140,11 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                 if (shouldBeActive)
                 {
                     await DeactivateOtherActiveRatesAsync(rate.CarrierId, rate.RouteId,
-                    rate.ContainerTypeId, rate.Id);
+                    rate.ContainerTypeId, dto.ValidFrom, dto.ValidTo, rate.Id);
                 }
 
                 _unitOfWork.Rates.Update(rate);
-
+                await _unitOfWork.SaveChangesAsync();
                 return _mapper.Map<RateResponse>(rate);
             });
         }
@@ -113,6 +153,76 @@ namespace Infrastructure.Services.Pricing.PricingEngine
         {
             var rates = await _unitOfWork.Rates.SearchAsync(query);
             return _mapper.Map<IEnumerable<RateResponse>>(rates);
+        }
+
+        public async Task<MarketAnalyticsResponse> GetMarketAnalyticsAsync(Guid routeId, Guid containerId, string currency)
+        {
+            var query = _unitOfWork.Rates
+                .GetRatesByRouteAndContainerTypeQuery(routeId, containerId, currency.Trim().ToUpperInvariant());
+            
+            var analytics = await query
+                .GroupBy(x => 1)
+                .Select(g => new MarketAnalyticsResponse
+                {
+                    ActiveCount = g.Count(),
+                    AveragePrice = g.Average(x => x.Price),
+                    CheapestPrice = g.Min(x => x.Price),
+                    HighestPrice = g.Max(x => x.Price),
+                    Currency = currency.Trim().ToUpper()
+                })
+                .FirstOrDefaultAsync();
+
+            if (analytics is null)
+                throw new BusinessRuleException("No active rates found for this route, container type, and currency.");
+
+            return analytics;
+        }
+
+        public async Task<RateRecommendationResponse> RecommendationAsync(RateRecommendationRequest dto)
+        {
+            var query = _unitOfWork.Rates.GetRatesByRouteAndContainerTypeQueryForRecommendation
+            (dto.RouteId, dto.ContainerTypeId, dto.Currency, dto.MaxPrice);
+
+            query = dto.Priority switch
+            {
+                RecommendationPriority.Cheapest => query.OrderBy(x => x.Price),
+
+                _ => query.OrderBy(x => x.Price)
+            };
+
+            var rates = await query.Take(dto.Limit).ToListAsync();
+            if (!rates.Any())
+                return new RateRecommendationResponse
+                {
+                    Recommendations = []
+                };
+
+            var cheapestPrice = rates.Min(x => x.Price);
+            var averagePrice = rates.Average(x => x.Price);
+
+            var recommendations = rates.Select(rate => new RecommendedRateResponse
+            {
+                Rate = _mapper.Map<RateResponse>(rate),
+
+                IsCheapest = rate.Price == cheapestPrice,
+
+                Score = rate.Price == cheapestPrice ? 100 : 80,
+
+                RecommendationReason = rate.Price == cheapestPrice
+                ? "Cheapest available active rate"
+                : "Available valid rate",
+
+                MarketPosition = rate.Price < averagePrice
+                ? MarketPosition.BelowMarket
+                : rate.Price > averagePrice
+                ? MarketPosition.AboveMarket
+                : MarketPosition.AverageMarket
+            }).ToList();
+
+            return new RateRecommendationResponse
+            {
+                Recommendations = recommendations
+            };
         }
 
         public async Task<RateResponse?> GetByIdAsync(Guid id)
@@ -139,7 +249,7 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                         throw new BusinessRuleException("Cannot activate a rate with an expired validity period.");
 
                     await DeactivateOtherActiveRatesAsync(rate.CarrierId, rate.RouteId,
-                    rate.ContainerTypeId, rate.Id);
+                    rate.ContainerTypeId, rate.ValidFrom, rate.ValidTo,rate.Id);
 
                     rate.IsActive = true;
                 }
@@ -169,6 +279,33 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                 await _unitOfWork.RollbackTransactionAsync();
                 throw;
             }
+        }
+
+        private static void ValidateRateConstraints(
+        decimal? maxGrossWeightKg,
+        decimal? maxNetWeightKg,
+        decimal? maxVolumeCbm,
+        decimal? minTemperatureCelsius,
+        decimal? maxTemperatureCelsius)
+        {
+            if (maxGrossWeightKg.HasValue && maxGrossWeightKg <= 0)
+                throw new BusinessRuleException("Max gross weight must be greater than zero.");
+
+            if (maxNetWeightKg.HasValue && maxNetWeightKg <= 0)
+                throw new BusinessRuleException("Max net weight must be greater than zero.");
+
+            if (maxVolumeCbm.HasValue && maxVolumeCbm <= 0)
+                throw new BusinessRuleException("Max volume CBM must be greater than zero.");
+
+            if (maxGrossWeightKg.HasValue &&
+                maxNetWeightKg.HasValue &&
+                maxNetWeightKg > maxGrossWeightKg)
+                throw new BusinessRuleException("Max net weight cannot be greater than max gross weight.");
+
+            if (minTemperatureCelsius.HasValue &&
+                maxTemperatureCelsius.HasValue &&
+                minTemperatureCelsius > maxTemperatureCelsius)
+                throw new BusinessRuleException("Minimum temperature cannot be greater than maximum temperature.");
         }
 
         private async Task EnsureReferencesExistAsync(Guid carrierId, Guid routeId, Guid containerTypeId)
@@ -207,10 +344,11 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                 .Include(r => r.ContainerType);
         }
 
-        private async Task DeactivateOtherActiveRatesAsync(Guid carrierId, Guid routeId, Guid containerTypeId, Guid? excludeRateId = null)
+        private async Task DeactivateOtherActiveRatesAsync(Guid carrierId, Guid routeId, Guid containerTypeId, DateTimeOffset validFrom,
+        DateTimeOffset validTo, Guid? excludeRateId = null)
         {
             var activeRates = await _unitOfWork.Rates
-                .GetAvailableRatesByCarrierRouteAndContainerTypeAsync(carrierId, routeId, containerTypeId);
+                .GetAvailableRatesByCarrierRouteAndContainerTypeAsync(carrierId, routeId, containerTypeId, validFrom, validTo);
 
             foreach (var activeRate in activeRates)
             {

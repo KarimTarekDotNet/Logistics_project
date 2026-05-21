@@ -45,7 +45,7 @@ namespace API.Controllers.Auth
             return Ok(registerResult);
         }
 
-        [HttpGet("confirm-phone")]
+        [HttpPost("confirm-phone")]
         public async Task<IActionResult> ConfirmPhone([FromBody] ConfirmPhoneRequest request)
         {
             var result = await auth.ConfirmPhoneAsync(request);

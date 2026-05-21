@@ -9,6 +9,7 @@ namespace Infrastructure.Services.Auth
 {
     public class EmailVerificationService : IEmailVerificationService
     {
+        private const string FrontendBaseUrl = "http://127.0.0.1:5173";
         private readonly IEmailSender _emailSender;
         private readonly UserManager<ApplicationUser> _userManager;
 
@@ -33,7 +34,7 @@ namespace Infrastructure.Services.Auth
 
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encoded = WebUtility.UrlEncode(token);
-            var confirmationLink = $"https://localhost:7100/api/auth/confirm-email?userId={user.Id}&token={encoded}";
+            var confirmationLink = $"{FrontendBaseUrl}/confirm-email?userId={user.Id}&token={encoded}";
 
 
             var subject = "Confirm Your Email Address";
@@ -186,7 +187,7 @@ namespace Infrastructure.Services.Auth
             var encodedToken = WebUtility.UrlEncode(token);
 
             var confirmationLink =
-                $"https://localhost:7100/api/user/profile/confirm-email-change?userId={user.Id}&token={encodedToken}";
+                $"{FrontendBaseUrl}/confirm-email-change?userId={user.Id}&token={encodedToken}";
 
             var subject = "Confirm Your New Email Address";
 

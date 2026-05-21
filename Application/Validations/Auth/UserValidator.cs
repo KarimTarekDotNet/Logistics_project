@@ -60,7 +60,7 @@ public class ConfirmPhoneRequestValidator : AbstractValidator<ConfirmPhoneReques
 {
     public ConfirmPhoneRequestValidator()
     {
-        RuleFor(x => x.PhoneNumber)
+        RuleFor(x => string.IsNullOrWhiteSpace(x.PhoneNumber) ? x.Phone : x.PhoneNumber)
             .NotEmpty().WithMessage("Phone number is required.")
             .Matches(@"^\+\d{7,15}$")
             .WithMessage("Phone number must start with '+' followed by 7 to 15 digits.");

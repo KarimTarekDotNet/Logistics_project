@@ -19,5 +19,6 @@ namespace Application.Interfaces.Repositories.Shipments.Core
         Task<bool> ExistsAsync(Guid id);
         Task<bool> ExistsByQuoteIdAsync(Guid quoteId);
         Task<bool> ExistsByQuoteIdExceptAsync(Guid quoteId, Guid shipmentId);
+        Task<int?> CountAsync();
     }
 }

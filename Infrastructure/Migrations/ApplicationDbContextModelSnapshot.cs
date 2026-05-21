@@ -22,6 +22,41 @@ namespace Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("Domain.Entities.Aliases.Alias", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AliasName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NormalizedAlias")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Aliases");
+                });
+
             modelBuilder.Entity("Domain.Entities.Pricing.Imports.IntegrationMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -64,6 +99,9 @@ namespace Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("AllowsHazardous")
+                        .HasColumnType("bit");
+
                     b.Property<Guid>("CarrierId")
                         .HasColumnType("uniqueidentifier");
 
@@ -88,6 +126,21 @@ namespace Infrastructure.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
+
+                    b.Property<decimal?>("MaxGrossWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MaxNetWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MaxTemperatureCelsius")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MaxVolumeCbm")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MinTemperatureCelsius")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
@@ -153,11 +206,36 @@ namespace Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsHazardous")
+                        .HasColumnType("bit");
+
                     b.Property<Guid>("RateId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Reason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("RequestedChargeableWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("RequestedGrossWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("RequestedNetWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("RequestedVolumeCbm")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("RequiredTemperatureCelsius")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<Guid>("RouteId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
@@ -177,40 +255,68 @@ namespace Infrastructure.Migrations
                     b.ToTable("Quotes");
                 });
 
-            modelBuilder.Entity("Domain.Entities.Pricing.Quotation.QuoteItem", b =>
+            modelBuilder.Entity("Domain.Entities.Pricing.Quotation.QuoteRequest", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("Description")
+                    b.Property<string>("Currency")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<Guid>("QuoteId")
+                    b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTimeOffset?>("UpdatedAt")
+                    b.Property<bool>("IsHazardous")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("RateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RejectionReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("RequestedGrossWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("RequestedNetWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("RequestedRatePrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("RequestedVolumeCbm")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("RequiredTemperatureCelsius")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ReviewedByUserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("QuoteId");
+                    b.HasIndex("CustomerId");
 
-                    b.ToTable("QuoteItems");
+                    b.HasIndex("RateId");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.ToTable("QuoteRequests");
                 });
 
             modelBuilder.Entity("Domain.Entities.Shipments.Invoice", b =>
@@ -256,6 +362,12 @@ namespace Infrastructure.Migrations
                         .HasColumnType("datetimeoffset");
 
                     b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<decimal?>("PaidPart")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset?>("PaidPartAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<string>("PayerType")
@@ -320,6 +432,18 @@ namespace Infrastructure.Migrations
                     b.Property<decimal>("AgreedPrice")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("AllowedChargeableWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("AllowedGrossWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("AllowedNetWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("AllowedVolumeCbm")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTimeOffset?>("BookingConfirmedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -382,6 +506,9 @@ namespace Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsHazardousAllowed")
+                        .HasColumnType("bit");
+
                     b.Property<DateTimeOffset?>("PaymentConfirmedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -404,6 +531,18 @@ namespace Infrastructure.Migrations
 
                     b.Property<DateTimeOffset?>("TelexReleasedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<decimal>("TotalChargeableWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalGrossWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalNetWeightKg")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalVolumeCbm")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
@@ -502,6 +641,36 @@ namespace Infrastructure.Migrations
                     b.HasIndex("ShipmentId");
 
                     b.ToTable("ShipmentCharges");
+                });
+
+            modelBuilder.Entity("Domain.Entities.Shipments.ShipmentChargeRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CalculationType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ChargeType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("PayerType")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Value")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ShipmentChargeRules");
                 });
 
             modelBuilder.Entity("Domain.Entities.Shipments.ShipmentDocument", b =>
@@ -1204,15 +1373,29 @@ namespace Infrastructure.Migrations
                     b.Navigation("Route");
                 });
 
-            modelBuilder.Entity("Domain.Entities.Pricing.Quotation.QuoteItem", b =>
+            modelBuilder.Entity("Domain.Entities.Pricing.Quotation.QuoteRequest", b =>
                 {
-                    b.HasOne("Domain.Entities.Pricing.Quotation.Quote", "Quote")
-                        .WithMany("Items")
-                        .HasForeignKey("QuoteId")
+                    b.HasOne("Domain.Entities.Users.Customer", "Customer")
+                        .WithMany("QuoteRequests")
+                        .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Quote");
+                    b.HasOne("Domain.Entities.Pricing.PricingEngine.Rate", "Rate")
+                        .WithMany()
+                        .HasForeignKey("RateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Domain.Entities.Users.ApplicationUser", "ReviewedByUser")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Rate");
+
+                    b.Navigation("ReviewedByUser");
                 });
 
             modelBuilder.Entity("Domain.Entities.Shipments.Invoice", b =>
@@ -1414,8 +1597,6 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Domain.Entities.Pricing.Quotation.Quote", b =>
                 {
-                    b.Navigation("Items");
-
                     b.Navigation("Shipment");
                 });
 
@@ -1465,6 +1646,8 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Domain.Entities.Users.Customer", b =>
                 {
+                    b.Navigation("QuoteRequests");
+
                     b.Navigation("Quotes");
 
                     b.Navigation("Shipments");

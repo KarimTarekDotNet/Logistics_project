@@ -33,6 +33,18 @@ namespace API.Controllers.Pricing.Quotation
             return Ok(quotes);
         }
 
+        [HttpGet("my")]
+        public async Task<IActionResult> GetMyQuotes([FromQuery] QueryParameters query)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var quotes = await _quoteService.GetMyQuotesAsync(userId, query);
+
+            if (quotes == null || !quotes.Any())
+                return NotFound(new { message = "No quotes found" });
+
+            return Ok(quotes);
+        }
+
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetQuoteById(Guid id)
         {
@@ -79,12 +91,38 @@ namespace API.Controllers.Pricing.Quotation
             return CreatedAtAction(nameof(GetQuoteById), new { id = result.Id }, result);
         }
 
+        [HttpPatch("{id}/accept-from-user")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "User")]
+        public async Task<IActionResult> AcceptFromUser(Guid id)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            var result = await _quoteService.AcceptFromUserAsync(id, userId);
+
+            return Ok(result);
+        }
+
+        [HttpPatch("{id}/rejected-from-user")]
+        [EnableRateLimiting("HeavyPolicy")]
+        [Authorize(Roles = "User")]
+        public async Task<IActionResult> RejectedFromUser(Guid id, string reason)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            var result = await _quoteService.RejectFromUserAsync(id, userId, reason);
+
+            return Ok(result);
+        }
+
         [HttpDelete("{id:guid}")]
         [EnableRateLimiting("HeavyPolicy")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteQuote(Guid id)
         {
-            await _quoteService.DeleteAsync(id);
+            var isAdmin = User.IsInRole("Admin");
+
+            await _quoteService.DeleteAsync(id, isAdmin);
 
             return Ok(new { message = "Quote deleted successfully" });
         }

@@ -10,9 +10,25 @@ namespace Infrastructure.Repositories.Pricing.PricingEngine
     public class RateRepository : GenericRepository<Rate>, IRateRepository
     {
         private readonly ApplicationDbContext _context;
-        public RateRepository(ApplicationDbContext context) : base(context)
-        {
+        public RateRepository(ApplicationDbContext context) : base(context) {
+        
             _context = context;
+        }
+
+        public async Task<Rate?> GetById(Guid Id)
+        {
+            return await _context.Rates.FirstOrDefaultAsync(r => r.Id == Id && r.IsActive && !r.IsDeleted);
+        }
+        public async Task<Rate?> GetByIdWithDetailsAsync(Guid Id)
+        {
+            return await _context.Rates
+                .Include(r => r.Carrier)
+                .Include(r => r.ContainerType)
+                .Include(r => r.Route)
+                    .ThenInclude(r => r.FromPort)
+                .Include(r => r.Route)
+                    .ThenInclude(r => r.ToPort)
+                .FirstOrDefaultAsync(r => r.Id == Id && r.IsActive && !r.IsDeleted);
         }
 
         public async Task<IEnumerable<Rate>> SearchAsync(RateParameters query)
@@ -43,17 +59,51 @@ namespace Infrastructure.Repositories.Pricing.PricingEngine
             );
         }
 
-        public async Task<IEnumerable<Rate>> GetAvailableRatesByCarrierRouteAndContainerTypeAsync(Guid carrierId, Guid routeId, Guid containerTypeId)
+        public async Task<int?> CountAsync()
         {
-            var now = DateTimeOffset.UtcNow;
+            return await _context.Rates.CountAsync();
+        }
+
+        public async Task<IEnumerable<Rate>> GetAvailableRatesByCarrierRouteAndContainerTypeAsync(Guid carrierId, Guid routeId, Guid containerTypeId,
+        DateTimeOffset validFrom, DateTimeOffset validTo)
+        {
             return await _context.Rates
                 .Where(r => r.IsActive
                     && !r.IsDeleted
                     && r.CarrierId == carrierId
                     && r.RouteId == routeId
                     && r.ContainerTypeId == containerTypeId
-                    && r.ValidFrom <= now && r.ValidTo >= now)
+                    && r.ValidFrom == validFrom && r.ValidTo == validTo)
                 .ToListAsync();
+        }
+
+        public IQueryable<Rate> GetRatesByRouteAndContainerTypeQuery(Guid routeId, Guid containerTypeId, string currency)
+        {
+            var now = DateTimeOffset.UtcNow;
+            return _context.Rates
+                .Where(r => !r.IsDeleted
+                    && r.RouteId == routeId
+                    && r.ContainerTypeId == containerTypeId
+                    && EF.Functions.Like(currency, r.Currency)
+                    && r.ValidFrom <= now && r.ValidTo >= now);
+        }
+        public IQueryable<Rate> GetRatesByRouteAndContainerTypeQueryForRecommendation(Guid routeId, Guid containerTypeId, string currency, decimal? maxPrice)
+        {
+            var now = DateTimeOffset.UtcNow;
+            return _context.Rates
+                .Include(r => r.Carrier)
+                .Include(r => r.Route)
+                    .ThenInclude(route => route.FromPort)
+                .Include(r => r.Route)
+                    .ThenInclude(route => route.ToPort)
+                .Include(r => r.ContainerType)
+                .Where(r => !r.IsDeleted
+                    && r.IsActive
+                    && r.RouteId == routeId
+                    && r.ContainerTypeId == containerTypeId
+                    && r.Currency == currency
+                    && r.ValidFrom <= now && r.ValidTo >= now
+                    && (!maxPrice.HasValue || r.Price <= maxPrice.Value));
         }
 
         public async Task<IEnumerable<Rate>> GetByCarrierRouteAndContainerTypeAsync(Guid carrierId, Guid routeId, Guid containerTypeId)

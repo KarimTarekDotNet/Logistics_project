@@ -5,6 +5,7 @@ using Application.Interfaces.Services.Shipments.Core;
 using AutoMapper;
 using Domain.Entities.Shipments;
 using Domain.Entities.Users;
+using Domain.Enums;
 using Domain.Exceptions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -23,8 +24,13 @@ namespace Infrastructure.Services.Shipments.Core
             _userManager = userManager;
         }
 
-        public async Task<ShipmentChargeResponse> CreateAsync(CreateShipmentChargeRequest request)
+        public async Task<IEnumerable<ShipmentChargeResponse>> GenerateAsync(GenerateShipmentChargesRequest request, string userId)
         {
+            var user = await _userManager.Users.Include(x => x.CustomerProfile)
+            .FirstOrDefaultAsync(x => x.Id == userId);
+            if (user == null || user.CustomerProfile == null)
+                throw new KeyNotFoundException("User not found.");
+
             var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(request.ShipmentId);
 
             if (shipment == null)
@@ -33,23 +39,60 @@ namespace Infrastructure.Services.Shipments.Core
             if (!ShipmentStatusRules.CanModifyCharges(shipment.Status))
                 throw new BusinessRuleException("Cannot modify charges at this stage.");
 
-            var charge = new ShipmentCharge
+            var rules = await _unitOfWork.ShipmentChargeRule.GetActiveRulesAsync(shipment.Currency);
+
+            if (!rules.Any())
+                throw new BusinessRuleException("No active charge rules found.");
+
+            var generatedCharges = new List<ShipmentCharge>();
+
+
+            foreach (var rule in rules)
             {
-                ShipmentId = shipment.Id,
-                Description = request.Description,
-                Amount = request.Amount,
-                ChargeType = request.ChargeType,
-                Currency = request.Currency,
-                TaxAmount = request.TaxAmount,
-                PayerType = request.PayerType,
-                CreatedAt = DateTimeOffset.UtcNow
-            };
+                var alreadyExists = shipment.Charges.Any(x => x.ChargeType == rule.ChargeType && !x.IsDeleted);
 
-            shipment.Charges.Add(charge);
+                if (alreadyExists)
+                    continue;
 
+                var amount = rule.CalculationType switch
+                {
+                    ChargeCalculationType.Fixed =>
+                        rule.Value,
+
+                    ChargeCalculationType.PerKg =>
+                        shipment.TotalChargeableWeightKg * rule.Value,
+
+                    ChargeCalculationType.PerCbm =>
+                        shipment.TotalVolumeCbm * rule.Value,
+
+                    ChargeCalculationType.PercentageOfAgreedPrice =>
+                        shipment.AgreedPrice * rule.Value / 100,
+
+                    _ => throw new BusinessRuleException("Unsupported charge calculation type.")
+                };
+
+                var charge = new ShipmentCharge
+                {
+                    ShipmentId = shipment.Id,
+                    ChargeType = request.ChargeType,
+                    PayerType = request.PayerType,
+                    Amount = amount,
+                    TaxAmount = 0,
+                    Currency = shipment.Currency,
+                    Description = $"{rule.ChargeType} auto generated charge",
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+
+                generatedCharges.Add(charge);
+            }
+
+            if (!generatedCharges.Any())
+                return Enumerable.Empty<ShipmentChargeResponse>();
+
+            await _unitOfWork.ShipmentCharges.AddRangeAsync(generatedCharges);
             await _unitOfWork.SaveChangesAsync();
 
-            return _mapper.Map<ShipmentChargeResponse>(charge);
+            return _mapper.Map<IEnumerable<ShipmentChargeResponse>>(generatedCharges);
         }
 
         public async Task<bool> DeleteAsync(Guid id)
@@ -96,14 +139,28 @@ namespace Infrastructure.Services.Shipments.Core
 
         public async Task<IReadOnlyList<ShipmentChargeResponse>> GetByShipmentIdAsync(Guid shipmentId, string userId, bool isPrivileged)
         {
-            var user = await _userManager.Users.Include(x => x.CustomerProfile).FirstOrDefaultAsync(x => x.Id == userId);
-            if (user == null || user.CustomerProfile == null)
+            var user = await _userManager.Users
+                    .Include(x => x.CustomerProfile)
+                    .FirstOrDefaultAsync(x => x.Id == userId);
+
+            if (user == null)
                 throw new KeyNotFoundException("User not found.");
 
-            var charges = await _unitOfWork.ShipmentCharges.GetByShipmentIdAsync(shipmentId);
+            var shipment = await _unitOfWork.Shipments.GetByIdAsync(shipmentId);
 
-            if (!charges.Any(x => x.Shipment.CustomerId == user.CustomerProfile.Id || isPrivileged))
-                return new List<ShipmentChargeResponse>();
+            if (shipment == null)
+                throw new KeyNotFoundException("Shipment not found.");
+
+            if (!isPrivileged)
+            {
+                if (user.CustomerProfile == null)
+                    throw new BusinessRuleException("Customer profile not found.");
+
+                if (shipment.CustomerId != user.CustomerProfile.Id)
+                    throw new BusinessRuleException("You do not have permission.");
+            }
+
+            var charges = await _unitOfWork.ShipmentCharges.GetByShipmentIdAsync(shipmentId);
 
             return _mapper.Map<IReadOnlyList<ShipmentChargeResponse>>(charges);
         }

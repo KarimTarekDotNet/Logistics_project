@@ -2,8 +2,10 @@
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Services.Shipments.Core;
 using AutoMapper;
+using Domain.Entities.Shipments;
 using Domain.Entities.Users;
 using Domain.Enums;
+using Domain.Exceptions;
 using Infrastructure.Helper;
 using Microsoft.AspNetCore.Identity;
 
@@ -37,6 +39,10 @@ namespace Infrastructure.Services.Shipments.Core.Shipment
 
         public async Task<ShipmentResponse?> CloseAsync(Guid id, string userId, bool isPrivileged, ChangeShipmentStatusRequest request)
         {
+            var invoices = await _unitOfWork.Invoices.GetByShipmentIdAsync(id);
+            if (!invoices.Any() || !invoices.All(x => x.PaymentStatus == PaymentStatus.Paid))
+                throw new BusinessRuleException("Shipment cannot proceed before all invoices are paid.");
+
             var newShipment = await HelperMethods.ChangeStatusAsync(_userManager, _unitOfWork, id, userId, isPrivileged, ShipmentStatus.Closed, request.Reason);
             if (newShipment == null)
                 return null;
@@ -49,6 +55,10 @@ namespace Infrastructure.Services.Shipments.Core.Shipment
 
         public async Task<ShipmentResponse?> CompleteDeliveryAsync(Guid id, string userId, bool isPrivileged, ChangeShipmentStatusRequest request)
         {
+            var invoices = await _unitOfWork.Invoices.GetByShipmentIdAsync(id);
+            if (!invoices.Any() || !invoices.All(x => x.PaymentStatus == PaymentStatus.Paid))
+                throw new BusinessRuleException("Shipment cannot proceed before all invoices are paid.");
+
             var newShipment = await HelperMethods.ChangeStatusAsync(_userManager, _unitOfWork, id, userId, isPrivileged, ShipmentStatus.Delivered, request.Reason);
             if (newShipment == null)
                 return null;
@@ -85,6 +95,10 @@ namespace Infrastructure.Services.Shipments.Core.Shipment
 
         public async Task<ShipmentResponse?> ConfirmPaymentAsync(Guid id, string userId, bool isPrivileged, ChangeShipmentStatusRequest request)
         {
+            var invoices = await _unitOfWork.Invoices.GetByShipmentIdAsync(id);
+            if (!invoices.Any() || !invoices.All(x => x.PaymentStatus == PaymentStatus.Paid))
+                throw new BusinessRuleException("Shipment cannot proceed before all invoices are paid.");
+
             var newShipment = await HelperMethods.ChangeStatusAsync(_userManager, _unitOfWork, id, userId, isPrivileged, ShipmentStatus.PaymentCompleted, request.Reason);
             if (newShipment == null)
                 return null;
@@ -121,6 +135,10 @@ namespace Infrastructure.Services.Shipments.Core.Shipment
 
         public async Task<ShipmentResponse?> ReleaseTelexAsync(Guid id, string userId, bool isPrivileged, ChangeShipmentStatusRequest request)
         {
+            var invoices = await _unitOfWork.Invoices.GetByShipmentIdAsync(id);
+            if (!invoices.Any() || !invoices.All(x => x.PaymentStatus == PaymentStatus.Paid))
+                throw new BusinessRuleException("Shipment cannot proceed before all invoices are paid.");
+
             var newShipment = await HelperMethods.ChangeStatusAsync(_userManager, _unitOfWork, id, userId, isPrivileged, ShipmentStatus.TelexReleased, request.Reason);
             if (newShipment == null)
                 return null;

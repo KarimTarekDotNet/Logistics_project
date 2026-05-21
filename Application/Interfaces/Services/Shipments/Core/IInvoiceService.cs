@@ -8,10 +8,11 @@ namespace Application.Interfaces.Services.Shipments.Core
 
         Task<IReadOnlyList<InvoiceResponse>> GetByShipmentIdAsync(Guid shipmentId, string userId, bool isPrivileged);
 
-        Task<InvoiceResponse> CreateAsync(CreateInvoiceRequest request);
+        Task<InvoiceResponse> CreateOrUpdateDraftInvoiceAsync(Guid shipmentId, string userId);
 
         Task<InvoiceResponse?> MarkAsPaidAsync(Guid id, string userId, bool isPrivileged);
-        Task<InvoiceResponse?> MarkAsPartiallyPaidAsync(Guid id);
+        Task<InvoiceResponse?> ConfirmAsync(Guid id, string userId);
+        Task<InvoiceResponse?> MarkAsPartiallyPaidAsync(Guid id, decimal price);
         Task<InvoiceResponse?> MarkAsRefundedAsync(Guid id);
 
         Task<InvoiceResponse?> CancelAsync(Guid id, string userId, bool isPrivileged, string reason);

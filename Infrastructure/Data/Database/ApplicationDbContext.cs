@@ -1,4 +1,5 @@
-﻿using Domain.Entities.Pricing.Imports;
+﻿using Domain.Entities.Aliases;
+using Domain.Entities.Pricing.Imports;
 using Domain.Entities.Pricing.PricingEngine;
 using Domain.Entities.Pricing.Quotation;
 using Domain.Entities.Shipments;
@@ -24,13 +25,14 @@ namespace Infrastructure.Data.Database
 
         // Quotation
         public DbSet<Quote> Quotes { get; set; }
-        public DbSet<QuoteItem> QuoteItems { get; set; }
+        public DbSet<QuoteRequest> QuoteRequests { get; set; }
 
         // shipment
         public DbSet<Shipment> Shipments { get; set; }
         public DbSet<ShipmentItem> ShipmentItems { get; set; }
         public DbSet<ShipmentStatusHistory> ShipmentStatusHistories { get; set; }
         public DbSet<ShipmentCharge> ShipmentCharges { get; set; }
+        public DbSet<ShipmentChargeRule> ShipmentChargeRules { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<ShipmentDocument> ShipmentDocuments { get; set; }
         public DbSet<Customer> Customers { get; set; }
@@ -39,25 +41,43 @@ namespace Infrastructure.Data.Database
         public DbSet<ApplicationUser> ApplicationUsers { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
 
+
+        // Aliases
+        public DbSet<Alias> Aliases { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
             // Global query filters for soft delete
             modelBuilder.Entity<Rate>().HasQueryFilter(r => !r.IsDeleted);
+
             modelBuilder.Entity<Quote>().HasQueryFilter(r => !r.IsDeleted);
-            modelBuilder.Entity<QuoteItem>().HasQueryFilter(r => !r.IsDeleted);
+
             modelBuilder.Entity<Carrier>().HasQueryFilter(r => !r.IsDeleted);
+
             modelBuilder.Entity<ContainerType>().HasQueryFilter(r => !r.IsDeleted);
+
             modelBuilder.Entity<Port>().HasQueryFilter(r => !r.IsDeleted);
+
             modelBuilder.Entity<Route>().HasQueryFilter(r => !r.IsDeleted);
+
             modelBuilder.Entity<Shipment>().HasQueryFilter(r => !r.IsDeleted);
             modelBuilder.Entity<ShipmentItem>().HasQueryFilter(r => !r.IsDeleted);
             modelBuilder.Entity<ShipmentCharge>().HasQueryFilter(r => !r.IsDeleted);
             modelBuilder.Entity<ShipmentStatusHistory>().HasQueryFilter(r => !r.Shipment.IsDeleted);
-            modelBuilder.Entity<Customer>().HasQueryFilter(r => !r.IsDeleted);
-            modelBuilder.Entity<Invoice>().HasQueryFilter(r => !r.IsDeleted);
             modelBuilder.Entity<ShipmentDocument>().HasQueryFilter(r => !r.IsDeleted);
+
+            modelBuilder.Entity<Invoice>().HasQueryFilter(r => !r.IsDeleted);
+
+            modelBuilder.Entity<Customer>().HasQueryFilter(r => !r.IsDeleted);
+
+            modelBuilder.Entity<Alias>().HasQueryFilter(r => !r.IsDeleted);
+
+
+            modelBuilder.Entity<Alias>().Property(r => r.Type).HasConversion<string>();
+            modelBuilder.Entity<QuoteRequest>().Property(r => r.Status).HasConversion<string>();
+            modelBuilder.Entity<Quote>().Property(r => r.Status).HasConversion<string>();
 
             // indexes
             modelBuilder.Entity<ApplicationUser>().HasIndex(x => x.PhoneNumber).IsUnique().HasFilter("[PhoneNumber] IS NOT NULL");

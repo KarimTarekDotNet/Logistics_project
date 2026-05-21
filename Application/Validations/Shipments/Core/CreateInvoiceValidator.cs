@@ -38,4 +38,12 @@ namespace Application.Validations.Shipments.Core
                 .WithMessage("Due date must be in the future.");
         }
     }
+    public class PriceRequestValidator : AbstractValidator<PriceRequest>
+    {
+        public PriceRequestValidator()
+        {
+            RuleFor(x => x.Price)
+                .GreaterThan(0).WithMessage("Price must be greater than 0.");
+        }
+    }
 }

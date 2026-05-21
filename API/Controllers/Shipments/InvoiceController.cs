@@ -46,15 +46,18 @@ namespace API.Controllers.Shipments
             return Ok(invoices);
         }
 
-        [HttpPost]
+        [HttpPost("{ShipmentId}")]
         [EnableRateLimiting("HeavyPolicy")]
-        [Authorize(Roles = "Admin,Staff")]
-        public async Task<IActionResult> Create(CreateInvoiceRequest request)
+        public async Task<IActionResult> Create(Guid ShipmentId)
         {
-            var createdInvoice = await invoiceService.CreateAsync(request);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            var createdInvoice = await invoiceService.CreateOrUpdateDraftInvoiceAsync(ShipmentId, userId);
 
             return CreatedAtAction(nameof(GetById), new { id = createdInvoice.Id }, createdInvoice);
         }
+
+
 
         [HttpPatch("{id}/cancel")]
         [EnableRateLimiting("HeavyPolicy")]
@@ -64,6 +67,19 @@ namespace API.Controllers.Shipments
             var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
 
             var cancelledInvoice = await invoiceService.CancelAsync(id, userId, isPrivileged, request.Reason);
+            if (cancelledInvoice == null)
+                return NotFound();
+
+            return Ok(cancelledInvoice);
+        }
+
+        [HttpPatch("{id}/confirm")]
+        [EnableRateLimiting("HeavyPolicy")]
+        public async Task<IActionResult> Confirm(Guid id, CancelInvoiceRequest request)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            var cancelledInvoice = await invoiceService.ConfirmAsync(id, userId);
             if (cancelledInvoice == null)
                 return NotFound();
 
@@ -87,9 +103,9 @@ namespace API.Controllers.Shipments
         [HttpPatch("{id}/mark-as-partially-paid")]
         [EnableRateLimiting("HeavyPolicy")]
         [Authorize(Roles = "Admin,Staff")]
-        public async Task<IActionResult> MarkAsPartiallyPaid(Guid id)
+        public async Task<IActionResult> MarkAsPartiallyPaid(Guid id, PriceRequest price)
         {
-            var paidInvoice = await invoiceService.MarkAsPartiallyPaidAsync(id);
+            var paidInvoice = await invoiceService.MarkAsPartiallyPaidAsync(id, price.Price);
             if (paidInvoice == null)
                 return NotFound();
 

@@ -2,6 +2,7 @@
 
 using API.Mapping;
 using API.Middlewares;
+using Application.Interfaces.Repositories.Aliases;
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Repositories.Pricing.Imports;
 using Application.Interfaces.Repositories.Pricing.PricingEngine;
@@ -9,6 +10,7 @@ using Application.Interfaces.Repositories.Pricing.Quotation;
 using Application.Interfaces.Repositories.Shipments.Core;
 using Application.Interfaces.Repositories.Shipments.User;
 using Application.Interfaces.Repositories.ShippingCore;
+using Application.Interfaces.Services.Aliases;
 using Application.Interfaces.Services.Auth;
 using Application.Interfaces.Services.Pricing.Imports;
 using Application.Interfaces.Services.Pricing.PricingEngine;
@@ -19,11 +21,13 @@ using Application.Interfaces.Services.Shipments.Core;
 using Application.Interfaces.Services.Shipments.User;
 using Application.Interfaces.Services.User;
 using Application.Validations.PricingFeature.Pricing;
+using Domain.Entities.Shipments;
 using Domain.Entities.Users;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Infrastructure.Data.Configuration.Seeding;
 using Infrastructure.Data.Database;
+using Infrastructure.Repositories.Aliases;
 using Infrastructure.Repositories.Patterns;
 using Infrastructure.Repositories.Pricing.Imports;
 using Infrastructure.Repositories.Pricing.PricingEngine;
@@ -31,6 +35,7 @@ using Infrastructure.Repositories.Pricing.Quotation;
 using Infrastructure.Repositories.Pricing.ShippingCore;
 using Infrastructure.Repositories.Shipments;
 using Infrastructure.Repositories.Shipments.Core;
+using Infrastructure.Services.Aliases;
 using Infrastructure.Services.Auth;
 using Infrastructure.Services.Pricing.Imports;
 using Infrastructure.Services.Pricing.PricingEngine;
@@ -56,6 +61,7 @@ namespace API
         public static async Task Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+            const string FrontendCorsPolicy = "FrontendCors";
 
             // Database
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -65,6 +71,21 @@ namespace API
                 .AddIdentity<ApplicationUser, IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
+
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy(FrontendCorsPolicy, policy =>
+                {
+                    policy
+                        .WithOrigins(
+                            "http://localhost:5173",
+                            "http://127.0.0.1:5173",
+                            "https://localhost:5173",
+                            "https://127.0.0.1:5173")
+                        .AllowAnyHeader()
+                        .AllowAnyMethod();
+                });
+            });
 
             builder.Services.AddRateLimiter(options =>
             {
@@ -114,6 +135,9 @@ namespace API
             builder.Services.AddScoped<IIntegrationMessageRepository, IntegrationMessageRepository>();
             builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
             builder.Services.AddScoped<IShipmentDocumentRepository, ShipmentDocumentRepository>();
+            builder.Services.AddScoped<IAliasRepository, AliasRepository>();
+            builder.Services.AddScoped<IQuoteRequestRepository, QuoteRequestRepository>();
+            builder.Services.AddScoped<IShipmentChargeRuleRepository, ShipmentChargeRuleRepository>();
 
             // Unit of Work
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -145,6 +169,8 @@ namespace API
             builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
             builder.Services.AddScoped<IFileSecurityService, ClamAvFileScanner>();
             builder.Services.AddScoped<IShipmentDocumentService, ShipmentDocumentService>();
+            builder.Services.AddScoped<IAliasService, AliasService>();
+            builder.Services.AddScoped<IQuoteRequestService, QuoteRequestService>();
 
             builder.Services.AddAuthentication(options =>
             {
@@ -186,16 +212,16 @@ namespace API
 
             var app = builder.Build();
 
-            //using (var scope = app.Services.CreateScope())
-            //{
-            //    var services = scope.ServiceProvider;
+            using (var scope = app.Services.CreateScope())
+            {
+                var services = scope.ServiceProvider;
 
-            //    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-            //    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-            //    var dbContext = services.GetRequiredService<ApplicationDbContext>();
+                var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+                var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+                var dbContext = services.GetRequiredService<ApplicationDbContext>();
 
-            //    await AppSeeder.SeedAsync(roleManager, userManager, dbContext);
-            //}
+                await AppSeeder.SeedAsync(roleManager, userManager, dbContext);
+            }
 
             if (app.Environment.IsDevelopment())
             {
@@ -205,6 +231,8 @@ namespace API
             }
 
             app.UseHttpsRedirection();
+
+            app.UseCors(FrontendCorsPolicy);
 
             app.UseStaticFiles();
             app.UseAuthentication();

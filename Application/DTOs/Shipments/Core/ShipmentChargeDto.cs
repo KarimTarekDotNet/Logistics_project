@@ -2,25 +2,21 @@
 
 namespace Application.DTOs.Shipments.Core
 {
-    public record CreateShipmentChargeRequest
+    public record GenerateShipmentChargesRequest
     {
-        public Guid ShipmentId { get; set; }
-        public string Description { get; set; } = null!;
-        public decimal Amount { get; set; }
-        public decimal TaxAmount { get; set; }
-        public string Currency { get; set; } = null!;
-        public ChargeType ChargeType { get; set; }
-        public PayerType PayerType { get; set; }
+        public Guid ShipmentId { get; init; }
+        public ChargeType ChargeType { get; init; }
+        public PayerType PayerType { get; init; }
     }
 
     public record UpdateShipmentChargeRequest
     {
-        public string? Description { get; set; }
-        public decimal? Amount { get; set; }
-        public decimal? TaxAmount { get; set; }
-        public string? Currency { get; set; }
-        public ChargeType? ChargeType { get; set; }
-        public PayerType? PayerType { get; set; }
+        public ChargeType? ChargeType { get; init; }
+        public PayerType? PayerType { get; init; }
+        public decimal? Amount { get; init; }
+        public decimal? TaxAmount { get; init; }
+        public string? Currency { get; init; }
+        public string? Description { get; init; }
     }
 
     public record ShipmentChargeResponse

@@ -1,0 +1,811 @@
+import type {
+  AuthResponse,
+  AuthSession,
+  Carrier,
+  ContainerType,
+  Customer,
+  Invoice,
+  MarketAnalytics,
+  Port,
+  ProfileResponse,
+  ProfileUpdateResponse,
+  QueryParams,
+  Quote,
+  QuoteRequest,
+  Rate,
+  RateRecommendationResponse,
+  RecommendationPriority,
+  Route,
+  Shipment,
+  ShipmentCharge,
+  ShipmentDocument,
+  ShipmentHistory,
+  ShipmentItem,
+  TimelineItem
+} from "../types";
+import { loadStoredSession, persistSession, sessionFromAuth } from "../utils/session";
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
+export const SESSION_REFRESHED_EVENT = "flowtix:session-refreshed";
+
+type RequestOptions = {
+  method?: string;
+  body?: unknown;
+  token?: string;
+  headers?: Record<string, string>;
+  skipAuthRefresh?: boolean;
+};
+
+let refreshPromise: Promise<AuthSession | null> | null = null;
+
+export class ApiError extends Error {
+  status: number;
+  payload: unknown;
+
+  constructor(status: number, message: string, payload: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
+function buildQuery(params?: QueryParams | Record<string, string | number | boolean | undefined>) {
+  if (!params) return "";
+
+  const query = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    query.set(key, String(value));
+  });
+
+  const result = query.toString();
+  return result ? `?${result}` : "";
+}
+
+async function parseResponse(response: Response) {
+  if (response.status === 204) return null;
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  return text || null;
+}
+
+function parseJsonString(value: string) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function cleanMessage(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .replace(/["{}[\]]/g, "")
+    .trim()
+    .slice(0, 260);
+}
+
+function extractErrorStrings(value: unknown): string[] {
+  if (typeof value === "string") {
+    const parsed = value.trim().startsWith("{") || value.trim().startsWith("[") ? parseJsonString(value) : null;
+    return parsed ? extractErrorStrings(parsed) : [cleanMessage(value)];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap(extractErrorStrings);
+  }
+
+  if (typeof value === "object" && value) {
+    const record = value as Record<string, unknown>;
+    const direct = [record.message, record.Message, record.error, record.Error, record.detail]
+      .flatMap(extractErrorStrings)
+      .filter(Boolean);
+
+    if (direct.length > 0) return direct;
+    if (record.errors) return extractErrorStrings(record.errors);
+    if (record.title) return extractErrorStrings(record.title);
+
+    return Object.values(record).flatMap(extractErrorStrings);
+  }
+
+  return [];
+}
+
+function extractApiMessage(payload: unknown, status: number) {
+  const messages = extractErrorStrings(payload).filter((message) => message.length > 0);
+  if (messages.length > 0) return Array.from(new Set(messages)).slice(0, 2).join(" ");
+  return `Request failed with status ${status}`;
+}
+
+function resolveRequestBody(method: string, body: unknown): BodyInit | undefined {
+  if (body instanceof FormData) return body;
+  if (body !== undefined) return JSON.stringify(body);
+
+  const verb = method.toUpperCase();
+  if (verb === "POST" || verb === "PUT" || verb === "PATCH") {
+    return "{}";
+  }
+
+  return undefined;
+}
+
+function notifySessionRefresh(session: AuthSession | null) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<AuthSession | null>(SESSION_REFRESHED_EVENT, { detail: session }));
+}
+
+async function refreshStoredSession() {
+  if (refreshPromise) return refreshPromise;
+
+  const current = loadStoredSession();
+  if (!current?.refreshToken) return null;
+
+  refreshPromise = request<AuthResponse>("/api/Auth/refresh", {
+    method: "POST",
+    body: { refreshToken: current.refreshToken },
+    skipAuthRefresh: true
+  })
+    .then((response) => {
+      if (!response.isAuthenticated || !response.accessToken) {
+        throw new ApiError(401, response.message || "Session refresh failed", response);
+      }
+
+      const nextSession = sessionFromAuth(response);
+      persistSession(nextSession);
+      notifySessionRefresh(nextSession);
+      return nextSession;
+    })
+    .catch((error) => {
+      persistSession(null);
+      notifySessionRefresh(null);
+      throw error;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+
+  return refreshPromise;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const isFormData = options.body instanceof FormData;
+  const method = options.method ?? "GET";
+  const requestBody = resolveRequestBody(method, options.body);
+  const storedSession = options.token && !options.skipAuthRefresh ? loadStoredSession() : null;
+  const authToken = storedSession?.accessToken ?? options.token;
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...(isFormData ? {} : method !== "GET" && method !== "DELETE" ? { "Content-Type": "application/json" } : {}),
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    ...options.headers
+  };
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers,
+    body: requestBody,
+    credentials: "same-origin",
+    referrerPolicy: "strict-origin-when-cross-origin"
+  });
+
+  const payload = await parseResponse(response);
+
+  if (response.status === 401 && options.token && !options.skipAuthRefresh) {
+    const nextSession = await refreshStoredSession();
+    if (nextSession?.accessToken) {
+      return request<T>(path, {
+        ...options,
+        token: nextSession.accessToken,
+        skipAuthRefresh: true
+      });
+    }
+  }
+
+  if (!response.ok) {
+    throw new ApiError(response.status, extractApiMessage(payload, response.status), payload);
+  }
+
+  return payload as T;
+}
+
+export const api = {
+  baseUrl: API_BASE_URL,
+
+  login(body: { identity: string; password: string }) {
+    return request<AuthResponse>("/api/Auth/login", { method: "POST", body });
+  },
+
+  register(body: {
+    firstName: string;
+    lastName: string;
+    userName: string;
+    email: string;
+    countryCode: string;
+    phoneNumber: string;
+    password: string;
+    confirmPassword: string;
+  }) {
+    return request<AuthResponse>("/api/Auth/register", { method: "POST", body });
+  },
+
+  confirmEmail(userId: string, token: string) {
+    return request<AuthResponse>(`/api/Auth/confirm-email${buildQuery({ userId, token })}`);
+  },
+
+  resendEmailConfirmation(email: string) {
+    return request<AuthResponse>(`/api/Auth/resend-email-confirmation${buildQuery({ Email: email })}`, {
+      method: "POST"
+    });
+  },
+
+  confirmPhone(phone: string, code: string) {
+    return request<AuthResponse>("/api/Auth/confirm-phone", {
+      method: "POST",
+      body: { phone, code }
+    });
+  },
+
+  resendPhoneOtp(phone: string) {
+    return request<AuthResponse>(`/api/Auth/resend-phone-otp${buildQuery({ phone })}`, { method: "POST" });
+  },
+
+  refresh(refreshToken: string) {
+    return request<AuthResponse>("/api/Auth/refresh", { method: "POST", body: { refreshToken }, skipAuthRefresh: true });
+  },
+
+  logout(refreshToken: string, token: string) {
+    return request<{ message: string }>("/api/Auth/logout", {
+      method: "POST",
+      token,
+      body: { refreshToken },
+      skipAuthRefresh: true
+    });
+  },
+
+  logoutAll(token: string) {
+    return request<{ message: string }>("/api/Auth/logout-all", {
+      method: "POST",
+      token
+    });
+  },
+
+  getRates(token: string, params?: QueryParams) {
+    return request<Rate[]>(`/api/rates${buildQuery(params)}`, { token });
+  },
+
+  getPublicRateCount() {
+    return request<number>("/api/rates/count");
+  },
+
+  getRate(token: string, id: string) {
+    return request<Rate>(`/api/rates/${id}`, { token });
+  },
+
+  getMarketAnalytics(token: string, params: { routeId: string; containerId: string; currency: string }) {
+    return request<MarketAnalytics>(
+      `/api/rates/market-analytics${buildQuery({
+        RouteId: params.routeId,
+        ContainerId: params.containerId,
+        Currency: params.currency
+      })}`,
+      { token }
+    );
+  },
+
+  getRateRecommendations(token: string, params: {
+    routeId: string;
+    containerTypeId: string;
+    currency: string;
+    maxPrice?: number;
+    limit: number;
+    priority: RecommendationPriority;
+  }) {
+    return request<RateRecommendationResponse>(
+      `/api/rates/recommended${buildQuery({
+        RouteId: params.routeId,
+        ContainerTypeId: params.containerTypeId,
+        Currency: params.currency,
+        MaxPrice: params.maxPrice,
+        Limit: params.limit,
+        Priority: params.priority
+      })}`,
+      { method: "POST", token }
+    );
+  },
+
+  createRate(token: string, body: {
+    carrierId: string;
+    routeId: string;
+    containerTypeId: string;
+    price: number;
+    currency: string;
+    validFrom: string;
+    validTo: string;
+    maxGrossWeightKg?: number;
+    maxNetWeightKg?: number;
+    maxVolumeCbm?: number;
+    allowsHazardous?: boolean;
+    minTemperatureCelsius?: number;
+    maxTemperatureCelsius?: number;
+  }) {
+    return request<Rate>("/api/rates", { method: "POST", token, body });
+  },
+
+  updateRate(token: string, id: string, body: {
+    price: number;
+    currency: string;
+    validFrom: string;
+    validTo: string;
+    maxGrossWeightKg?: number;
+    maxNetWeightKg?: number;
+    maxVolumeCbm?: number;
+    allowsHazardous?: boolean;
+    minTemperatureCelsius?: number;
+    maxTemperatureCelsius?: number;
+  }) {
+    return request<Rate>(`/api/rates/${id}`, { method: "PUT", token, body });
+  },
+
+  deleteRate(token: string, id: string) {
+    return request<{ message: string }>(`/api/rates/${id}`, { method: "DELETE", token });
+  },
+
+  toggleRate(token: string, id: string) {
+    return request<{ message: string }>(`/api/rates/${id}/active`, { method: "PATCH", token });
+  },
+
+  getCarriers(params?: QueryParams) {
+    return request<Carrier[]>(`/api/carriers${buildQuery(params)}`);
+  },
+
+  getCarrier(id: string) {
+    return request<Carrier>(`/api/carriers/${id}`);
+  },
+
+  createCarrier(token: string, body: { name: string; code: string }) {
+    return request<Carrier>("/api/carriers", { method: "POST", token, body });
+  },
+
+  updateCarrier(token: string, id: string, body: { name?: string; code?: string }) {
+    return request<Carrier>(`/api/carriers/${id}`, { method: "PUT", token, body });
+  },
+
+  deleteCarrier(token: string, id: string) {
+    return request<{ message: string }>(`/api/carriers/${id}`, { method: "DELETE", token });
+  },
+
+  getPorts(params?: QueryParams) {
+    return request<Port[]>(`/api/ports${buildQuery(params)}`);
+  },
+
+  getPort(id: string) {
+    return request<Port>(`/api/ports/${id}`);
+  },
+
+  getPortsByCountry(country: string, params?: QueryParams) {
+    return request<Port[]>(`/api/ports/country${buildQuery({ ...params, country })}`);
+  },
+
+  createPort(token: string, body: { name: string; code: string; country: string }) {
+    return request<Port>("/api/ports", { method: "POST", token, body });
+  },
+
+  updatePort(token: string, id: string, body: { name?: string; code?: string; country?: string }) {
+    return request<Port>(`/api/ports/${id}`, { method: "PUT", token, body });
+  },
+
+  deletePort(token: string, id: string) {
+    return request<{ message: string }>(`/api/ports/${id}`, { method: "DELETE", token });
+  },
+
+  getRoutes(params?: QueryParams) {
+    return request<Route[]>(`/api/routes${buildQuery(params)}`);
+  },
+
+  getRoute(id: string) {
+    return request<Route>(`/api/routes/${id}`);
+  },
+
+  getRoutesByFromPort(fromPortId: string, params?: QueryParams) {
+    return request<Route[]>(`/api/routes/from-port/${fromPortId}${buildQuery(params)}`);
+  },
+
+  getRoutesByToPort(toPortId: string, params?: QueryParams) {
+    return request<Route[]>(`/api/routes/to-port/${toPortId}${buildQuery(params)}`);
+  },
+
+  createRoute(token: string, body: { fromPortId: string; toPortId: string }) {
+    return request<Route>("/api/routes", { method: "POST", token, body });
+  },
+
+  updateRoute(token: string, id: string, body: { fromPortId: string; toPortId: string }) {
+    return request<Route>(`/api/routes/${id}`, { method: "PUT", token, body });
+  },
+
+  deleteRoute(token: string, id: string) {
+    return request<{ message: string }>(`/api/routes/${id}`, { method: "DELETE", token });
+  },
+
+  getContainerTypes(params?: QueryParams) {
+    return request<ContainerType[]>(`/api/container-types${buildQuery(params)}`);
+  },
+
+  getContainerType(id: string) {
+    return request<ContainerType>(`/api/container-types/${id}`);
+  },
+
+  createContainerType(token: string, body: { name: string }) {
+    return request<ContainerType>("/api/container-types", { method: "POST", token, body });
+  },
+
+  updateContainerType(token: string, id: string, body: { name: string }) {
+    return request<ContainerType>(`/api/container-types/${id}`, { method: "PUT", token, body });
+  },
+
+  deleteContainerType(token: string, id: string) {
+    return request<{ message: string }>(`/api/container-types/${id}`, { method: "DELETE", token });
+  },
+
+  getQuotes(token: string, params?: QueryParams) {
+    return request<Quote[]>(`/api/quotes${buildQuery(params)}`, { token });
+  },
+
+  getMyQuotes(token: string, params?: QueryParams) {
+    return request<Quote[]>(`/api/quotes/my${buildQuery(params)}`, { token });
+  },
+
+  getQuote(token: string, id: string) {
+    return request<Quote>(`/api/quotes/${id}`, { token });
+  },
+
+  getQuotesByCustomer(token: string, customerName: string, params?: QueryParams) {
+    return request<Quote[]>(`/api/quotes/customer/${encodeURIComponent(customerName)}${buildQuery(params)}`, { token });
+  },
+
+  getQuotesByRoute(token: string, routeId: string, params?: QueryParams) {
+    return request<Quote[]>(`/api/quotes/route/${routeId}${buildQuery(params)}`, { token });
+  },
+
+  createQuote(token: string, body: {
+    customerId: string;
+    rateId: string;
+    requestedGrossWeightKg: number;
+    requestedNetWeightKg: number;
+    requestedVolumeCbm: number;
+    isHazardous: boolean;
+    requiredTemperatureCelsius?: number;
+  }) {
+    return request<Quote>("/api/quotes", { method: "POST", token, body });
+  },
+
+  acceptQuote(token: string, id: string) {
+    return request<Quote>(`/api/quotes/${id}/accept-from-user`, { method: "PATCH", token });
+  },
+
+  rejectQuote(token: string, id: string, reason: string) {
+    return request<Quote>(`/api/quotes/${id}/rejected-from-user${buildQuery({ reason })}`, {
+      method: "PATCH",
+      token
+    });
+  },
+
+  deleteQuote(token: string, id: string) {
+    return request<{ message: string }>(`/api/quotes/${id}`, { method: "DELETE", token });
+  },
+
+  getQuoteRequests(token: string, params?: QueryParams) {
+    return request<QuoteRequest[]>(`/api/QuoteRequest${buildQuery(params)}`, { token });
+  },
+
+  getMyQuoteRequests(token: string, params?: QueryParams) {
+    return request<QuoteRequest[]>(`/api/QuoteRequest/my${buildQuery(params)}`, { token });
+  },
+
+  getQuoteRequest(token: string, id: string) {
+    return request<QuoteRequest>(`/api/QuoteRequest/${id}`, { token });
+  },
+
+  createQuoteRequestFromRate(token: string, body: {
+    rateId: string;
+    requestedGrossWeightKg: number;
+    requestedNetWeightKg: number;
+    requestedVolumeCbm: number;
+    isHazardous: boolean;
+    requiredTemperatureCelsius?: number;
+    notes?: string;
+  }) {
+    return request<QuoteRequest>("/api/QuoteRequest/from-rate", { method: "POST", token, body });
+  },
+
+  approveQuoteRequest(token: string, id: string) {
+    return request<QuoteRequest>(`/api/QuoteRequest/${id}/approve`, { method: "PATCH", token });
+  },
+
+  rejectQuoteRequest(token: string, id: string, reason: string) {
+    return request<QuoteRequest>(`/api/QuoteRequest/${id}/reject`, {
+      method: "PATCH",
+      token,
+      body: { reason }
+    });
+  },
+
+  cancelQuoteRequest(token: string, id: string) {
+    return request<QuoteRequest>(`/api/QuoteRequest/${id}/cancel`, { method: "PATCH", token });
+  },
+
+  getCustomers(token: string, params?: QueryParams) {
+    return request<Customer[]>(`/api/Customer${buildQuery(params)}`, { token });
+  },
+
+  getMyCustomer(token: string) {
+    return request<Customer>("/api/Customer/me", { token });
+  },
+
+  createCustomer(token: string, body: {
+    nationalId?: string;
+    dateOfBirth?: string;
+    companyName?: string;
+    taxNumber?: string;
+    countryCode?: string;
+  }) {
+    return request<Customer>("/api/Customer", { method: "POST", token, body });
+  },
+
+  updateCustomer(token: string, body: {
+    nationalId?: string;
+    dateOfBirth?: string;
+    companyName?: string;
+    taxNumber?: string;
+    countryCode?: string;
+  }) {
+    return request<Customer>("/api/Customer", { method: "PUT", token, body });
+  },
+
+  deleteCustomer(token: string) {
+    return request<string>("/api/Customer", { method: "DELETE", token });
+  },
+
+  getProfile(token: string) {
+    return request<ProfileResponse>("/api/user/profile", { token });
+  },
+
+  updateProfile(token: string, body: {
+    firstName?: string;
+    lastName?: string;
+    username?: string;
+    email?: string;
+    phoneNumber?: string;
+  }) {
+    return request<ProfileUpdateResponse>("/api/user/profile", {
+      method: "PUT",
+      token,
+      body
+    });
+  },
+
+  confirmProfileEmailChange(userId: string, token: string) {
+    return request<ProfileUpdateResponse>(`/api/user/profile/confirm-email-change${buildQuery({ userId, token })}`);
+  },
+
+  updatePassword(token: string, body: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) {
+    return request<{ success: boolean; message: string }>("/api/user/profile/password", {
+      method: "PUT",
+      token,
+      body
+    });
+  },
+
+  verifyPhoneChange(token: string, code: string) {
+    return request<ProfileUpdateResponse>("/api/user/profile/verify-phone-change", {
+      method: "POST",
+      token,
+      body: { code }
+    });
+  },
+
+  getShipments(token: string, params?: QueryParams) {
+    return request<Shipment[]>(`/api/Shipment${buildQuery(params)}`, { token });
+  },
+
+  getPublicShipmentCount() {
+    return request<number>("/api/Shipment/Count");
+  },
+
+  getMyShipments(token: string, params?: QueryParams) {
+    return request<Shipment[]>(`/api/Shipment/my${buildQuery(params)}`, { token });
+  },
+
+  getShipment(token: string, id: string) {
+    return request<Shipment>(`/api/Shipment/${id}`, { token });
+  },
+
+  createShipment(token: string, quoteId: string) {
+    return request<Shipment>("/api/Shipment", {
+      method: "POST",
+      token,
+      body: { quoteId }
+    });
+  },
+
+  updateShipment(token: string, id: string, body: Record<string, string | undefined>) {
+    return request<Shipment>(`/api/Shipment/${id}`, {
+      method: "PUT",
+      token,
+      body
+    });
+  },
+
+  deleteShipment(token: string, id: string) {
+    return request<string>(`/api/Shipment/${id}`, { method: "DELETE", token });
+  },
+
+  updateTracking(token: string, id: string, body: Record<string, string | undefined>) {
+    return request<Shipment>(`/api/Shipment/${id}/tracking`, {
+      method: "PUT",
+      token,
+      body
+    });
+  },
+
+  shipmentAction(token: string, id: string, action: string, reason?: string) {
+    return request<Shipment>(`/api/Shipment/${id}/${action}`, {
+      method: "PATCH",
+      token,
+      body: { reason: reason?.trim() || null }
+    });
+  },
+
+  getTimeline(token: string, id: string, params?: QueryParams) {
+    return request<TimelineItem[]>(`/api/Shipment/${id}/timeline${buildQuery(params)}`, { token });
+  },
+
+  getShipmentHistory(token: string, id: string, params?: QueryParams) {
+    return request<ShipmentHistory[]>(`/api/ShipmentStatusHistory/${id}${buildQuery(params)}`, { token });
+  },
+
+  getChargesByShipment(token: string, shipmentId: string) {
+    return request<ShipmentCharge[]>(`/api/ShipmentCharge/shipment/${shipmentId}`, { token });
+  },
+
+  getCharge(token: string, id: string) {
+    return request<ShipmentCharge>(`/api/ShipmentCharge/${id}`, { token });
+  },
+
+  generateCharges(token: string, shipmentId: string, options: { chargeType?: number; payerType?: number } = {}) {
+    return request<ShipmentCharge[]>("/api/ShipmentCharge/generate", {
+      method: "POST",
+      token,
+      body: {
+        shipmentId,
+        chargeType: options.chargeType ?? 0,
+        payerType: options.payerType ?? 0
+      }
+    });
+  },
+
+  updateCharge(token: string, id: string, body: {
+    description?: string;
+    amount?: number;
+    taxAmount?: number;
+    currency?: string;
+    chargeType?: number;
+    payerType?: number;
+  }) {
+    return request<ShipmentCharge>(`/api/ShipmentCharge/${id}`, { method: "PUT", token, body });
+  },
+
+  deleteCharge(token: string, id: string) {
+    return request<string>(`/api/ShipmentCharge/${id}`, { method: "DELETE", token });
+  },
+
+  getInvoice(token: string, id: string) {
+    return request<Invoice>(`/api/Invoice/${id}`, { token });
+  },
+
+  getInvoicesByShipment(token: string, shipmentId: string) {
+    return request<Invoice[]>(`/api/Invoice/shipment/${shipmentId}`, { token });
+  },
+
+  createInvoice(token: string, shipmentId: string) {
+    return request<Invoice>(`/api/Invoice/${shipmentId}`, { method: "POST", token });
+  },
+
+  invoiceStatus(token: string, id: string, action: "mark-as-paid" | "mark-as-partially-paid" | "mark-as-refunded", price?: number) {
+    return request<Invoice>(`/api/Invoice/${id}/${action}`, {
+      method: "PATCH",
+      token,
+      body: action === "mark-as-partially-paid" && price !== undefined ? { Price: price } : {}
+    });
+  },
+
+  confirmInvoice(token: string, id: string) {
+    return request<Invoice>(`/api/Invoice/${id}/confirm`, {
+      method: "PATCH",
+      token
+    });
+  },
+
+  cancelInvoice(token: string, id: string, reason: string) {
+    return request<Invoice>(`/api/Invoice/${id}/cancel`, {
+      method: "PATCH",
+      token,
+      body: { reason }
+    });
+  },
+
+  deleteInvoice(token: string, id: string) {
+    return request<string>(`/api/Invoice/${id}`, { method: "DELETE", token });
+  },
+
+  getDocument(token: string, id: string) {
+    return request<ShipmentDocument>(`/api/ShipmentDocument/${id}`, { token });
+  },
+
+  getDocuments(token: string, shipmentId: string) {
+    return request<ShipmentDocument[]>(`/api/ShipmentDocument/shipment/${shipmentId}`, { token });
+  },
+
+  uploadDocument(token: string, shipmentId: string, formData: FormData) {
+    return request<ShipmentDocument>(`/api/ShipmentDocument/shipment/${shipmentId}`, {
+      method: "POST",
+      token,
+      body: formData
+    });
+  },
+
+  deleteDocument(token: string, id: string) {
+    return request<string>(`/api/ShipmentDocument/${id}`, { method: "DELETE", token });
+  },
+
+  getShipmentItems(token: string, shipmentId: string) {
+    return request<ShipmentItem[]>(`/api/ShipmentItem/shipment/${shipmentId}`, { token });
+  },
+
+  getShipmentItem(token: string, id: string) {
+    return request<ShipmentItem>(`/api/ShipmentItem/${id}`, { token });
+  },
+
+  createShipmentItem(token: string, body: {
+    shipmentId: string;
+    description: string;
+    quantity: number;
+    grossWeight: number;
+    netWeight: number;
+    volumeCbm: number;
+    isHazardous: boolean;
+    requiredTemperatureCelsius?: number;
+    marksAndNumbers?: string;
+  }) {
+    return request<ShipmentItem>("/api/ShipmentItem", { method: "POST", token, body });
+  },
+
+  updateShipmentItem(token: string, id: string, body: {
+    shipmentId?: string;
+    description?: string;
+    quantity?: number;
+    grossWeight?: number;
+    netWeight?: number;
+    volumeCbm?: number;
+    isHazardous?: boolean;
+    requiredTemperatureCelsius?: number;
+    marksAndNumbers?: string;
+  }) {
+    return request<ShipmentItem>(`/api/ShipmentItem/${id}`, { method: "PUT", token, body });
+  },
+
+  deleteShipmentItem(token: string, id: string) {
+    return request<string>(`/api/ShipmentItem/${id}`, { method: "DELETE", token });
+  }
+};

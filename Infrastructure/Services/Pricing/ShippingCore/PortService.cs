@@ -1,10 +1,13 @@
 using Application.ApplicationRules;
+using Application.DTOs.Aliases;
 using Application.DTOs.ShippingCore;
 using Application.Interfaces.Repositories.Patterns;
+using Application.Interfaces.Services.Aliases;
 using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
 using AutoMapper;
 using Domain.Entities.ShippingCore;
+using Domain.Enums;
 using Domain.Exceptions;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
@@ -12,12 +15,14 @@ namespace Infrastructure.Services.Pricing.ShippingCore
     public class PortService : IPortService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IAliasService _aliasService;
         private readonly IMapper _mapper;
 
-        public PortService(IUnitOfWork unitOfWork, IMapper mapper)
+        public PortService(IUnitOfWork unitOfWork, IMapper mapper, IAliasService aliasService)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _aliasService = aliasService;
         }
 
         public async Task<PortResponse?> GetByIdAsync(Guid id)
@@ -43,20 +48,32 @@ namespace Infrastructure.Services.Pricing.ShippingCore
 
         public async Task<PortResponse> CreateAsync(CreatePortRequest dto)
         {
+            dto.Code = dto.Code.Replace(" ", "").Trim().ToUpper();
             var existing = await _unitOfWork.Ports.GetByCodeAsync(dto.Code);
             if (existing != null && !existing.IsDeleted)
                 throw new BusinessRuleException($"A port with code '{dto.Code}' already exists.");
 
-            dto.Code = dto.Code.Replace(" ", "").Trim().ToUpper();
 
             var port = _mapper.Map<Port>(dto);
             port.CreatedAt = DateTimeOffset.UtcNow;
-            port.UpdatedAt = null;
             port.IsDeleted = false;
-            port.DeletedAt = null;
 
             await _unitOfWork.Ports.AddAsync(port);
             await _unitOfWork.SaveChangesAsync();
+
+            await _aliasService.CreateAsync(new CreateAliasRequest
+            {
+                AliasName = port.Name,
+                EntityId = port.Id,
+                Type = AliasType.Port
+            });
+
+            await _aliasService.CreateAsync(new CreateAliasRequest
+            {
+                AliasName = port.Code,
+                EntityId = port.Id,
+                Type = AliasType.Port
+            });
 
             return _mapper.Map<PortResponse>(port);
         }
@@ -85,8 +102,21 @@ namespace Infrastructure.Services.Pricing.ShippingCore
             port.Country = dto.Country;
             port.UpdatedAt = DateTimeOffset.UtcNow;
 
-            _unitOfWork.Ports.Update(port);
             await _unitOfWork.SaveChangesAsync();
+
+            await _aliasService.CreateAsync(new CreateAliasRequest
+            {
+                AliasName = port.Name,
+                EntityId = port.Id,
+                Type = AliasType.Port
+            });
+
+            await _aliasService.CreateAsync(new CreateAliasRequest
+            {
+                AliasName = port.Code,
+                EntityId = port.Id,
+                Type = AliasType.Port
+            });
 
             return _mapper.Map<PortResponse>(port);
         }
@@ -101,7 +131,6 @@ namespace Infrastructure.Services.Pricing.ShippingCore
             port.DeletedAt = DateTimeOffset.UtcNow;
             port.UpdatedAt = DateTimeOffset.UtcNow;
 
-            _unitOfWork.Ports.Update(port);
             await _unitOfWork.SaveChangesAsync();
         }
     }

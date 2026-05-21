@@ -45,6 +45,13 @@ namespace API.Controllers.Shipments
             return Ok(shipments);
         }
 
+        [HttpGet("Count")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Count()
+        {
+            return Ok(await _shipmentQueryService.CountAsync());
+        }
+
         [HttpGet("my")]
         public async Task<IActionResult> GetAllForCurrentUser([FromQuery] ShipmentParameters parameters)
         {

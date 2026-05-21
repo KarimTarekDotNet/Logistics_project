@@ -162,8 +162,12 @@ namespace Infrastructure.Services.Auth
 
         public async Task<AuthResponse> ConfirmPhoneAsync(ConfirmPhoneRequest request)
         {
+            var phone = string.IsNullOrWhiteSpace(request.PhoneNumber)
+                ? request.Phone
+                : request.PhoneNumber;
+
             var user = await _userManager.Users
-                .FirstOrDefaultAsync(x => x.PhoneNumber == request.PhoneNumber);
+                .FirstOrDefaultAsync(x => x.PhoneNumber == phone);
 
             if (user == null)
             {
@@ -174,7 +178,7 @@ namespace Infrastructure.Services.Auth
                 };
             }
 
-            var isValid = await _phoneOtpService.VerifyOtpAsync(request.PhoneNumber, request.Code);
+            var isValid = await _phoneOtpService.VerifyOtpAsync(phone, request.Code);
 
             if (!isValid)
             {
