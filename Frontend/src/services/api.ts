@@ -27,6 +27,7 @@ import { loadStoredSession, persistSession, sessionFromAuth } from "../utils/ses
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
+const SKIP_NGROK_WARNING = API_BASE_URL.includes(".ngrok-free.dev");
 export const SESSION_REFRESHED_EVENT = "flowtix:session-refreshed";
 
 type RequestOptions = {
@@ -183,6 +184,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const authToken = storedSession?.accessToken ?? options.token;
   const headers: Record<string, string> = {
     Accept: "application/json",
+    ...(SKIP_NGROK_WARNING ? { "ngrok-skip-browser-warning": "true" } : {}),
     ...(isFormData ? {} : method !== "GET" && method !== "DELETE" ? { "Content-Type": "application/json" } : {}),
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     ...options.headers

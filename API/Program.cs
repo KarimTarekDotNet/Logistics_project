@@ -81,7 +81,9 @@ namespace API
                             "http://localhost:5173",
                             "http://127.0.0.1:5173",
                             "https://localhost:5173",
-                            "https://127.0.0.1:5173")
+                            "https://127.0.0.1:5173",
+                            "https://karimtarekdotnet.github.io"
+                        )
                         .AllowAnyHeader()
                         .AllowAnyMethod();
                 });
@@ -191,7 +193,6 @@ namespace API
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
                 };
 
-                options.MapInboundClaims = false;
             });
 
             // APIs Integrations
