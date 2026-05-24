@@ -66,14 +66,14 @@ export function persistSession(session: AuthSession | null) {
 
 export function loadPendingVerification() {
   const stored = localStorage.getItem(PENDING_VERIFICATION_KEY);
-  if (!stored) return { email: "", phone: "" };
+  if (!stored) return { userId: "", email: "", phone: "" };
 
   try {
-    const parsed = JSON.parse(stored) as { email?: string; phone?: string };
-    return { email: parsed.email ?? "", phone: parsed.phone ?? "" };
+    const parsed = JSON.parse(stored) as { userId?: string; email?: string; phone?: string };
+    return { userId: parsed.userId ?? "", email: parsed.email ?? "", phone: parsed.phone ?? "" };
   } catch {
     localStorage.removeItem(PENDING_VERIFICATION_KEY);
-    return { email: "", phone: "" };
+    return { userId: "", email: "", phone: "" };
   }
 }
 

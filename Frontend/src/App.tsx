@@ -167,6 +167,57 @@ function canQueryInvoicesForShipment(shipment?: Shipment) {
   return Boolean(shipment) && status !== "created" && status !== "clientconfirmed";
 }
 
+const localConfirmationOrigins = ["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:5174", "http://localhost:5174"];
+
+function readConfirmationLink(path: string) {
+  const url = new URL(path, window.location.origin);
+  const pathname = getAppPathname(url.pathname).toLowerCase();
+  const isEmailConfirmation = pathname === "/confirm-email";
+  const isEmailChangeConfirmation = pathname === "/confirm-email-change";
+
+  if (!isEmailConfirmation && !isEmailChangeConfirmation) return null;
+
+  return {
+    type: isEmailConfirmation ? "registration-email" : "profile-email",
+    userId: url.searchParams.get("userId") ?? url.searchParams.get("UserId") ?? "",
+    token: (url.searchParams.get("token") ?? url.searchParams.get("Token") ?? "").replace(/ /g, "+")
+  };
+}
+
+function shouldBridgeConfirmationToLocal(path: string) {
+  const confirmationLink = readConfirmationLink(path);
+  return Boolean(confirmationLink && window.location.hostname.toLowerCase() === "karimtarekdotnet.github.io");
+}
+
+function canLoadLocalAsset(origin: string) {
+  return new Promise<boolean>((resolve) => {
+    const image = new Image();
+    const timeout = window.setTimeout(() => {
+      image.onload = null;
+      image.onerror = null;
+      resolve(false);
+    }, 700);
+
+    image.onload = () => {
+      window.clearTimeout(timeout);
+      resolve(true);
+    };
+    image.onerror = () => {
+      window.clearTimeout(timeout);
+      resolve(false);
+    };
+    image.src = `${origin}/logo.png?confirm-bridge=${Date.now()}`;
+  });
+}
+
+async function findLocalConfirmationOrigin() {
+  for (const origin of localConfirmationOrigins) {
+    if (await canLoadLocalAsset(origin)) return origin;
+  }
+
+  return "";
+}
+
 function buildRateQuery(filters: RateBookFilterDraft): QueryParams {
   const search = trimOrUndefined(filters.search, 100);
   const currency = trimOrUndefined(filters.currency.toUpperCase(), 4);
@@ -292,6 +343,8 @@ export default function App() {
   const workspace = useShipmentWorkspace(session, setData);
   const loadSequenceRef = useRef(0);
   const pageLoadingTimerRef = useRef<number | null>(null);
+  const localConfirmationBridgeRef = useRef<Set<string>>(new Set());
+  const handledConfirmationLinksRef = useRef<Set<string>>(new Set());
   const [appliedRateBookFilters, setAppliedRateBookFilters] = useState<RateBookFilterDraft>(initialRateBookFilters);
   const appliedRateBookFiltersRef = useRef<RateBookFilterDraft>(initialRateBookFilters);
 
@@ -539,43 +592,73 @@ export default function App() {
   }, [loadData, session?.accessToken]);
 
   useEffect(() => {
-    if (session || authMode === "verify") return;
+    if (session) return;
     const pathname = getAppPathname(path).toLowerCase();
+    if (pathname === "/auth/verify") setAuthMode("verify");
     if (pathname === "/auth/register") setAuthMode("register");
     if (pathname === "/auth/login") setAuthMode("login");
-  }, [authMode, path, session]);
+  }, [path, session]);
 
   useEffect(() => {
-    const url = new URL(path, window.location.origin);
-    const pathname = url.pathname.toLowerCase();
-    const isEmailConfirmation = pathname === "/confirm-email";
-    const isEmailChangeConfirmation = pathname === "/confirm-email-change";
+    const confirmationLink = readConfirmationLink(path);
 
-    if (!isEmailConfirmation && !isEmailChangeConfirmation) return;
+    if (!confirmationLink) return;
 
-    const userId = url.searchParams.get("userId") ?? "";
-    const token = url.searchParams.get("token") ?? "";
-    navigate(session ? "/" : "/auth/login", { replace: true, scroll: false });
+    const { type, userId, token } = confirmationLink;
+    const isEmailConfirmation = type === "registration-email";
 
     if (!userId || !token) {
+      if (isEmailConfirmation) {
+        setAuthMode("verify");
+        setVerificationStep("email");
+        navigate("/auth/verify", { replace: true, scroll: false });
+      } else {
+        navigate(session ? "/" : "/auth/login", { replace: true, scroll: false });
+      }
       pushToast("error", "Confirmation link is invalid", "Please request a new confirmation link.");
       return;
+    }
+
+    const confirmationKey = `${type}:${userId}:${token}`;
+    if (handledConfirmationLinksRef.current.has(confirmationKey)) return;
+    handledConfirmationLinksRef.current.add(confirmationKey);
+
+    if (isEmailConfirmation) {
+      const pending = loadPendingVerification();
+      if (pending.userId !== userId) {
+        localStorage.removeItem(PENDING_VERIFICATION_KEY);
+        setVerifyDraft((current) => ({ ...current, email: "", phone: "", phoneCode: "" }));
+      }
+      setAuthMode("verify");
+      setVerificationStep("email");
     }
 
     setBusy(true);
     void (async () => {
       try {
+        if (shouldBridgeConfirmationToLocal(path) && !localConfirmationBridgeRef.current.has(path)) {
+          localConfirmationBridgeRef.current.add(path);
+          const localOrigin = await findLocalConfirmationOrigin();
+          if (localOrigin) {
+            window.location.replace(`${localOrigin}${path}`);
+            return;
+          }
+        }
+
         if (isEmailConfirmation) {
           const response = await api.confirmEmail(userId, token);
           setAuthMode("verify");
           setVerificationStep("phone");
+          navigate("/auth/verify", { replace: true, scroll: false });
           pushToast("success", "Email confirmed", response.message || "Enter the 6-digit code sent to your phone.");
         } else {
           const response = await api.confirmProfileEmailChange(userId, token);
           if (response.updatedProfile) setProfile(response.updatedProfile);
+          navigate(session ? "/" : "/auth/login", { replace: true, scroll: false });
           pushToast("success", "Email change confirmed", response.message || "Your profile email has been updated.");
         }
       } catch (confirmationError) {
+        handledConfirmationLinksRef.current.delete(confirmationKey);
         pushToast("error", "Email confirmation failed", getFriendlyErrorMessage(confirmationError));
       } finally {
         setBusy(false);
@@ -718,6 +801,7 @@ export default function App() {
     setAuthMode(mode);
     if (mode === "login") navigate("/auth/login");
     if (mode === "register") navigate("/auth/register");
+    if (mode === "verify") navigate("/auth/verify");
   }
 
   async function handleLogin(event: FormEvent) {
@@ -762,7 +846,10 @@ export default function App() {
       async () => {
         const response = await api.register(registerForm);
         const registeredPhone = `${registerForm.countryCode}${registerForm.phoneNumber}`;
-        localStorage.setItem(PENDING_VERIFICATION_KEY, JSON.stringify({ email: registerForm.email, phone: registeredPhone }));
+        localStorage.setItem(
+          PENDING_VERIFICATION_KEY,
+          JSON.stringify({ userId: response.id ?? "", email: registerForm.email, phone: registeredPhone })
+        );
         setVerifyDraft((current) => ({
           ...current,
           email: registerForm.email,
@@ -776,7 +863,7 @@ export default function App() {
 
     if (result) {
       if (result.message) pushToast("info", "Registration submitted", result.message);
-      setAuthMode("verify");
+      handleAuthModeChange("verify");
       setVerificationStep("email");
     }
   }
@@ -824,6 +911,11 @@ export default function App() {
 
   async function handleResendPhone(event: FormEvent) {
     event.preventDefault();
+    if (!verifyDraft.phone.trim()) {
+      pushToast("error", "Phone number is required", "Enter the phone number used during registration.");
+      return;
+    }
+
     await runMutation(
       "Phone code sent",
       async () => {
@@ -844,6 +936,11 @@ export default function App() {
       return;
     }
 
+    if (!verifyDraft.phone.trim()) {
+      pushToast("error", "Phone number is required", "Enter the phone number used during registration.");
+      return;
+    }
+
     setBusy(true);
 
     try {
@@ -856,18 +953,10 @@ export default function App() {
       localStorage.removeItem(PENDING_VERIFICATION_KEY);
       pushToast("success", "Phone verified", response.message || "Your phone number has been confirmed.");
 
-      const identity = verifyDraft.email.trim() || registerForm.email.trim() || response.email || verifyDraft.phone.trim();
-      if (registerForm.password && identity) {
-        const loginResponse = await api.login({ identity, password: registerForm.password });
-        if (loginResponse.isAuthenticated && loginResponse.accessToken) {
-          const nextSession = sessionFromAuth(loginResponse);
-          setSession(nextSession);
-          persistSession(nextSession);
-          navigate("/", { replace: true });
-          return;
-        }
-      }
-
+      const identity = response.email || verifyDraft.email.trim() || registerForm.email.trim() || verifyDraft.phone.trim();
+      setLoginForm({ identity, password: "" });
+      setRegisterForm(initialRegisterForm);
+      setVerifyDraft((current) => ({ ...current, email: identity, phoneCode: "" }));
       handleAuthModeChange("login");
     } catch (phoneError) {
       pushToast("error", "Phone verification failed", getFriendlyErrorMessage(phoneError));
@@ -2127,7 +2216,13 @@ export default function App() {
 
   if (!session) {
     const lowerPathname = pathname.toLowerCase();
-    const showAuth = lowerPathname === "/auth/login" || lowerPathname === "/auth/register" || Boolean(rateDetailMatch);
+    const showAuth =
+      lowerPathname === "/auth/login" ||
+      lowerPathname === "/auth/register" ||
+      lowerPathname === "/auth/verify" ||
+      lowerPathname === "/confirm-email" ||
+      lowerPathname === "/confirm-email-change" ||
+      Boolean(rateDetailMatch);
 
     return (
       <>

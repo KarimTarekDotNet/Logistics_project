@@ -97,7 +97,8 @@ export function AuthPage(props: {
     return () => window.clearInterval(timer);
   }, [authMode, resendSeconds, verificationStep]);
 
-  const canResendPhone = verificationStep === "phone" && resendSeconds === 0;
+  const hasPhoneForVerification = verifyDraft.phone.trim().length > 0;
+  const canResendPhone = verificationStep === "phone" && resendSeconds === 0 && hasPhoneForVerification;
   const resendLabel = canResendPhone
     ? "Resend code"
     : `Resend in ${String(Math.floor(resendSeconds / 60)).padStart(2, "0")}:${String(resendSeconds % 60).padStart(2, "0")}`;
@@ -223,8 +224,17 @@ export function AuthPage(props: {
                 </div>
 
                 <form className="form-stack" onSubmit={onConfirmPhone}>
+                  <Field label="Phone number">
+                    <input
+                      value={verifyDraft.phone}
+                      onChange={(event) => setVerifyDraft({ ...verifyDraft, phone: event.target.value.replace(/[^\d+]/g, "").slice(0, 26) })}
+                      placeholder="+201000000000"
+                      inputMode="tel"
+                      required
+                    />
+                  </Field>
                   <OtpInput value={verifyDraft.phoneCode} onChange={(value) => setVerifyDraft({ ...verifyDraft, phoneCode: value })} />
-                  <button className="primary-button" type="submit" disabled={busy || verifyDraft.phoneCode.length !== 6}>
+                  <button className="primary-button" type="submit" disabled={busy || !hasPhoneForVerification || verifyDraft.phoneCode.length !== 6}>
                     <CheckCircle2 size={16} />
                     Verify phone number
                   </button>
@@ -354,5 +364,4 @@ export function AuthPage(props: {
     </main>
   );
 }
-
 

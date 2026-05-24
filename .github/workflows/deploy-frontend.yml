@@ -39,9 +39,10 @@ jobs:
       - name: Add SPA fallback
         run: |
           cp dist/index.html dist/404.html
-          mkdir -p dist/confirm-email dist/confirm-email-change
-          cp dist/index.html dist/confirm-email/index.html
-          cp dist/index.html dist/confirm-email-change/index.html
+          for route in confirm-email confirm-email-change auth/login auth/register auth/verify; do
+            mkdir -p "dist/$route"
+            cp dist/index.html "dist/$route/index.html"
+          done
         working-directory: Frontend
 
       - name: Publish to gh-pages
