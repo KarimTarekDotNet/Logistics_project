@@ -1,3 +1,4 @@
+import { LockKeyhole, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { AppShell } from "./components/layout/AppShell";
 import { ProfilePreviewModal } from "./components/layout/ProfilePreviewModal";
@@ -206,7 +207,7 @@ function canLoadLocalAsset(origin: string) {
       window.clearTimeout(timeout);
       resolve(false);
     };
-    image.src = `${origin}/logo.png?confirm-bridge=${Date.now()}`;
+    image.src = `${origin}/confirm-bridge.svg?confirm-bridge=${Date.now()}`;
   });
 }
 
@@ -216,6 +217,41 @@ async function findLocalConfirmationOrigin() {
   }
 
   return "";
+}
+
+function CustomerRequiredView(props: { onGoToSettings: () => void }) {
+  return (
+    <div className="customer-lock-view">
+      <div className="customer-lock-preview" aria-hidden="true">
+        <div className="customer-lock-row wide" />
+        <div className="customer-lock-grid">
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="customer-lock-table">
+          {Array.from({ length: 5 }, (_, index) => (
+            <span key={index} />
+          ))}
+        </div>
+      </div>
+
+      <section className="customer-lock-panel" aria-labelledby="customer-lock-title">
+        <span className="customer-lock-icon">
+          <LockKeyhole size={24} />
+        </span>
+        <div>
+          <h1 id="customer-lock-title">Customer profile required</h1>
+          <p>This workspace is locked until you create your customer profile. Add your customer details in settings to load quotes, shipments, invoices, and documents.</p>
+        </div>
+        <button className="primary-button compact" type="button" onClick={props.onGoToSettings}>
+          <Settings size={16} />
+          Go to settings
+        </button>
+      </section>
+    </div>
+  );
 }
 
 function buildRateQuery(filters: RateBookFilterDraft): QueryParams {
@@ -390,6 +426,10 @@ export default function App() {
   const isPrivileged = Boolean(session?.roles.some((role) => role === "Admin" || role === "Staff"));
   const isAdmin = Boolean(session?.roles.includes("Admin"));
   const isUser = Boolean(session?.roles.includes("User"));
+  const currentCustomer = data.currentCustomer ?? profile?.customer;
+  const hasCustomerProfile = isPrivileged || Boolean(currentCustomer);
+  const customerLockedViews = new Set<View>(["overview", "pricing", "quotes", "shipments", "finance", "documents"]);
+  const isCustomerLockedView = !isPrivileged && customerLockedViews.has(activeView) && !hasCustomerProfile;
   const selectedShipment =
     workspace.selectedShipmentDetail ?? data.shipments.find((shipment) => shipment.id === workspace.selectedShipmentId);
   const selectedShipmentId = selectedShipment?.id ?? "";
@@ -402,7 +442,7 @@ export default function App() {
     ? data.quotes
     : data.quotes.length > 0
       ? data.quotes
-      : data.currentCustomer?.quotes ?? profile?.customer?.quotes ?? [];
+      : currentCustomer?.quotes ?? [];
 
   const loadData = useCallback(
     async (showNotice = false) => {
@@ -439,22 +479,30 @@ export default function App() {
 
         if (!profileResult.preserve) setProfile(profileResult.value ?? null);
 
-        const [quotesResult, quoteRequestsResult, shipmentsResult, customersResult, currentCustomerResult] = await Promise.all([
+        const currentCustomerResult = !isPrivileged
+          ? await loadOrPreserve(() => api.getMyCustomer(token), undefined as Customer | undefined)
+          : { preserve: false, value: undefined as Customer | undefined };
+        const canLoadCustomerWorkspace = isPrivileged || Boolean(profileResult.value?.customer || currentCustomerResult.value);
+
+        const [quotesResult, quoteRequestsResult, shipmentsResult, customersResult] = await Promise.all([
           isPrivileged
             ? loadOrPreserve(() => api.getQuotes(token, params), [] as Quote[])
-            : loadOrPreserve(() => api.getMyQuotes(token, params), [] as Quote[]),
+            : canLoadCustomerWorkspace
+              ? loadOrPreserve(() => api.getMyQuotes(token, params), [] as Quote[])
+              : Promise.resolve({ preserve: false, value: [] as Quote[] }),
           isPrivileged
             ? loadOrPreserve(() => api.getQuoteRequests(token, params), [] as QuoteRequest[])
-            : loadOrPreserve(() => api.getMyQuoteRequests(token, params), [] as QuoteRequest[]),
+            : canLoadCustomerWorkspace
+              ? loadOrPreserve(() => api.getMyQuoteRequests(token, params), [] as QuoteRequest[])
+              : Promise.resolve({ preserve: false, value: [] as QuoteRequest[] }),
           isPrivileged
             ? loadOrPreserve(() => api.getShipments(token, params), [] as Shipment[])
-            : loadOrPreserve(() => api.getMyShipments(token, params), [] as Shipment[]),
+            : canLoadCustomerWorkspace
+              ? loadOrPreserve(() => api.getMyShipments(token, params), [] as Shipment[])
+              : Promise.resolve({ preserve: false, value: [] as Shipment[] }),
           isPrivileged
             ? loadOrPreserve(() => api.getCustomers(token, params), [] as Customer[])
-            : Promise.resolve({ preserve: false, value: [] as Customer[] }),
-          !isPrivileged
-            ? loadOrPreserve(() => api.getMyCustomer(token), undefined as Customer | undefined)
-            : Promise.resolve({ preserve: false, value: undefined as Customer | undefined })
+            : Promise.resolve({ preserve: false, value: [] as Customer[] })
         ]);
 
         if (loadId !== loadSequenceRef.current) return;
@@ -476,7 +524,7 @@ export default function App() {
               ? undefined
               : currentCustomerResult.preserve
                 ? current.currentCustomer
-                : currentCustomerResult.value
+                : (currentCustomerResult.value ?? profileResult.value?.customer)
           };
         });
 
@@ -1953,6 +2001,10 @@ export default function App() {
   }
 
   function renderWorkspace() {
+    if (isCustomerLockedView) {
+      return <CustomerRequiredView onGoToSettings={() => selectWorkspaceView("account")} />;
+    }
+
     if (activeView === "overview") {
       return (
         <OverviewPage
@@ -2188,7 +2240,7 @@ export default function App() {
       <AccountPage
         profile={profile}
         customers={data.customers}
-        currentCustomer={data.currentCustomer ?? profile?.customer}
+        currentCustomer={currentCustomer}
         isPrivileged={isPrivileged}
         busy={busy}
         profileDraft={profileDraft}
@@ -2316,7 +2368,7 @@ export default function App() {
       <ProfilePreviewModal
         open={profilePreviewOpen}
         profile={profile}
-        currentCustomer={data.currentCustomer ?? profile?.customer}
+        currentCustomer={currentCustomer}
         roles={session.roles}
         onClose={() => setProfilePreviewOpen(false)}
         onGoToSettings={() => {

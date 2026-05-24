@@ -99,9 +99,11 @@ export function AuthPage(props: {
 
   const hasPhoneForVerification = verifyDraft.phone.trim().length > 0;
   const canResendPhone = verificationStep === "phone" && resendSeconds === 0 && hasPhoneForVerification;
-  const resendLabel = canResendPhone
-    ? "Resend code"
-    : `Resend in ${String(Math.floor(resendSeconds / 60)).padStart(2, "0")}:${String(resendSeconds % 60).padStart(2, "0")}`;
+  const resendLabel = !hasPhoneForVerification
+    ? "Phone unavailable"
+    : canResendPhone
+      ? "Resend code"
+      : `Resend in ${String(Math.floor(resendSeconds / 60)).padStart(2, "0")}:${String(resendSeconds % 60).padStart(2, "0")}`;
   const publicRateValue = <span className="metric-plus">{publicRateCount.toLocaleString()}<b>+</b></span>;
   const workflowValue = <span className="metric-plus">{publicWorkflowCount.toLocaleString()}<b>+</b></span>;
 
@@ -224,15 +226,9 @@ export function AuthPage(props: {
                 </div>
 
                 <form className="form-stack" onSubmit={onConfirmPhone}>
-                  <Field label="Phone number">
-                    <input
-                      value={verifyDraft.phone}
-                      onChange={(event) => setVerifyDraft({ ...verifyDraft, phone: event.target.value.replace(/[^\d+]/g, "").slice(0, 26) })}
-                      placeholder="+201000000000"
-                      inputMode="tel"
-                      required
-                    />
-                  </Field>
+                  <p className="verification-note">
+                    Phone verification uses the number entered during registration and cannot be changed here.
+                  </p>
                   <OtpInput value={verifyDraft.phoneCode} onChange={(value) => setVerifyDraft({ ...verifyDraft, phoneCode: value })} />
                   <button className="primary-button" type="submit" disabled={busy || !hasPhoneForVerification || verifyDraft.phoneCode.length !== 6}>
                     <CheckCircle2 size={16} />
@@ -364,4 +360,3 @@ export function AuthPage(props: {
     </main>
   );
 }
-

@@ -1186,6 +1186,13 @@ input[type="checkbox"] {
   font-weight: 600;
 }
 
+.verification-note {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: -4px 0 0;
+}
+
 .verify-actions {
   display: flex;
   gap: 10px;
@@ -1297,6 +1304,99 @@ input[type="checkbox"] {
   min-width: 0;
   /* removed overflow-x: hidden — was swallowing content */
   animation: viewFadeIn 0.35s ease-out;
+}
+
+.customer-lock-view {
+  position: relative;
+  min-height: calc(100vh - var(--topbar-h) - 56px);
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  overflow: hidden;
+}
+
+.customer-lock-preview {
+  position: absolute;
+  inset: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 26px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  filter: blur(5px);
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.customer-lock-row,
+.customer-lock-grid span,
+.customer-lock-table span {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--bg-elevated), var(--accent-soft), var(--bg-elevated));
+}
+
+.customer-lock-row.wide {
+  width: 55%;
+  height: 28px;
+}
+
+.customer-lock-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.customer-lock-grid span {
+  height: 96px;
+}
+
+.customer-lock-table {
+  display: grid;
+  gap: 12px;
+}
+
+.customer-lock-table span {
+  height: 44px;
+}
+
+.customer-lock-panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 520px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 28px;
+  background: rgba(9, 20, 34, 0.9);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.customer-lock-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(14, 165, 233, 0.18);
+  border-radius: var(--radius-md);
+}
+
+.customer-lock-panel h1 {
+  font-size: 1.35rem;
+  margin-bottom: 8px;
+}
+
+.customer-lock-panel p {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.65;
 }
 
 @keyframes viewFadeIn {
@@ -4713,6 +4813,10 @@ tbody td {
 :root.light .stat-card:hover {
   border-color: #b8c4d8 !important;
   box-shadow: 0 14px 34px rgba(15, 28, 46, 0.08);
+}
+
+:root.light .customer-lock-panel {
+  background: rgba(255, 255, 255, 0.92);
 }
 
 :root.light .invoice-row.payment-card {
