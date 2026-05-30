@@ -63,9 +63,6 @@ namespace API.Controllers.Auth
         {
             var result = await auth.ConfirmPhoneAsync(request);
 
-            if (!result.IsAuthenticated)
-                return BadRequest(result);
-
             return Ok(result);
         }
 
@@ -85,15 +82,7 @@ namespace API.Controllers.Auth
             if (!result.IsAuthenticated)
                 return BadRequest(result);
 
-            SetJwtCookie(result.AccessToken!);
-            SetRefreshTokenCookie(result.RefreshToken!);
-
-            return Ok(new
-            {
-                result.IsAuthenticated,
-                result.UserName,
-                result.Email
-            });
+            return Ok(result);
         }
 
         [HttpPost("resend-email-confirmation")]
@@ -101,18 +90,10 @@ namespace API.Controllers.Auth
         {
             var result = await _emailVerificationService.ResendEmailConfirmationAsync(request.Email);
 
-            if (!result.IsAuthenticated)
+            if (string.IsNullOrWhiteSpace(request.Email))
                 return BadRequest(result);
 
-            SetJwtCookie(result.AccessToken!);
-            SetRefreshTokenCookie(result.RefreshToken!);
-
-            return Ok(new
-            {
-                result.IsAuthenticated,
-                result.UserName,
-                result.Email
-            });
+            return Ok(result);
         }
 
         [HttpPost("refresh")]
@@ -174,20 +155,14 @@ namespace API.Controllers.Auth
         }
 
         [HttpGet("csrf-token")]
-        public IActionResult GetCsrfToken()
+        public IActionResult GetCsrfToken([FromServices] IAntiforgery antiforgery)
         {
-            var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
+            var tokens = antiforgery.GetAndStoreTokens(HttpContext);
 
-            Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!,
-                new CookieOptions
-                {
-                    HttpOnly = false,
-                    Secure = true,
-                    SameSite = SameSiteMode.None,
-                    IsEssential = true
-                });
-
-            return Ok();
+            return Ok(new
+            {
+                token = tokens.RequestToken
+            });
         }
 
         private string GetUserId()

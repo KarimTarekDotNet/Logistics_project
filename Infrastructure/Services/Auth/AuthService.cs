@@ -69,6 +69,10 @@ namespace Infrastructure.Services.Auth
                 return new AuthResponse
                 {
                     IsAuthenticated = false,
+                    Id = user.Id,
+                    Email = user.Email,
+                    UserName = user.UserName,
+                    PhoneNumber = user.PhoneNumber,
                     Message = "Please confirm your email before logging in.",
                     Expiration = DateTime.UtcNow,
                     AccessToken = string.Empty
@@ -148,6 +152,7 @@ namespace Infrastructure.Services.Auth
                     Id = user.Id,
                     Email = user.Email,
                     UserName = user.UserName,
+                    PhoneNumber = user.PhoneNumber
                 };
             }
             catch (Exception)
@@ -208,7 +213,8 @@ namespace Infrastructure.Services.Auth
                 Message = "Phone number confirmed successfully.",
                 Id = user.Id,
                 Email = user.Email,
-                UserName = user.UserName
+                UserName = user.UserName,
+                PhoneNumber = user.PhoneNumber
             };
         }
 

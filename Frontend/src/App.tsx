@@ -765,7 +765,21 @@ export default function App() {
             const response = await api.confirmEmail(userId, token);
             if (cancelled) return;
             const pending = loadPendingVerification();
-            localStorage.setItem(PENDING_VERIFICATION_KEY, JSON.stringify({ ...pending, userId, emailConfirmed: true }));
+            const nextPending = {
+              ...pending,
+              userId,
+              email: response.email || pending.email,
+              phone: response.phoneNumber || pending.phone,
+              userName: response.userName || pending.userName,
+              emailConfirmed: true
+            };
+            localStorage.setItem(PENDING_VERIFICATION_KEY, JSON.stringify(nextPending));
+            setVerifyDraft((current) => ({
+              ...current,
+              email: nextPending.email,
+              phone: nextPending.phone,
+              phoneCode: ""
+            }));
             setAuthMode("verify");
             setVerificationStep("phone");
             navigate("/auth/verify", { replace: true, scroll: false });
@@ -965,17 +979,48 @@ export default function App() {
     return digits.length >= 6 && !/[a-z]/i.test(value);
   }
 
-  function resolvePendingVerificationForIdentity(identity: string) {
+  function readAuthString(payload: unknown, ...keys: string[]) {
+    if (typeof payload !== "object" || !payload) return "";
+    const record = payload as Record<string, unknown>;
+
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+
+    return "";
+  }
+
+  function getAuthErrorPayload(error: unknown) {
+    if (!(error instanceof ApiError)) return null;
+
+    return {
+      id: readAuthString(error.payload, "id", "Id"),
+      email: readAuthString(error.payload, "email", "Email"),
+      phoneNumber: readAuthString(error.payload, "phoneNumber", "PhoneNumber", "phone", "Phone"),
+      userName: readAuthString(error.payload, "userName", "UserName")
+    };
+  }
+
+  function resolvePendingVerificationForIdentity(identity: string, authPayload: ReturnType<typeof getAuthErrorPayload> = null) {
     const pending = loadPendingVerification();
     const normalizedIdentity = identity.trim();
     const lowerIdentity = normalizedIdentity.toLowerCase();
     const isEmailIdentity = lowerIdentity.includes("@");
     const registeredPhone = `${registerForm.countryCode}${registerForm.phoneNumber}`;
+    const payloadEmail = authPayload?.email ?? "";
+    const payloadPhone = authPayload?.phoneNumber ?? "";
+    const payloadUserName = authPayload?.userName ?? "";
 
     const identityMatchesPending =
       lowerIdentity === pending.email.toLowerCase() ||
       lowerIdentity === pending.userName.toLowerCase() ||
       phoneMatches(normalizedIdentity, pending.phone);
+
+    const identityMatchesPayload =
+      lowerIdentity === payloadEmail.toLowerCase() ||
+      lowerIdentity === payloadUserName.toLowerCase() ||
+      phoneMatches(normalizedIdentity, payloadPhone);
 
     const identityMatchesCurrentForm =
       lowerIdentity === registerForm.email.trim().toLowerCase() ||
@@ -983,16 +1028,18 @@ export default function App() {
       phoneMatches(normalizedIdentity, registeredPhone);
 
     return {
-      userId: pending.userId,
+      userId: authPayload?.id || pending.userId,
       email:
+        payloadEmail ||
         (identityMatchesPending && pending.email) ||
         (identityMatchesCurrentForm && registerForm.email.trim()) ||
         (isEmailIdentity ? normalizedIdentity : ""),
       phone:
+        payloadPhone ||
         (identityMatchesPending && pending.phone) ||
         (identityMatchesCurrentForm && registeredPhone) ||
-        (isPhoneIdentity(normalizedIdentity) && !isEmailIdentity ? normalizedIdentity : ""),
-      userName: pending.userName || registerForm.userName.trim(),
+        (identityMatchesPayload && isPhoneIdentity(normalizedIdentity) && !isEmailIdentity ? normalizedIdentity : ""),
+      userName: payloadUserName || pending.userName || registerForm.userName.trim(),
       emailConfirmed: pending.emailConfirmed
     };
   }
@@ -1013,8 +1060,8 @@ export default function App() {
     }
   }
 
-  async function resumeEmailVerificationFromLogin(identity: string) {
-    const pending = resolvePendingVerificationForIdentity(identity);
+  async function resumeEmailVerificationFromLogin(identity: string, error: unknown) {
+    const pending = resolvePendingVerificationForIdentity(identity, getAuthErrorPayload(error));
 
     setVerifyDraft((current) => ({
       ...current,
@@ -1070,7 +1117,7 @@ export default function App() {
       pushToast("success", "Signed in", `Welcome back${nextSession.userName ? `, ${nextSession.userName}` : ""}.`);
     } catch (loginError) {
       if (isUnconfirmedEmailResponse(loginError)) {
-        await resumeEmailVerificationFromLogin(loginForm.identity);
+        await resumeEmailVerificationFromLogin(loginForm.identity, loginError);
         return;
       }
 

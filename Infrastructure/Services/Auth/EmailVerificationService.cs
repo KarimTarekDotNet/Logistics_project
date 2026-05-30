@@ -27,10 +27,20 @@ namespace Infrastructure.Services.Auth
                 return new AuthResponse { Id = userId, IsAuthenticated = false, Message = "User not found." };
 
             if (string.IsNullOrWhiteSpace(user.Email))
-                return new AuthResponse { Id = user.Id, IsAuthenticated = false, Message = "User email is not configured." };
+                return new AuthResponse { Id = user.Id, UserName = user.UserName, PhoneNumber = user.PhoneNumber, IsAuthenticated = false, Message = "User email is not configured." };
 
             if (user.EmailConfirmed)
-                return new AuthResponse { Id = user.Id, IsAuthenticated = true, Message = "Email is already confirmed." };
+            {
+                return new AuthResponse
+                {
+                    Id = user.Id,
+                    Email = user.Email,
+                    UserName = user.UserName,
+                    PhoneNumber = user.PhoneNumber,
+                    IsAuthenticated = true,
+                    Message = "Email is already confirmed."
+                };
+            }
 
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encoded = WebUtility.UrlEncode(token);
@@ -97,6 +107,9 @@ namespace Infrastructure.Services.Auth
             return new AuthResponse
             {
                 Id = user.Id,
+                Email = user.Email,
+                UserName = user.UserName,
+                PhoneNumber = user.PhoneNumber,
                 IsAuthenticated = false,
                 Message = "Email confirmation link has been sent successfully."
             };
@@ -110,10 +123,20 @@ namespace Infrastructure.Services.Auth
                 return new AuthResponse { Id = userId, IsAuthenticated = false, Message = "User not found." };
 
             if (string.IsNullOrWhiteSpace(token))
-                return new AuthResponse { Id = user.Id, IsAuthenticated = false, Message = "Invalid confirmation token." };
+                return new AuthResponse { Id = user.Id, Email = user.Email, UserName = user.UserName, PhoneNumber = user.PhoneNumber, IsAuthenticated = false, Message = "Invalid confirmation token." };
 
             if (user.EmailConfirmed)
-                return new AuthResponse { Id = user.Id, IsAuthenticated = true, Message = "Email is already confirmed." };
+            {
+                return new AuthResponse
+                {
+                    Id = user.Id,
+                    Email = user.Email,
+                    UserName = user.UserName,
+                    PhoneNumber = user.PhoneNumber,
+                    IsAuthenticated = true,
+                    Message = "Email is already confirmed."
+                };
+            }
 
             var result = await _userManager.ConfirmEmailAsync(user, token);
 
@@ -122,6 +145,9 @@ namespace Infrastructure.Services.Auth
                 return new AuthResponse
                 {
                     Id = user.Id,
+                    Email = user.Email,
+                    UserName = user.UserName,
+                    PhoneNumber = user.PhoneNumber,
                     IsAuthenticated = false,
                     Message = string.Join(", ", result.Errors.Select(e => e.Description))
                 };
@@ -130,6 +156,9 @@ namespace Infrastructure.Services.Auth
             return new AuthResponse
             {
                 Id = user.Id,
+                Email = user.Email,
+                UserName = user.UserName,
+                PhoneNumber = user.PhoneNumber,
                 IsAuthenticated = true,
                 Message = "Email confirmed successfully."
             };
@@ -165,6 +194,8 @@ namespace Infrastructure.Services.Auth
                 {
                     Id = user.Id,
                     Email = user.Email,
+                    UserName = user.UserName,
+                    PhoneNumber = user.PhoneNumber,
                     IsAuthenticated = true,
                     Message = "Email is already confirmed."
                 };

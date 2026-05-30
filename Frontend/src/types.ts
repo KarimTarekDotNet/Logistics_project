@@ -34,6 +34,7 @@ export type AuthResponse = {
   id?: string;
   userName?: string;
   email?: string;
+  phoneNumber?: string;
   message: string;
   expiration: string;
   accessToken?: string;

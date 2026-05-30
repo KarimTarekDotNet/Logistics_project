@@ -37,6 +37,7 @@ namespace Application.DTOs.Auth
         public string? Id { get; set; }
         public string? UserName { get; set; }
         public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
         public string Message { get; set; } = string.Empty;
         public DateTime Expiration { get; set; }
         public string? AccessToken { get; set; }

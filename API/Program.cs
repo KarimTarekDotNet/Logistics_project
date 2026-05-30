@@ -264,15 +264,17 @@ namespace API
             app.UseStaticFiles();
             app.UseAuthentication();
 
+
             app.UseMiddleware<GlobalHandleExceptionMiddleware>();
+
             app.Use(async (context, next) =>
             {
-                var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
-
                 var method = context.Request.Method;
 
-                if (method is "POST" or "PUT" or "PATCH" or "DELETE")
+                if (context.Request.Cookies.ContainsKey("AuthToken") &&
+                    method is "POST" or "PUT" or "PATCH" or "DELETE")
                 {
+                    var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
                     await antiforgery.ValidateRequestAsync(context);
                 }
 
