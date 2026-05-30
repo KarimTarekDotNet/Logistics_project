@@ -203,9 +203,9 @@ async function ensureCsrfToken(force = false) {
       }
 
       csrfRequestToken =
+        extractCsrfToken(payload) ||
         response.headers.get(CSRF_RESPONSE_HEADER_NAME) ||
         response.headers.get(CSRF_HEADER_NAME) ||
-        extractCsrfToken(payload) ||
         readCookie(CSRF_COOKIE_NAME);
 
       if (!csrfRequestToken) {

@@ -968,6 +968,38 @@ export default function App() {
     return message.includes("confirmation link has been sent") || message.includes("check your email");
   }
 
+  function isExistingRegistrationResponse(error: unknown) {
+    const message = getFriendlyErrorMessage(error).toLowerCase();
+    return message.includes("already exists") || message.includes("already registered");
+  }
+
+  function isEmailAlreadyConfirmedResponse(response: AuthResponse | null) {
+    const message = (response?.message ?? "").toLowerCase();
+    return Boolean(response?.isAuthenticated) || message.includes("already confirmed");
+  }
+
+  function normalizeCountryCode(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 4);
+    return digits ? `+${digits}` : "";
+  }
+
+  function normalizeRegisterFormForBackend(form: RegisterForm): RegisterForm {
+    return {
+      firstName: form.firstName.trim().slice(0, 50),
+      lastName: form.lastName.trim().slice(0, 50),
+      userName: form.userName.trim().slice(0, 30),
+      email: form.email.trim().toLowerCase().slice(0, 120),
+      countryCode: normalizeCountryCode(form.countryCode),
+      phoneNumber: form.phoneNumber.replace(/\D/g, "").slice(0, 15),
+      password: form.password,
+      confirmPassword: form.confirmPassword
+    };
+  }
+
+  function getRegisteredPhone(form: RegisterForm) {
+    return `${form.countryCode}${form.phoneNumber}`;
+  }
+
   function phoneMatches(left: string, right: string) {
     const first = left.replace(/\D/g, "");
     const second = right.replace(/\D/g, "");
@@ -1002,12 +1034,38 @@ export default function App() {
     };
   }
 
+  function storePendingVerification(pending: {
+    userId?: string;
+    email?: string;
+    phone?: string;
+    userName?: string;
+    emailConfirmed?: boolean;
+  }) {
+    const nextPending = {
+      userId: pending.userId ?? "",
+      email: pending.email ?? "",
+      phone: pending.phone ?? "",
+      userName: pending.userName ?? "",
+      emailConfirmed: pending.emailConfirmed ?? false
+    };
+
+    localStorage.setItem(PENDING_VERIFICATION_KEY, JSON.stringify(nextPending));
+    setVerifyDraft((current) => ({
+      ...current,
+      email: nextPending.email,
+      phone: nextPending.phone,
+      phoneCode: ""
+    }));
+
+    return nextPending;
+  }
+
   function resolvePendingVerificationForIdentity(identity: string, authPayload: ReturnType<typeof getAuthErrorPayload> = null) {
     const pending = loadPendingVerification();
     const normalizedIdentity = identity.trim();
     const lowerIdentity = normalizedIdentity.toLowerCase();
     const isEmailIdentity = lowerIdentity.includes("@");
-    const registeredPhone = `${registerForm.countryCode}${registerForm.phoneNumber}`;
+    const registeredPhone = getRegisteredPhone(normalizeRegisterFormForBackend(registerForm));
     const payloadEmail = authPayload?.email ?? "";
     const payloadPhone = authPayload?.phoneNumber ?? "";
     const payloadUserName = authPayload?.userName ?? "";
@@ -1044,34 +1102,75 @@ export default function App() {
     };
   }
 
-  async function resendEmailConfirmationLink(email: string) {
+  async function resendEmailConfirmationLink(email: string): Promise<AuthResponse | null> {
     try {
       const response = await api.resendEmailConfirmation(email);
       pushToast(response.isAuthenticated ? "info" : "success", "Email verification request", response.message);
-      return true;
+      return response;
     } catch (error) {
       if (isEmailConfirmationSentResponse(error)) {
-        pushToast("success", "Email verification request", getFriendlyErrorMessage(error));
-        return true;
+        const message = getFriendlyErrorMessage(error);
+        pushToast("success", "Email verification request", message);
+        return { isAuthenticated: false, message, expiration: "" };
       }
 
       pushToast("error", "Email confirmation failed", getFriendlyErrorMessage(error));
-      return false;
+      return null;
     }
+  }
+
+  async function resumeExistingRegistration(form: RegisterForm, originalError: unknown) {
+    if (!form.email) return false;
+
+    const response = await resendEmailConfirmationLink(form.email);
+    if (!response) return false;
+
+    const registeredPhone = getRegisteredPhone(form);
+    const hasBackendAccountSignal = Boolean(response.id || response.email || response.phoneNumber || response.userName);
+
+    if (isEmailAlreadyConfirmedResponse(response)) {
+      localStorage.removeItem(PENDING_VERIFICATION_KEY);
+      setLoginForm({ identity: response.email || form.email, password: "" });
+      setVerifyDraft((current) => ({
+        ...current,
+        email: response.email || form.email,
+        phone: response.phoneNumber || registeredPhone,
+        phoneCode: ""
+      }));
+      handleAuthModeChange("login");
+      pushToast("info", "Account already confirmed", "Sign in with your existing account.");
+      return true;
+    }
+
+    if (!hasBackendAccountSignal) {
+      pushToast("error", "Registration failed", getFriendlyErrorMessage(originalError));
+      return true;
+    }
+
+    storePendingVerification({
+      userId: response.id,
+      email: response.email || form.email,
+      phone: response.phoneNumber || registeredPhone,
+      userName: response.userName || form.userName,
+      emailConfirmed: false
+    });
+    handleAuthModeChange("verify");
+    setVerificationStep("email");
+    return true;
   }
 
   async function resumeEmailVerificationFromLogin(identity: string, error: unknown) {
     const pending = resolvePendingVerificationForIdentity(identity, getAuthErrorPayload(error));
 
-    setVerifyDraft((current) => ({
-      ...current,
-      email: pending.email,
-      phone: pending.phone,
-      phoneCode: ""
-    }));
-
     if (pending.email || pending.phone || pending.userName) {
-      localStorage.setItem(PENDING_VERIFICATION_KEY, JSON.stringify(pending));
+      storePendingVerification(pending);
+    } else {
+      setVerifyDraft((current) => ({
+        ...current,
+        email: "",
+        phone: "",
+        phoneCode: ""
+      }));
     }
 
     setAuthMode("verify");
@@ -1083,15 +1182,24 @@ export default function App() {
       return;
     }
 
-    await resendEmailConfirmationLink(pending.email);
+    const response = await resendEmailConfirmationLink(pending.email);
+    if (isEmailAlreadyConfirmedResponse(response)) {
+      storePendingVerification({ ...pending, emailConfirmed: true, email: response?.email || pending.email, phone: response?.phoneNumber || pending.phone });
+      setVerificationStep("phone");
+    }
   }
 
   async function handleLogin(event: FormEvent) {
     event.preventDefault();
+    const normalizedLoginForm = {
+      identity: loginForm.identity.trim().slice(0, 100),
+      password: loginForm.password
+    };
+    setLoginForm(normalizedLoginForm);
     setBusy(true);
 
     try {
-      const response = await api.login(loginForm);
+      const response = await api.login(normalizedLoginForm);
       if (!response.isAuthenticated) {
         pushToast("error", "Login failed", response.message || "The credentials could not be authenticated.");
         return;
@@ -1117,7 +1225,7 @@ export default function App() {
       pushToast("success", "Signed in", `Welcome back${nextSession.userName ? `, ${nextSession.userName}` : ""}.`);
     } catch (loginError) {
       if (isUnconfirmedEmailResponse(loginError)) {
-        await resumeEmailVerificationFromLogin(loginForm.identity, loginError);
+        await resumeEmailVerificationFromLogin(normalizedLoginForm.identity, loginError);
         return;
       }
 
@@ -1129,36 +1237,34 @@ export default function App() {
 
   async function handleRegister(event: FormEvent) {
     event.preventDefault();
-    const result = await runMutation(
-      "Registration submitted",
-      async () => {
-        const response = await api.register(registerForm);
-        const registeredPhone = `${registerForm.countryCode}${registerForm.phoneNumber}`;
-        localStorage.setItem(
-          PENDING_VERIFICATION_KEY,
-          JSON.stringify({
-            userId: response.id ?? "",
-            email: registerForm.email,
-            phone: registeredPhone,
-            userName: registerForm.userName,
-            emailConfirmed: false
-          })
-        );
-        setVerifyDraft((current) => ({
-          ...current,
-          email: registerForm.email,
-          phone: registeredPhone,
-          phoneCode: ""
-        }));
-        return response;
-      },
-      { successToast: false, refresh: false }
-    );
+    const normalizedForm = normalizeRegisterFormForBackend(registerForm);
+    setRegisterForm(normalizedForm);
+    setBusy(true);
 
-    if (result) {
-      if (result.message) pushToast("info", "Registration submitted", result.message);
+    try {
+      const response = await api.register(normalizedForm);
+      const registeredPhone = response.phoneNumber || getRegisteredPhone(normalizedForm);
+
+      storePendingVerification({
+        userId: response.id,
+        email: response.email || normalizedForm.email,
+        phone: registeredPhone,
+        userName: response.userName || normalizedForm.userName,
+        emailConfirmed: false
+      });
+
+      if (response.message) pushToast("info", "Registration submitted", response.message);
       handleAuthModeChange("verify");
       setVerificationStep("email");
+    } catch (registerError) {
+      if (isExistingRegistrationResponse(registerError)) {
+        const resumed = await resumeExistingRegistration(normalizedForm, registerError);
+        if (resumed) return;
+      }
+
+      pushToast("error", "Registration failed", getFriendlyErrorMessage(registerError));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -1168,8 +1274,19 @@ export default function App() {
       "Email confirmation sent",
       async () => {
         const email = verifyDraft.email.trim() || registerForm.email.trim();
-        const sent = await resendEmailConfirmationLink(email);
-        return { sent };
+        const response = await resendEmailConfirmationLink(email);
+        if (isEmailAlreadyConfirmedResponse(response)) {
+          const pending = loadPendingVerification();
+          storePendingVerification({
+            ...pending,
+            email: response?.email || email,
+            phone: response?.phoneNumber || pending.phone || verifyDraft.phone,
+            userName: response?.userName || pending.userName,
+            emailConfirmed: true
+          });
+          setVerificationStep("phone");
+        }
+        return response;
       },
       { successToast: false, refresh: false }
     );
@@ -1187,18 +1304,25 @@ export default function App() {
         return;
       }
 
-      const identity = verifyDraft.email.trim() || registerForm.email.trim();
-      if (!identity || !registerForm.password) {
+      const email = verifyDraft.email.trim() || registerForm.email.trim() || pending.email;
+      if (!email) {
+        pushToast("info", "Confirm your email", "Enter the email address used during registration to request a new confirmation link.");
+        return;
+      }
+
+      const response = await resendEmailConfirmationLink(email);
+      if (!isEmailAlreadyConfirmedResponse(response)) {
         pushToast("info", "Use your email link", "Open the confirmation link from your inbox. We will move you to phone verification automatically.");
         return;
       }
 
-      const response = await api.login({ identity, password: registerForm.password });
-      if (!response.isAuthenticated) {
-        pushToast("error", "Email is not confirmed yet", response.message || "Open the confirmation link from your inbox first.");
-        return;
-      }
-
+      storePendingVerification({
+        ...pending,
+        email: response?.email || email,
+        phone: response?.phoneNumber || pending.phone || verifyDraft.phone,
+        userName: response?.userName || pending.userName,
+        emailConfirmed: true
+      });
       setVerificationStep("phone");
       pushToast("success", "Email confirmed", "Enter the 6-digit code sent to your registered phone.");
     } catch (confirmationError) {

@@ -280,10 +280,10 @@ export function AuthPage(props: {
                 <Field label="Email, username, or phone">
                   <input
                     value={loginForm.identity}
-                    onChange={(event) => setLoginForm({ ...loginForm, identity: event.target.value.slice(0, 120) })}
+                    onChange={(event) => setLoginForm({ ...loginForm, identity: event.target.value.slice(0, 100) })}
                     autoComplete="username"
                     placeholder="ops@company.com"
-                    maxLength={120}
+                    maxLength={100}
                     spellCheck={false}
                     required
                   />
@@ -309,24 +309,24 @@ export function AuthPage(props: {
                 <form className="form-stack" onSubmit={onRegister}>
                 <div className="form-grid">
                   <Field label="First name">
-                    <input value={registerForm.firstName} onChange={(event) => setRegisterForm({ ...registerForm, firstName: event.target.value.slice(0, 60) })} maxLength={60} required />
+                    <input value={registerForm.firstName} onChange={(event) => setRegisterForm({ ...registerForm, firstName: event.target.value.slice(0, 50) })} maxLength={50} required />
                   </Field>
                   <Field label="Last name">
-                    <input value={registerForm.lastName} onChange={(event) => setRegisterForm({ ...registerForm, lastName: event.target.value.slice(0, 60) })} maxLength={60} required />
+                    <input value={registerForm.lastName} onChange={(event) => setRegisterForm({ ...registerForm, lastName: event.target.value.slice(0, 50) })} maxLength={50} required />
                   </Field>
                 </div>
                 <Field label="Username">
-                  <input value={registerForm.userName} onChange={(event) => setRegisterForm({ ...registerForm, userName: event.target.value.slice(0, 60) })} maxLength={60} spellCheck={false} required />
+                  <input value={registerForm.userName} onChange={(event) => setRegisterForm({ ...registerForm, userName: event.target.value.replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 30) })} maxLength={30} spellCheck={false} required />
                 </Field>
                 <Field label="Email">
                   <input type="email" value={registerForm.email} onChange={(event) => setRegisterForm({ ...registerForm, email: event.target.value.slice(0, 120) })} maxLength={120} spellCheck={false} required />
                 </Field>
                 <div className="form-grid">
                   <Field label="Country code">
-                    <input value={registerForm.countryCode} onChange={(event) => setRegisterForm({ ...registerForm, countryCode: event.target.value.replace(/[^\d+]/g, "").slice(0, 6) })} maxLength={6} inputMode="tel" required />
+                    <input value={registerForm.countryCode} onChange={(event) => setRegisterForm({ ...registerForm, countryCode: event.target.value.replace(/[^\d+]/g, "").slice(0, 5) })} maxLength={5} inputMode="tel" required />
                   </Field>
                   <Field label="Phone number">
-                    <input value={registerForm.phoneNumber} onChange={(event) => setRegisterForm({ ...registerForm, phoneNumber: event.target.value.replace(/\D/g, "").slice(0, 20) })} maxLength={20} inputMode="tel" required />
+                    <input value={registerForm.phoneNumber} onChange={(event) => setRegisterForm({ ...registerForm, phoneNumber: event.target.value.replace(/\D/g, "").slice(0, 15) })} maxLength={15} inputMode="tel" required />
                   </Field>
                 </div>
                 <div className="form-grid">
