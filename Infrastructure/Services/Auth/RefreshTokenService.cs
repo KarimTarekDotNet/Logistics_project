@@ -21,7 +21,6 @@ namespace Infrastructure.Services.Auth
             var hashedToken = HashToken(rawToken);
             var refreshToken = new RefreshToken
             {
-                Id = Guid.NewGuid(),
                 HashedToken = hashedToken,
                 ApplicationUserId = userId,
                 CreatedAt = DateTimeOffset.UtcNow,
@@ -85,7 +84,6 @@ namespace Infrastructure.Services.Auth
 
             var newRefreshToken = new RefreshToken
             {
-                Id = Guid.NewGuid(),
                 HashedToken = newHashedToken,
                 ApplicationUserId = userId,
                 CreatedAt = DateTimeOffset.UtcNow,

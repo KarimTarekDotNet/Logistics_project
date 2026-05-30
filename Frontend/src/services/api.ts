@@ -23,12 +23,15 @@ import type {
   ShipmentItem,
   TimelineItem
 } from "../types";
-import { loadStoredSession, persistSession, sessionFromAuth } from "../utils/session";
+import { sessionFromAuth } from "../utils/session";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
 const SKIP_NGROK_WARNING = API_BASE_URL.includes(".ngrok-free.dev");
 export const SESSION_REFRESHED_EVENT = "flowtix:session-refreshed";
+const CSRF_COOKIE_NAME = "XSRF-TOKEN";
+const CSRF_HEADER_NAME = "X-CSRF-TOKEN";
+const CSRF_RESPONSE_HEADER_NAME = "X-CSRF-REQUEST-TOKEN";
 
 type RequestOptions = {
   method?: string;
@@ -39,6 +42,8 @@ type RequestOptions = {
 };
 
 let refreshPromise: Promise<AuthSession | null> | null = null;
+let csrfPromise: Promise<void> | null = null;
+let csrfRequestToken = "";
 
 export class ApiError extends Error {
   status: number;
@@ -138,6 +143,49 @@ function resolveRequestBody(method: string, body: unknown): BodyInit | undefined
   return undefined;
 }
 
+function isUnsafeMethod(method: string) {
+  return ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase());
+}
+
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+
+  const encodedName = `${encodeURIComponent(name)}=`;
+  const cookie = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(encodedName));
+
+  return cookie ? decodeURIComponent(cookie.slice(encodedName.length)) : "";
+}
+
+async function ensureCsrfToken(force = false) {
+  if (!force && readCookie(CSRF_COOKIE_NAME) && csrfRequestToken) return;
+  if (csrfPromise) return csrfPromise;
+
+  csrfPromise = fetch(`${API_BASE_URL}/api/Auth/csrf-token`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      ...(SKIP_NGROK_WARNING ? { "ngrok-skip-browser-warning": "true" } : {})
+    },
+    credentials: "include",
+    referrerPolicy: "strict-origin-when-cross-origin"
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new ApiError(response.status, "Could not prepare request security token", await parseResponse(response));
+      }
+
+      csrfRequestToken = response.headers.get(CSRF_RESPONSE_HEADER_NAME) ?? readCookie(CSRF_COOKIE_NAME);
+    })
+    .finally(() => {
+      csrfPromise = null;
+    });
+
+  return csrfPromise;
+}
+
 function notifySessionRefresh(session: AuthSession | null) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent<AuthSession | null>(SESSION_REFRESHED_EVENT, { detail: session }));
@@ -156,7 +204,7 @@ export async function openApiAsset(path: string, filename = "document") {
   try {
     const response = await fetch(url, {
       headers: SKIP_NGROK_WARNING ? { "ngrok-skip-browser-warning": "true" } : {},
-      credentials: "same-origin",
+      credentials: "include",
       referrerPolicy: "strict-origin-when-cross-origin"
     });
 
@@ -189,26 +237,21 @@ export async function openApiAsset(path: string, filename = "document") {
 async function refreshStoredSession() {
   if (refreshPromise) return refreshPromise;
 
-  const current = loadStoredSession();
-  if (!current?.refreshToken) return null;
-
   refreshPromise = request<AuthResponse>("/api/Auth/refresh", {
     method: "POST",
-    body: { refreshToken: current.refreshToken },
     skipAuthRefresh: true
   })
     .then((response) => {
-      if (!response.isAuthenticated || !response.accessToken) {
+      if (!response.isAuthenticated) {
         throw new ApiError(401, response.message || "Session refresh failed", response);
       }
 
       const nextSession = sessionFromAuth(response);
-      persistSession(nextSession);
       notifySessionRefresh(nextSession);
+      void ensureCsrfToken(true);
       return nextSession;
     })
     .catch((error) => {
-      persistSession(null);
       notifySessionRefresh(null);
       throw error;
     })
@@ -222,14 +265,19 @@ async function refreshStoredSession() {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const isFormData = options.body instanceof FormData;
   const method = options.method ?? "GET";
+  const upperMethod = method.toUpperCase();
   const requestBody = resolveRequestBody(method, options.body);
-  const storedSession = options.token && !options.skipAuthRefresh ? loadStoredSession() : null;
-  const authToken = storedSession?.accessToken ?? options.token;
+
+  if (isUnsafeMethod(upperMethod)) {
+    await ensureCsrfToken();
+  }
+
+  const csrfToken = isUnsafeMethod(upperMethod) ? csrfRequestToken || readCookie(CSRF_COOKIE_NAME) : "";
   const headers: Record<string, string> = {
     Accept: "application/json",
     ...(SKIP_NGROK_WARNING ? { "ngrok-skip-browser-warning": "true" } : {}),
-    ...(isFormData ? {} : method !== "GET" && method !== "DELETE" ? { "Content-Type": "application/json" } : {}),
-    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    ...(isFormData ? {} : upperMethod !== "GET" && upperMethod !== "DELETE" ? { "Content-Type": "application/json" } : {}),
+    ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
     ...options.headers
   };
 
@@ -237,7 +285,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     method,
     headers,
     body: requestBody,
-    credentials: "same-origin",
+    credentials: "include",
     referrerPolicy: "strict-origin-when-cross-origin"
   });
 
@@ -302,17 +350,20 @@ export const api = {
     return request<AuthResponse>(`/api/Auth/resend-phone-otp${buildQuery({ phone })}`, { method: "POST" });
   },
 
-  refresh(refreshToken: string) {
-    return request<AuthResponse>("/api/Auth/refresh", { method: "POST", body: { refreshToken }, skipAuthRefresh: true });
+  refresh() {
+    return request<AuthResponse>("/api/Auth/refresh", { method: "POST", skipAuthRefresh: true });
   },
 
-  logout(refreshToken: string, token: string) {
+  logout(token: string) {
     return request<{ message: string }>("/api/Auth/logout", {
       method: "POST",
       token,
-      body: { refreshToken },
       skipAuthRefresh: true
     });
+  },
+
+  prepareCsrfToken(force = false) {
+    return ensureCsrfToken(force);
   },
 
   logoutAll(token: string) {

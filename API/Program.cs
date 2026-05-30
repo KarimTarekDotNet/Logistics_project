@@ -21,7 +21,6 @@ using Application.Interfaces.Services.Shipments.Core;
 using Application.Interfaces.Services.Shipments.User;
 using Application.Interfaces.Services.User;
 using Application.Validations.PricingFeature.Pricing;
-using Domain.Entities.Shipments;
 using Domain.Entities.Users;
 using FluentValidation;
 using FluentValidation.AspNetCore;
@@ -46,6 +45,8 @@ using Infrastructure.Services.Shipments.Core;
 using Infrastructure.Services.Shipments.Core.Shipment;
 using Infrastructure.Services.Shipments.User;
 using Infrastructure.Services.User;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -85,9 +86,12 @@ namespace API
                             "https://karimtarekdotnet.github.io"
                         )
                         .AllowAnyHeader()
-                        .AllowAnyMethod();
+                        .AllowAnyMethod()
+                        .AllowCredentials();
                 });
             });
+
+            #region Rate Limiting
 
             builder.Services.AddRateLimiter(options =>
             {
@@ -122,6 +126,9 @@ namespace API
                 });
             });
 
+            #endregion
+
+            #region Dependency Injection
             // Repositories
             builder.Services.AddScoped<ICarrierRepository, CarrierRepository>();
             builder.Services.AddScoped<IContainerTypeRepository, ContainerTypeRepository>();
@@ -174,6 +181,8 @@ namespace API
             builder.Services.AddScoped<IAliasService, AliasService>();
             builder.Services.AddScoped<IQuoteRequestService, QuoteRequestService>();
 
+            #endregion
+
             builder.Services.AddAuthentication(options =>
             {
                 options.DefaultAuthenticateScheme = "Bearer";
@@ -181,7 +190,7 @@ namespace API
             }).AddJwtBearer("Bearer", options =>
             {
                 options.RequireHttpsMetadata = true;
-                options.SaveToken = true;
+
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateLifetime = true,
@@ -193,6 +202,23 @@ namespace API
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
                 };
 
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        context.Token = context.Request.Cookies["AuthToken"];
+                        return Task.CompletedTask;
+                    }
+                };
+            });
+
+            builder.Services.AddAntiforgery(options =>
+            {
+                options.HeaderName = "X-CSRF-TOKEN";
+                options.Cookie.Name = "XSRF-TOKEN";
+                options.Cookie.HttpOnly = false;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.Cookie.SameSite = SameSiteMode.None;
             });
 
             // APIs Integrations
@@ -239,6 +265,19 @@ namespace API
             app.UseAuthentication();
 
             app.UseMiddleware<GlobalHandleExceptionMiddleware>();
+            app.Use(async (context, next) =>
+            {
+                var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
+
+                var method = context.Request.Method;
+
+                if (method is "POST" or "PUT" or "PATCH" or "DELETE")
+                {
+                    await antiforgery.ValidateRequestAsync(context);
+                }
+
+                await next();
+            });
 
             app.UseRateLimiter();
 

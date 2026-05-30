@@ -33,6 +33,8 @@ export function QuotesPage(props: {
   onFilterByRoute: (routeId: string) => void;
   onToggleTheme: () => void;
   onRateRequestCreated: (request: QuoteRequest) => void;
+  hasCustomerProfile: boolean;
+  onCreateCustomerProfile: () => void;
 }) {
   const {
     quotes,
@@ -233,11 +235,13 @@ export function QuotesPage(props: {
             rateId={selectedRateId}
             session={session}
             isUser={isUser}
+            hasCustomerProfile={props.hasCustomerProfile}
             theme={theme}
             onToggleTheme={props.onToggleTheme}
             initialRate={selectedRate ?? undefined}
             embedded
             onBack={() => setSelectedRateId(null)}
+            onCreateCustomerProfile={props.onCreateCustomerProfile}
             onRequestCreated={props.onRateRequestCreated}
           />
         </div>

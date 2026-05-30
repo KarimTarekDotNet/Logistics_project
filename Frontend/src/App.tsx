@@ -23,11 +23,11 @@ import { PricingPage, type AnalyticsDraft } from "./pages/PricingPage";
 import { PublicLandingPage } from "./pages/PublicLandingPage";
 import { QuoteRequestDetailsPage } from "./pages/QuoteRequestDetailsPage";
 import { QuotesPage } from "./pages/QuotesPage";
-import { RateDetailsPage } from "./pages/RateDetailsPage";
 import { ShipmentsPage } from "./pages/ShipmentsPage";
-import { api, SESSION_REFRESHED_EVENT } from "./services/api";
+import { ApiError, api, SESSION_REFRESHED_EVENT } from "./services/api";
 import type {
   AppData,
+  AuthResponse,
   AuthSession,
   Carrier,
   ContainerType,
@@ -281,7 +281,10 @@ function buildRateQuery(filters: RateBookFilterDraft): QueryParams {
 
 export default function App() {
   const [path, setPath] = useState(() => getAppPath());
+  const pathname = getAppPathname(path);
+  const hasRecordIdInPath = /^\/rates\/[0-9a-f-]{36}$/i.test(pathname);
   const [session, setSession] = useState<AuthSession | null>(() => loadStoredSession());
+  const [restoringSession, setRestoringSession] = useState(true);
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     return (localStorage.getItem(THEME_KEY) as "dark" | "light" | null) ?? "dark";
   });
@@ -428,7 +431,7 @@ export default function App() {
   const isUser = Boolean(session?.roles.includes("User"));
   const currentCustomer = data.currentCustomer ?? profile?.customer;
   const hasCustomerProfile = isPrivileged || Boolean(currentCustomer);
-  const customerLockedViews = new Set<View>(["overview", "pricing", "quotes", "shipments", "finance", "documents"]);
+  const customerLockedViews = new Set<View>(["overview", "quotes", "shipments", "finance", "documents"]);
   const isCustomerLockedView = !isPrivileged && customerLockedViews.has(activeView) && !hasCustomerProfile;
   const selectedShipment =
     workspace.selectedShipmentDetail ?? data.shipments.find((shipment) => shipment.id === workspace.selectedShipmentId);
@@ -568,6 +571,50 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function restoreCookieSession() {
+      try {
+        const response = await api.refresh();
+        if (cancelled || !response.isAuthenticated) return;
+
+        const nextSession = await resolveAuthenticatedSession(response);
+        if (cancelled) return;
+
+        setSession(nextSession);
+        persistSession(nextSession);
+        void api.prepareCsrfToken(true);
+
+        const currentPathname = getAppPathname(path).toLowerCase();
+        if (currentPathname.startsWith("/auth/")) {
+          navigate("/", { replace: true, scroll: false });
+        }
+      } catch {
+        persistSession(null);
+      } finally {
+        if (!cancelled) setRestoringSession(false);
+      }
+    }
+
+    void restoreCookieSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasRecordIdInPath) return;
+
+    navigate("/", { replace: true, scroll: false });
+    pushToast(
+      "info",
+      "Protected link removed",
+      "Open records from the workspace so internal identifiers stay out of the browser URL."
+    );
+  }, [hasRecordIdInPath, navigate, pushToast]);
+
+  useEffect(() => {
     if (session) return;
 
     let cancelled = false;
@@ -598,7 +645,10 @@ export default function App() {
       const nextSession = (event as CustomEvent<AuthSession | null>).detail;
 
       if (nextSession?.accessToken) {
-        setSession(nextSession);
+        setSession((current) => ({
+          ...nextSession,
+          roles: nextSession.roles.length > 0 ? nextSession.roles : (current?.roles ?? ["User"])
+        }));
         return;
       }
 
@@ -670,6 +720,8 @@ export default function App() {
     const confirmationKey = `${type}:${userId}:${token}`;
     if (handledConfirmationLinksRef.current.has(confirmationKey)) return;
     handledConfirmationLinksRef.current.add(confirmationKey);
+
+    navigate(isEmailConfirmation ? "/auth/verify" : session ? "/" : "/auth/login", { replace: true, scroll: false });
 
     if (isEmailConfirmation) {
       const pending = loadPendingVerification();
@@ -817,6 +869,19 @@ export default function App() {
     return { activeRates, openShipments, quotedValue, shipmentValue };
   }, [data.quotes, data.rates, data.shipments]);
 
+  async function resolveAuthenticatedSession(response: AuthResponse) {
+    const nextSession = sessionFromAuth(response);
+    if (nextSession.roles.length > 0) return nextSession;
+
+    try {
+      await api.getCustomers(nextSession.accessToken, { pageSize: 1 });
+      return { ...nextSession, roles: ["Staff"] };
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) throw error;
+      return { ...nextSession, roles: ["User"] };
+    }
+  }
+
   async function runMutation<T>(
     label: string,
     mutation: () => Promise<T>,
@@ -858,12 +923,12 @@ export default function App() {
 
     try {
       const response = await api.login(loginForm);
-      if (!response.isAuthenticated || !response.accessToken) {
+      if (!response.isAuthenticated) {
         pushToast("error", "Login failed", response.message || "The credentials could not be authenticated.");
         return;
       }
 
-      const nextSession = sessionFromAuth(response);
+      const nextSession = await resolveAuthenticatedSession(response);
       loadSequenceRef.current += 1;
       setData(initialData);
       setProfile(null);
@@ -878,6 +943,7 @@ export default function App() {
       showPageLoading(650);
       setSession(nextSession);
       persistSession(nextSession);
+      void api.prepareCsrfToken(true);
       navigate("/", { replace: true });
       pushToast("success", "Signed in", `Welcome back${nextSession.userName ? `, ${nextSession.userName}` : ""}.`);
     } catch (loginError) {
@@ -1030,8 +1096,8 @@ export default function App() {
     workspace.clearShipmentContext();
     navigate("/", { replace: true });
 
-    if (current?.refreshToken && current.accessToken) {
-      await safe(() => api.logout(current.refreshToken!, current.accessToken), { message: "" });
+    if (current?.accessToken) {
+      await safe(() => api.logout(current.accessToken), { message: "" });
     }
   }
 
@@ -1338,7 +1404,9 @@ export default function App() {
 
   async function handleApproveQuoteRequest(id: string) {
     if (!session?.accessToken) return null;
-    return runMutation("Quote request approved", () => api.approveQuoteRequest(session.accessToken, id));
+    return runMutation("Quote request approved", () => api.approveQuoteRequest(session.accessToken, id), {
+      successMessage: "The customer has been emailed with the approval and next steps."
+    });
   }
 
   async function handleRejectQuoteRequest(id: string, reason: string) {
@@ -1348,7 +1416,9 @@ export default function App() {
       pushToast("error", "Rejection reason needed", "Please enter at least 5 characters.");
       return null;
     }
-    return runMutation("Quote request rejected", () => api.rejectQuoteRequest(session.accessToken, id, cleanReason));
+    return runMutation("Quote request rejected", () => api.rejectQuoteRequest(session.accessToken, id, cleanReason), {
+      successMessage: "The customer has been emailed with the rejection update."
+    });
   }
 
   async function handleApproveQuoteRequestFromDetails(id: string) {
@@ -2051,8 +2121,10 @@ export default function App() {
           onToggleTheme={handleToggleTheme}
           onRateRequestCreated={(request) => {
             setData((current) => ({ ...current, quoteRequests: [request, ...current.quoteRequests] }));
-            pushToast("success", "Quote request submitted", "The request has been sent for review.");
+            pushToast("success", "Quote request submitted", "Your request is under review. We will email you as soon as it is approved or rejected.");
           }}
+          hasCustomerProfile={Boolean(currentCustomer)}
+          onCreateCustomerProfile={() => selectWorkspaceView("account")}
         />
       );
     }
@@ -2131,8 +2203,10 @@ export default function App() {
           onToggleTheme={handleToggleTheme}
           onRateRequestCreated={(request) => {
             setData((current) => ({ ...current, quoteRequests: [request, ...current.quoteRequests] }));
-            pushToast("success", "Quote request submitted", "The request has been sent for review.");
+            pushToast("success", "Quote request submitted", "Your request is under review. We will email you as soon as it is approved or rejected.");
           }}
+          hasCustomerProfile={Boolean(currentCustomer)}
+          onCreateCustomerProfile={() => selectWorkspaceView("account")}
         />
       );
     }
@@ -2263,8 +2337,14 @@ export default function App() {
     );
   }
 
-  const pathname = getAppPathname(path);
-  const rateDetailMatch = /^\/rates\/([0-9a-f-]{36})$/i.exec(pathname);
+  if (restoringSession && !session) {
+    return (
+      <>
+        <LoadingState label="Opening secure session" />
+        <ToastHost toasts={toasts} onDismiss={dismissToast} />
+      </>
+    );
+  }
 
   if (!session) {
     const lowerPathname = pathname.toLowerCase();
@@ -2273,8 +2353,7 @@ export default function App() {
       lowerPathname === "/auth/register" ||
       lowerPathname === "/auth/verify" ||
       lowerPathname === "/confirm-email" ||
-      lowerPathname === "/confirm-email-change" ||
-      Boolean(rateDetailMatch);
+      lowerPathname === "/confirm-email-change";
 
     return (
       <>
@@ -2319,25 +2398,6 @@ export default function App() {
             }}
           />
         )}
-        <ToastHost toasts={toasts} onDismiss={dismissToast} />
-      </>
-    );
-  }
-
-  if (rateDetailMatch) {
-    return (
-      <>
-        <RateDetailsPage
-          rateId={rateDetailMatch[1]}
-          session={session}
-          isUser={isUser}
-          theme={theme}
-          onToggleTheme={handleToggleTheme}
-          onRequestCreated={(request) => {
-            setData((current) => ({ ...current, quoteRequests: [request, ...current.quoteRequests] }));
-            pushToast("success", "Quote request submitted", "The request has been sent for review.");
-          }}
-        />
         <ToastHost toasts={toasts} onDismiss={dismissToast} />
       </>
     );

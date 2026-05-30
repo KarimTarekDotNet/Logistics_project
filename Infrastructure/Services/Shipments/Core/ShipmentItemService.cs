@@ -49,11 +49,7 @@ namespace Infrastructure.Services.Shipments.Core
             if (shipment.CustomerId != user.CustomerProfile.Id)
                 throw new BusinessRuleException("You do not have permission to modify this shipment.");
 
-            var hasLockedInvoice = shipment.Invoices.Any(x =>
-                !x.IsDeleted &&
-                (x.PaymentStatus == PaymentStatus.Pending ||
-                 x.PaymentStatus == PaymentStatus.PartiallyPaid ||
-                 x.PaymentStatus == PaymentStatus.Paid));
+            var hasLockedInvoice = shipment.Invoices.Any(x => !x.IsDeleted && x.PaymentStatus == PaymentStatus.Pending);
             
             if (hasLockedInvoice)
                 throw new BusinessRuleException("Cannot modify shipment items after invoice confirmation.");

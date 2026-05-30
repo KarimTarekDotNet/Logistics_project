@@ -3,8 +3,6 @@ using Domain.Exceptions;
 using Microsoft.Extensions.Configuration;
 using SendGrid;
 using SendGrid.Helpers.Mail;
-using System.Net;
-using System.Net.Mail;
 
 namespace Infrastructure.Services.Auth
 {

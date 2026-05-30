@@ -86,6 +86,8 @@ export function PricingPage(props: {
   onLoadRecommendations: (event: FormEvent) => void;
   onToggleTheme: () => void;
   onRateRequestCreated: (request: QuoteRequest) => void;
+  hasCustomerProfile: boolean;
+  onCreateCustomerProfile: () => void;
 }) {
   const {
     rates,
@@ -116,7 +118,9 @@ export function PricingPage(props: {
     onLoadAnalytics,
     onLoadRecommendations,
     onToggleTheme,
-    onRateRequestCreated
+    onRateRequestCreated,
+    hasCustomerProfile,
+    onCreateCustomerProfile
   } = props;
   const [filterDraft, setFilterDraft] = useState<RateBookFilterDraft>(rateFilters);
   const [editingRate, setEditingRate] = useState<Rate | null>(null);
@@ -580,11 +584,13 @@ export function PricingPage(props: {
             rateId={selectedRateId}
             session={session}
             isUser={isUser}
+            hasCustomerProfile={hasCustomerProfile}
             theme={theme}
             onToggleTheme={onToggleTheme}
             initialRate={selectedRate ?? undefined}
             embedded
             onBack={() => setSelectedRateId(null)}
+            onCreateCustomerProfile={onCreateCustomerProfile}
             onRequestCreated={onRateRequestCreated}
           />
         </div>

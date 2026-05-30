@@ -42,9 +42,4 @@ namespace Application.DTOs.Auth
         public string? AccessToken { get; set; }
         public string? RefreshToken { get; set; }
     }
-
-    public record RefreshTokenRequest
-    {
-        public string RefreshToken { get; init; } = string.Empty;
-    }
 }

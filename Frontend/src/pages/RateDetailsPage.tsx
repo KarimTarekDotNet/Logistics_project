@@ -47,11 +47,13 @@ export function RateDetailsPage(props: {
   rateId: string;
   session: AuthSession;
   isUser: boolean;
+  hasCustomerProfile: boolean;
   theme: "light" | "dark";
   onToggleTheme: () => void;
   initialRate?: Rate;
   embedded?: boolean;
   onBack?: () => void;
+  onCreateCustomerProfile?: () => void;
   onRequestCreated?: (request: QuoteRequest) => void;
 }) {
   const isEmbedded = Boolean(props.embedded);
@@ -94,6 +96,12 @@ export function RateDetailsPage(props: {
   }, [props.initialRate, props.rateId, props.session.accessToken]);
 
   const handleBack = props.onBack ?? leaveDetailPage;
+  const canRequestQuote = props.isUser && props.hasCustomerProfile;
+  const quoteRequestMeta = !props.isUser
+    ? "User role required"
+    : props.hasCustomerProfile
+      ? "Email decision notice"
+      : "Customer profile required";
 
   const validationMessage = useMemo(() => {
     if (!rate) return null;
@@ -118,6 +126,10 @@ export function RateDetailsPage(props: {
 
   async function submitQuoteRequest(event: FormEvent) {
     event.preventDefault();
+    if (!canRequestQuote) {
+      setError("Create your customer profile before requesting a quote.");
+      return;
+    }
     if (!rate || validationMessage) return;
 
     const requestedGrossWeightKg = positiveNumber(draft.requestedGrossWeightKg);
@@ -254,80 +266,107 @@ export function RateDetailsPage(props: {
           </div>
 
           <section className="panel quote-request-panel">
-            <PanelTitle icon={<Send size={18} />} title="Request a quote" meta={props.isUser ? "Customer request" : "User role required"} />
+            <PanelTitle icon={<Send size={18} />} title="Request a quote" meta={quoteRequestMeta} />
             {props.isUser ? (
-              <form className="quote-request-form" onSubmit={submitQuoteRequest}>
-                <div className="form-grid">
-                  <Field label="Gross kg" error={validationMessage?.includes("Gross") ? validationMessage : undefined}>
+              <div className={`customer-action-lock ${canRequestQuote ? "" : "locked"}`}>
+                <form className="quote-request-form" onSubmit={submitQuoteRequest} aria-hidden={!canRequestQuote}>
+                  <div className="form-grid">
+                    <Field label="Gross kg" error={validationMessage?.includes("Gross") ? validationMessage : undefined}>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={draft.requestedGrossWeightKg}
+                        onChange={(event) => setDraft({ ...draft, requestedGrossWeightKg: event.target.value })}
+                        disabled={!canRequestQuote}
+                        required
+                      />
+                    </Field>
+                    <Field label="Net kg" error={validationMessage?.includes("Net") ? validationMessage : undefined}>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={draft.requestedNetWeightKg}
+                        onChange={(event) => setDraft({ ...draft, requestedNetWeightKg: event.target.value })}
+                        disabled={!canRequestQuote}
+                        required
+                      />
+                    </Field>
+                    <Field label="Volume CBM" error={validationMessage?.includes("Volume") ? validationMessage : undefined}>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={draft.requestedVolumeCbm}
+                        onChange={(event) => setDraft({ ...draft, requestedVolumeCbm: event.target.value })}
+                        disabled={!canRequestQuote}
+                        required
+                      />
+                    </Field>
+                    <Field label="Temperature C" error={validationMessage?.includes("Temperature") ? validationMessage : undefined}>
+                      <input
+                        type="number"
+                        min="-50"
+                        max="50"
+                        step="0.1"
+                        value={draft.requiredTemperatureCelsius}
+                        onChange={(event) => setDraft({ ...draft, requiredTemperatureCelsius: event.target.value })}
+                        placeholder="Optional"
+                        disabled={!canRequestQuote}
+                      />
+                    </Field>
+                  </div>
+                  <label className="check-row compact">
                     <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={draft.requestedGrossWeightKg}
-                      onChange={(event) => setDraft({ ...draft, requestedGrossWeightKg: event.target.value })}
-                      required
+                      type="checkbox"
+                      checked={draft.isHazardous}
+                      onChange={(event) => setDraft({ ...draft, isHazardous: event.target.checked })}
+                      disabled={!canRequestQuote}
+                    />
+                    <span>Hazardous cargo</span>
+                  </label>
+                  <Field label="Notes" error={validationMessage?.includes("Hazardous") ? validationMessage : undefined}>
+                    <textarea
+                      value={draft.notes}
+                      onChange={(event) => setDraft({ ...draft, notes: event.target.value.slice(0, 1000) })}
+                      maxLength={1000}
+                      rows={4}
+                      placeholder="Optional operational notes"
+                      disabled={!canRequestQuote}
                     />
                   </Field>
-                  <Field label="Net kg" error={validationMessage?.includes("Net") ? validationMessage : undefined}>
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={draft.requestedNetWeightKg}
-                      onChange={(event) => setDraft({ ...draft, requestedNetWeightKg: event.target.value })}
-                      required
-                    />
-                  </Field>
-                  <Field label="Volume CBM" error={validationMessage?.includes("Volume") ? validationMessage : undefined}>
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={draft.requestedVolumeCbm}
-                      onChange={(event) => setDraft({ ...draft, requestedVolumeCbm: event.target.value })}
-                      required
-                    />
-                  </Field>
-                  <Field label="Temperature C" error={validationMessage?.includes("Temperature") ? validationMessage : undefined}>
-                    <input
-                      type="number"
-                      min="-50"
-                      max="50"
-                      step="0.1"
-                      value={draft.requiredTemperatureCelsius}
-                      onChange={(event) => setDraft({ ...draft, requiredTemperatureCelsius: event.target.value })}
-                      placeholder="Optional"
-                    />
-                  </Field>
-                </div>
-                <label className="check-row compact">
-                  <input type="checkbox" checked={draft.isHazardous} onChange={(event) => setDraft({ ...draft, isHazardous: event.target.checked })} />
-                  <span>Hazardous cargo</span>
-                </label>
-                <Field label="Notes" error={validationMessage?.includes("Hazardous") ? validationMessage : undefined}>
-                  <textarea
-                    value={draft.notes}
-                    onChange={(event) => setDraft({ ...draft, notes: event.target.value.slice(0, 1000) })}
-                    maxLength={1000}
-                    rows={4}
-                    placeholder="Optional operational notes"
-                  />
-                </Field>
-                {validationMessage && <p className="field-error">{validationMessage}</p>}
-                {error && <p className="field-error">{error}</p>}
-                {createdRequest && (
-                  <div className="request-success">
-                    <CheckCircle2 size={18} />
-                    <span>
-                      Request submitted. Current status: <StatusBadge status={createdRequest.status} group="quoteRequest" />
-                    </span>
+                  {validationMessage && <p className="field-error">{validationMessage}</p>}
+                  {error && canRequestQuote && <p className="field-error">{error}</p>}
+                  {createdRequest && (
+                    <div className="request-success">
+                      <CheckCircle2 size={18} />
+                      <span>
+                        Request submitted. We will email you when it is approved or rejected. Current status:{" "}
+                        <StatusBadge status={createdRequest.status} group="quoteRequest" />
+                      </span>
+                    </div>
+                  )}
+                  <button className="primary-button" type="submit" disabled={busy || Boolean(validationMessage) || !rate.isActive || !canRequestQuote}>
+                    <Send size={17} />
+                    {busy ? "Submitting..." : "Request quote"}
+                  </button>
+                </form>
+                {!canRequestQuote && (
+                  <div className="customer-action-lock-overlay">
+                    <ShieldCheck size={24} />
+                    <div>
+                      <strong>Customer profile required</strong>
+                      <p>Create your customer profile to send this request for review and receive the decision by email.</p>
+                    </div>
+                    {props.onCreateCustomerProfile && (
+                      <button className="primary-button compact" type="button" onClick={props.onCreateCustomerProfile}>
+                        Create profile
+                      </button>
+                    )}
                   </div>
                 )}
-                <button className="primary-button" type="submit" disabled={busy || Boolean(validationMessage) || !rate.isActive}>
-                  <Send size={17} />
-                  {busy ? "Submitting..." : "Request quote"}
-                </button>
-              </form>
+              </div>
             ) : (
               <div className="quote-request-locked">
                 <ShieldCheck size={22} />

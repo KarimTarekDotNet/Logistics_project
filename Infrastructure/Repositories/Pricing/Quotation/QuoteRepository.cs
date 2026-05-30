@@ -72,6 +72,7 @@ namespace Infrastructure.Repositories.Pricing.Quotation
         {
             var quotesQuery = _context.Quotes
                 .AsNoTracking()
+                .Include(x => x.Carrier)
                 .Include(x => x.Customer).ThenInclude(c => c.ApplicationUser)
                 .Include(q => q.Route).ThenInclude(r => r.FromPort)
                 .Include(q => q.Route).ThenInclude(r => r.ToPort)

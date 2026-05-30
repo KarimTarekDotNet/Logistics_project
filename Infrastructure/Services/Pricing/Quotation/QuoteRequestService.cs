@@ -17,14 +17,17 @@ namespace Infrastructure.Services.Pricing.Quotation
     public class QuoteRequestService : IQuoteRequestService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly Application.Interfaces.Services.Auth.IEmailSender _emailSender;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IMapper _mapper;
 
-        public QuoteRequestService(IUnitOfWork unitOfWork, UserManager<ApplicationUser> userManager, IMapper mapper)
+        public QuoteRequestService(IUnitOfWork unitOfWork, UserManager<ApplicationUser> userManager, IMapper mapper,
+            Application.Interfaces.Services.Auth.IEmailSender emailSender)
         {
             _unitOfWork = unitOfWork;
             _userManager = userManager;
             _mapper = mapper;
+            _emailSender = emailSender;
         }
 
         public async Task<QuoteRequestResponse> ApproveAsync(Guid requestId, string userId)
@@ -82,6 +85,8 @@ namespace Infrastructure.Services.Pricing.Quotation
 
             await _unitOfWork.Shipments.AddAsync(shipment);
 
+            await SendApprovalEmailAsync(user, request);
+
             return await UpdateRequestStatusAsync(request, user, QuoteRequestStatus.Approved);
         }
 
@@ -113,6 +118,8 @@ namespace Infrastructure.Services.Pricing.Quotation
 
             if (request == null)
                 throw new BusinessRuleException("Quote request not found.");
+
+            await SendRejectionEmailAsync(user, request);
 
             return await UpdateRequestStatusAsync(request, user, QuoteRequestStatus.Rejected, reason);
         }
@@ -162,6 +169,8 @@ namespace Infrastructure.Services.Pricing.Quotation
                     "Requested volume exceeds the maximum allowed volume for this rate.");
 
             var quoteRequest = _mapper.Map<QuoteRequest>(request);
+
+            quoteRequest.RequiredTemperatureCelsius = rate.MaxTemperatureCelsius;
 
             quoteRequest.CustomerId = user.CustomerProfile.Id;
             quoteRequest.RateId = rate.Id;
@@ -215,6 +224,86 @@ namespace Infrastructure.Services.Pricing.Quotation
                 return new List<QuoteRequestResponse>();
 
             return _mapper.Map<IEnumerable<QuoteRequestResponse>>(quotes);
+        }
+
+
+        private async Task SendRejectionEmailAsync(ApplicationUser user, QuoteRequest request)
+        {
+            var subject = "Quote Request Update";
+
+            var body = $@"
+            <div style='font-family:Arial,sans-serif;font-size:14px;line-height:1.6'>
+                <h2 style='color:#dc2626'>Quote Request Not Approved</h2>
+
+                <p>Hi {user.FirstName},</p>
+
+                <p>
+                    Thank you for your interest in our logistics services.
+                </p>
+
+                <p>
+                    After reviewing your request for the route
+                    <strong>{request.Rate.Route.FromPort.Name}</strong>
+                    →
+                    <strong>{request.Rate.Route.ToPort.Name}</strong>,
+                    we're unable to approve it at this time.
+                </p>
+
+                <p>
+                    <strong>Reason:</strong><br/>
+                    {request.RejectionReason}
+                </p>
+
+                <p>
+                    You're welcome to submit a new request or contact our team if you'd like assistance finding an alternative shipping option.
+                </p>
+
+                <hr />
+
+                <p>
+                    Thanks,<br/>
+                    <strong>The Logistics Team</strong>
+                </p>
+            </div>";
+
+            await _emailSender.SendEmailAsync(user.Email!, subject, body);
+        }
+
+        private async Task SendApprovalEmailAsync(ApplicationUser user, QuoteRequest request)
+        {
+            var subject = "Quote Request Approved";
+
+            var body = $@"
+            <div style='font-family:Arial,sans-serif;font-size:14px;line-height:1.6'>
+                <h2 style='color:#16a34a'>Your Quote Request Has Been Approved</h2>
+
+                <p>Hi {user.FirstName},</p>
+
+                <p>
+                    Good news — your quote request for the route
+                    <strong>{request.Rate.Route.FromPort.Name}</strong>
+                    →
+                    <strong>{request.Rate.Route.ToPort.Name}</strong>
+                    has been approved.
+                </p>
+
+                <p>
+                    You can now review the quotation details and proceed with the next steps from your dashboard.
+                </p>
+
+                <p>
+                    If you need any assistance, simply reply to this email or contact our support team.
+                </p>
+
+                <hr />
+
+                <p>
+                    Thanks,<br/>
+                    <strong>The Logistics Team</strong>
+                </p>
+            </div>";
+
+            await _emailSender.SendEmailAsync(user.Email!, subject, body);
         }
 
         private async Task<QuoteRequestResponse> UpdateRequestStatusAsync(QuoteRequest request, ApplicationUser reviewer,

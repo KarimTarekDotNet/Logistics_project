@@ -1,6 +1,8 @@
 import { PENDING_VERIFICATION_KEY, SESSION_KEY } from "../constants/logistics";
 import type { AuthResponse, AuthSession } from "../types";
 
+export const COOKIE_SESSION_TOKEN = "cookie-session";
+
 function decodeJwt(token: string) {
   try {
     const [, payload] = token.split(".");
@@ -26,8 +28,8 @@ export function sessionFromAuth(response: AuthResponse): AuthSession {
     claims["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
 
   return {
-    accessToken: token,
-    refreshToken: response.refreshToken,
+    accessToken: token || COOKIE_SESSION_TOKEN,
+    refreshToken: token ? response.refreshToken : undefined,
     id:
       response.id ??
       String(
@@ -44,24 +46,13 @@ export function sessionFromAuth(response: AuthResponse): AuthSession {
 }
 
 export function loadStoredSession() {
-  const stored = localStorage.getItem(SESSION_KEY);
-  if (!stored) return null;
-
-  try {
-    return JSON.parse(stored) as AuthSession;
-  } catch {
-    localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
+  localStorage.removeItem(SESSION_KEY);
+  return null;
 }
 
 export function persistSession(session: AuthSession | null) {
-  if (!session) {
-    localStorage.removeItem(SESSION_KEY);
-    return;
-  }
-
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  localStorage.removeItem(SESSION_KEY);
+  void session;
 }
 
 export function loadPendingVerification() {

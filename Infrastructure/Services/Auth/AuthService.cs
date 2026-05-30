@@ -204,7 +204,7 @@ namespace Infrastructure.Services.Auth
 
             return new AuthResponse
             {
-                IsAuthenticated = true,
+                IsAuthenticated = false,
                 Message = "Phone number confirmed successfully.",
                 Id = user.Id,
                 Email = user.Email,
@@ -248,9 +248,9 @@ namespace Infrastructure.Services.Auth
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        public async Task<AuthResponse> RefreshAsync(RefreshTokenRequest request, string? ipAddress)
+        public async Task<AuthResponse> RefreshAsync(string refreshToken, string? ipAddress)
         {
-            var oldToken = await _refreshTokenSerivce.GetByRawTokenAsync(request.RefreshToken);
+            var oldToken = await _refreshTokenSerivce.GetByRawTokenAsync(refreshToken);
             if (oldToken == null || !oldToken.IsActive)
             {
                 return new AuthResponse
@@ -279,14 +279,14 @@ namespace Infrastructure.Services.Auth
             };
         }
 
-        public async Task<bool> LogoutAsync(RefreshTokenRequest request, string? ipAddress)
+        public async Task<bool> LogoutAsync(string refreshToken, string? ipAddress)
         {
-            var token = await _refreshTokenSerivce.GetByRawTokenAsync(request.RefreshToken);
+            var token = await _refreshTokenSerivce.GetByRawTokenAsync(refreshToken);
 
             if (token == null || !token.IsActive)
                 return false;
 
-            var revoked = await _refreshTokenSerivce.RevokeAsync(token.ApplicationUserId, request.RefreshToken, ipAddress);
+            var revoked = await _refreshTokenSerivce.RevokeAsync(token.ApplicationUserId, refreshToken, ipAddress);
 
             await work.SaveChangesAsync();
 

@@ -9,7 +9,7 @@ namespace Infrastructure.Services.Auth
 {
     public class EmailVerificationService : IEmailVerificationService
     {
-        private const string FrontendBaseUrl = "http://127.0.0.1:5173";
+        private const string FrontendBaseUrl = "https://karimtarekdotnet.github.io/Logistics_project";
         private readonly IEmailSender _emailSender;
         private readonly UserManager<ApplicationUser> _userManager;
 
