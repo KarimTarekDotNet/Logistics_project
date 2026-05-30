@@ -33,13 +33,20 @@ function normalizeDevCsrfCookies(proxyRes: IncomingMessage) {
 
   const xsrfCookies = setCookies.filter((cookie) => cookie.startsWith(`${csrfCookieName}=`));
 
-  if (xsrfCookies.length < 2) return;
+  if (xsrfCookies.length < 1) return;
 
-  const [cookieToken, requestToken] = xsrfCookies;
+  const cookieToken = xsrfCookies.length > 1 ? xsrfCookies[0] : null;
+  const requestToken = xsrfCookies[xsrfCookies.length - 1];
   const requestTokenValue = readCookieValue(requestToken);
   const passthroughCookies = setCookies.filter((cookie) => !cookie.startsWith(`${csrfCookieName}=`));
+  const nextCookies = cookieToken ? [cookieToken, ...passthroughCookies] : passthroughCookies;
 
-  proxyRes.headers["set-cookie"] = [cookieToken, ...passthroughCookies].map(normalizeDevCookieAttributes);
+  if (nextCookies.length > 0) {
+    proxyRes.headers["set-cookie"] = nextCookies.map(normalizeDevCookieAttributes);
+  } else {
+    delete proxyRes.headers["set-cookie"];
+  }
+
   proxyRes.headers[csrfRequestHeaderName.toLowerCase()] = requestTokenValue;
   proxyRes.headers["access-control-expose-headers"] = [
     proxyRes.headers["access-control-expose-headers"],

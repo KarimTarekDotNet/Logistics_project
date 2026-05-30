@@ -54,6 +54,8 @@ namespace Infrastructure.Data.Database
 
             modelBuilder.Entity<Quote>().HasQueryFilter(r => !r.IsDeleted);
 
+            modelBuilder.Entity<QuoteRequest>().HasQueryFilter(r => !r.Customer.IsDeleted && !r.Rate.IsDeleted);
+
             modelBuilder.Entity<Carrier>().HasQueryFilter(r => !r.IsDeleted);
 
             modelBuilder.Entity<ContainerType>().HasQueryFilter(r => !r.IsDeleted);

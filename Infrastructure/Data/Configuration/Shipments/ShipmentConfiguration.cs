@@ -14,6 +14,30 @@ namespace Infrastructure.Data.Configuration.Shipments
                 .HasColumnType("decimal(18,2)")
                 .IsRequired();
 
+            builder.Property(x => x.AllowedGrossWeightKg)
+                .HasPrecision(18, 3);
+
+            builder.Property(x => x.AllowedNetWeightKg)
+                .HasPrecision(18, 3);
+
+            builder.Property(x => x.AllowedVolumeCbm)
+                .HasPrecision(18, 3);
+
+            builder.Property(x => x.AllowedChargeableWeightKg)
+                .HasPrecision(18, 3);
+
+            builder.Property(x => x.TotalGrossWeightKg)
+                .HasPrecision(18, 3);
+
+            builder.Property(x => x.TotalNetWeightKg)
+                .HasPrecision(18, 3);
+
+            builder.Property(x => x.TotalVolumeCbm)
+                .HasPrecision(18, 3);
+
+            builder.Property(x => x.TotalChargeableWeightKg)
+                .HasPrecision(18, 3);
+
             builder.Property(x => x.Currency)
                 .IsRequired()
                 .HasMaxLength(3);

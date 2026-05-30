@@ -15,6 +15,21 @@ namespace Infrastructure.Data.Configuration.Pricing
                 .HasColumnType("decimal(18,2)")
                 .IsRequired();
 
+            builder.Property(p => p.RequestedGrossWeightKg)
+                .HasPrecision(18, 3);
+
+            builder.Property(p => p.RequestedNetWeightKg)
+                .HasPrecision(18, 3);
+
+            builder.Property(p => p.RequestedVolumeCbm)
+                .HasPrecision(18, 3);
+
+            builder.Property(p => p.RequestedChargeableWeightKg)
+                .HasPrecision(18, 3);
+
+            builder.Property(p => p.RequiredTemperatureCelsius)
+                .HasPrecision(5, 2);
+
             builder.Property(p => p.Currency)
                 .HasMaxLength(4)
                 .IsRequired();

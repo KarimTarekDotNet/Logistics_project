@@ -29,6 +29,21 @@ namespace Infrastructure.Data.Configuration.Pricing
             builder.Property(r => r.Price)
                 .HasColumnType("decimal(18,2)")
                 .IsRequired();
+
+            builder.Property(r => r.MaxGrossWeightKg)
+                .HasPrecision(18, 3);
+
+            builder.Property(r => r.MaxNetWeightKg)
+                .HasPrecision(18, 3);
+
+            builder.Property(r => r.MaxVolumeCbm)
+                .HasPrecision(18, 3);
+
+            builder.Property(r => r.MinTemperatureCelsius)
+                .HasPrecision(5, 2);
+
+            builder.Property(r => r.MaxTemperatureCelsius)
+                .HasPrecision(5, 2);
     
             builder.Property(r => r.Currency)
                 .HasMaxLength(4)

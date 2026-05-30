@@ -36,6 +36,9 @@ namespace Infrastructure.Data.Configuration.Shipments
             builder.Property(x => x.TotalAmount)
                 .HasPrecision(18, 2);
 
+            builder.Property(x => x.PaidPart)
+                .HasPrecision(18, 2);
+
             builder.Property(x => x.PaymentStatus)
                 .HasConversion<string>()
                 .HasMaxLength(30)

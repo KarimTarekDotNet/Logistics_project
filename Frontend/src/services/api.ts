@@ -25,8 +25,20 @@ import type {
 } from "../types";
 import { sessionFromAuth } from "../utils/session";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
+
+function shouldUseDevProxy(apiBaseUrl: string) {
+  if (!import.meta.env.DEV || !apiBaseUrl) return false;
+
+  try {
+    const url = new URL(apiBaseUrl);
+    return ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+const API_BASE_URL = shouldUseDevProxy(configuredApiBaseUrl) ? "" : configuredApiBaseUrl;
 const SKIP_NGROK_WARNING = API_BASE_URL.includes(".ngrok-free.dev");
 export const SESSION_REFRESHED_EVENT = "flowtix:session-refreshed";
 const CSRF_COOKIE_NAME = "XSRF-TOKEN";
@@ -131,6 +143,15 @@ function extractApiMessage(payload: unknown, status: number) {
   return `Request failed with status ${status}`;
 }
 
+function extractCsrfToken(payload: unknown) {
+  if (typeof payload === "string") return payload.trim();
+  if (typeof payload !== "object" || !payload) return "";
+
+  const record = payload as Record<string, unknown>;
+  const token = record.requestToken ?? record.csrfToken ?? record.token ?? record.xsrfToken ?? record.antiForgeryToken;
+  return typeof token === "string" ? token.trim() : "";
+}
+
 function resolveRequestBody(method: string, body: unknown): BodyInit | undefined {
   if (body instanceof FormData) return body;
   if (body !== undefined) return JSON.stringify(body);
@@ -163,7 +184,7 @@ async function ensureCsrfToken(force = false) {
   if (!force && readCookie(CSRF_COOKIE_NAME) && csrfRequestToken) return;
   if (csrfPromise) return csrfPromise;
 
-  csrfPromise = fetch(`${API_BASE_URL}/api/Auth/csrf-token`, {
+  csrfPromise = fetch(`${API_BASE_URL}/api/auth/csrf-token`, {
     method: "GET",
     headers: {
       Accept: "application/json",
@@ -173,11 +194,25 @@ async function ensureCsrfToken(force = false) {
     referrerPolicy: "strict-origin-when-cross-origin"
   })
     .then(async (response) => {
+      const payload = await parseResponse(response);
+
       if (!response.ok) {
-        throw new ApiError(response.status, "Could not prepare request security token", await parseResponse(response));
+        throw new ApiError(response.status, "Could not prepare request security token", payload);
       }
 
-      csrfRequestToken = response.headers.get(CSRF_RESPONSE_HEADER_NAME) ?? readCookie(CSRF_COOKIE_NAME);
+      csrfRequestToken =
+        response.headers.get(CSRF_RESPONSE_HEADER_NAME) ||
+        response.headers.get(CSRF_HEADER_NAME) ||
+        extractCsrfToken(payload) ||
+        readCookie(CSRF_COOKIE_NAME);
+
+      if (!csrfRequestToken) {
+        throw new ApiError(
+          419,
+          "Could not prepare request security token. Use the Vite API proxy for local auth requests.",
+          payload
+        );
+      }
     })
     .finally(() => {
       csrfPromise = null;
@@ -272,7 +307,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     await ensureCsrfToken();
   }
 
-  const csrfToken = isUnsafeMethod(upperMethod) ? csrfRequestToken || readCookie(CSRF_COOKIE_NAME) : "";
+  let csrfToken = isUnsafeMethod(upperMethod) ? csrfRequestToken || readCookie(CSRF_COOKIE_NAME) : "";
+  if (isUnsafeMethod(upperMethod) && !csrfToken) {
+    await ensureCsrfToken(true);
+    csrfToken = csrfRequestToken || readCookie(CSRF_COOKIE_NAME);
+  }
   const headers: Record<string, string> = {
     Accept: "application/json",
     ...(SKIP_NGROK_WARNING ? { "ngrok-skip-browser-warning": "true" } : {}),
