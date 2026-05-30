@@ -28,11 +28,12 @@ import { sessionFromAuth } from "../utils/session";
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
 
 function shouldUseDevProxy(apiBaseUrl: string) {
-  if (!import.meta.env.DEV || !apiBaseUrl) return false;
+  if (!import.meta.env.DEV) return false;
+  if (!apiBaseUrl) return true;
 
   try {
-    const url = new URL(apiBaseUrl);
-    return ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+    new URL(apiBaseUrl);
+    return true;
   } catch {
     return false;
   }
@@ -88,7 +89,8 @@ async function parseResponse(response: Response) {
 
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
-    return response.json();
+    const text = await response.text();
+    return text ? parseJsonString(text) ?? text : null;
   }
 
   const text = await response.text();
@@ -297,6 +299,12 @@ async function refreshStoredSession() {
   return refreshPromise;
 }
 
+function isAuthEntryRequest(path: string, method: string) {
+  if (method.toUpperCase() !== "POST") return false;
+  const normalizedPath = path.toLowerCase().split("?")[0];
+  return normalizedPath === "/api/auth/login" || normalizedPath === "/api/auth/register";
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const isFormData = options.body instanceof FormData;
   const method = options.method ?? "GET";
@@ -304,7 +312,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const requestBody = resolveRequestBody(method, options.body);
 
   if (isUnsafeMethod(upperMethod)) {
-    await ensureCsrfToken();
+    await ensureCsrfToken(isAuthEntryRequest(path, upperMethod));
   }
 
   let csrfToken = isUnsafeMethod(upperMethod) ? csrfRequestToken || readCookie(CSRF_COOKIE_NAME) : "";

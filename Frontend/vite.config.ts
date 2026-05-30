@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 import type { IncomingMessage } from "node:http";
 
 const isGitHubPages = process.env.GITHUB_PAGES === "true";
-const devApiTarget = process.env.VITE_DEV_API_BASE_URL ?? "https://localhost:7100";
+const devApiTarget = process.env.VITE_DEV_API_BASE_URL ?? process.env.VITE_API_BASE_URL ?? "https://localhost:7100";
 const csrfCookieName = "XSRF-TOKEN";
 const csrfRequestHeaderName = "X-CSRF-REQUEST-TOKEN";
 
