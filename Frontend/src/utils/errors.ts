@@ -15,6 +15,9 @@ export function getFriendlyErrorMessage(error: unknown, fallback = "The request 
   const lower = message.toLowerCase();
 
   if (!message) return fallback;
+  if (lower.includes("status 429") || lower.includes("too many requests")) {
+    return "Too many verification attempts. Please wait about a minute, then try again.";
+  }
   if (lower.includes("no quotes found for route")) return "No quotes found for this route.";
   if (lower.includes("no rates found")) return "No rates found for the selected criteria.";
   if (lower.includes("invoice not found")) return "No invoices found for this shipment.";

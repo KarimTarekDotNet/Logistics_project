@@ -57,14 +57,26 @@ export function persistSession(session: AuthSession | null) {
 
 export function loadPendingVerification() {
   const stored = localStorage.getItem(PENDING_VERIFICATION_KEY);
-  if (!stored) return { userId: "", email: "", phone: "" };
+  if (!stored) return { userId: "", email: "", phone: "", userName: "", emailConfirmed: false };
 
   try {
-    const parsed = JSON.parse(stored) as { userId?: string; email?: string; phone?: string };
-    return { userId: parsed.userId ?? "", email: parsed.email ?? "", phone: parsed.phone ?? "" };
+    const parsed = JSON.parse(stored) as {
+      userId?: string;
+      email?: string;
+      phone?: string;
+      userName?: string;
+      emailConfirmed?: boolean;
+    };
+    return {
+      userId: parsed.userId ?? "",
+      email: parsed.email ?? "",
+      phone: parsed.phone ?? "",
+      userName: parsed.userName ?? "",
+      emailConfirmed: parsed.emailConfirmed ?? false
+    };
   } catch {
     localStorage.removeItem(PENDING_VERIFICATION_KEY);
-    return { userId: "", email: "", phone: "" };
+    return { userId: "", email: "", phone: "", userName: "", emailConfirmed: false };
   }
 }
 

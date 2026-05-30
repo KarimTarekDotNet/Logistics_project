@@ -574,6 +574,11 @@ export default function App() {
     let cancelled = false;
 
     async function restoreCookieSession() {
+      if (readConfirmationLink(getAppPath())) {
+        setRestoringSession(false);
+        return;
+      }
+
       try {
         const response = await api.refresh();
         if (cancelled || !response.isAuthenticated) return;
@@ -725,45 +730,67 @@ export default function App() {
 
     if (isEmailConfirmation) {
       const pending = loadPendingVerification();
-      if (pending.userId !== userId) {
+      if (pending.userId && pending.userId !== userId) {
         localStorage.removeItem(PENDING_VERIFICATION_KEY);
         setVerifyDraft((current) => ({ ...current, email: "", phone: "", phoneCode: "" }));
+      } else {
+        localStorage.setItem(PENDING_VERIFICATION_KEY, JSON.stringify({ ...pending, userId }));
+        setVerifyDraft((current) => ({
+          ...current,
+          email: current.email || pending.email,
+          phone: current.phone || pending.phone,
+          phoneCode: ""
+        }));
       }
       setAuthMode("verify");
       setVerificationStep("email");
     }
 
     setBusy(true);
-    void (async () => {
-      try {
-        if (shouldBridgeConfirmationToLocal(path) && !localConfirmationBridgeRef.current.has(path)) {
-          localConfirmationBridgeRef.current.add(path);
-          const localOrigin = await findLocalConfirmationOrigin();
-          if (localOrigin) {
-            window.location.replace(`${localOrigin}${path}`);
-            return;
-          }
-        }
+    let cancelled = false;
 
-        if (isEmailConfirmation) {
-          const response = await api.confirmEmail(userId, token);
-          setAuthMode("verify");
-          setVerificationStep("phone");
-          navigate("/auth/verify", { replace: true, scroll: false });
-          pushToast("success", "Email confirmed", response.message || "Enter the 6-digit code sent to your phone.");
-        } else {
-          const response = await api.confirmProfileEmailChange(userId, token);
-          if (response.updatedProfile) setProfile(response.updatedProfile);
-          navigate(session ? "/" : "/auth/login", { replace: true, scroll: false });
-          pushToast("success", "Email change confirmed", response.message || "Your profile email has been updated.");
+    const confirmationTimer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          if (shouldBridgeConfirmationToLocal(path) && !localConfirmationBridgeRef.current.has(path)) {
+            localConfirmationBridgeRef.current.add(path);
+            const localOrigin = await findLocalConfirmationOrigin();
+            if (localOrigin) {
+              window.location.replace(`${localOrigin}${path}`);
+              return;
+            }
+          }
+
+          if (isEmailConfirmation) {
+            const response = await api.confirmEmail(userId, token);
+            if (cancelled) return;
+            const pending = loadPendingVerification();
+            localStorage.setItem(PENDING_VERIFICATION_KEY, JSON.stringify({ ...pending, userId, emailConfirmed: true }));
+            setAuthMode("verify");
+            setVerificationStep("phone");
+            navigate("/auth/verify", { replace: true, scroll: false });
+            pushToast("success", "Email confirmed", response.message || "Enter the 6-digit code sent to your phone.");
+          } else {
+            const response = await api.confirmProfileEmailChange(userId, token);
+            if (cancelled) return;
+            if (response.updatedProfile) setProfile(response.updatedProfile);
+            navigate(session ? "/" : "/auth/login", { replace: true, scroll: false });
+            pushToast("success", "Email change confirmed", response.message || "Your profile email has been updated.");
+          }
+        } catch (confirmationError) {
+          if (cancelled) return;
+          handledConfirmationLinksRef.current.delete(confirmationKey);
+          pushToast("error", "Email confirmation failed", getFriendlyErrorMessage(confirmationError));
+        } finally {
+          if (!cancelled) setBusy(false);
         }
-      } catch (confirmationError) {
-        handledConfirmationLinksRef.current.delete(confirmationKey);
-        pushToast("error", "Email confirmation failed", getFriendlyErrorMessage(confirmationError));
-      } finally {
-        setBusy(false);
-      }
-    })();
+      })();
+    }, 80);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(confirmationTimer);
+    };
   }, [navigate, path, pushToast, session]);
 
   useEffect(() => {
@@ -917,6 +944,101 @@ export default function App() {
     if (mode === "verify") navigate("/auth/verify");
   }
 
+  function isUnconfirmedEmailResponse(error: unknown) {
+    const message = getFriendlyErrorMessage(error).toLowerCase();
+    return message.includes("confirm your email") || message.includes("email before logging in");
+  }
+
+  function isEmailConfirmationSentResponse(error: unknown) {
+    const message = getFriendlyErrorMessage(error).toLowerCase();
+    return message.includes("confirmation link has been sent") || message.includes("check your email");
+  }
+
+  function phoneMatches(left: string, right: string) {
+    const first = left.replace(/\D/g, "");
+    const second = right.replace(/\D/g, "");
+    return Boolean(first && second && (first === second || first.endsWith(second) || second.endsWith(first)));
+  }
+
+  function isPhoneIdentity(value: string) {
+    const digits = value.replace(/\D/g, "");
+    return digits.length >= 6 && !/[a-z]/i.test(value);
+  }
+
+  function resolvePendingVerificationForIdentity(identity: string) {
+    const pending = loadPendingVerification();
+    const normalizedIdentity = identity.trim();
+    const lowerIdentity = normalizedIdentity.toLowerCase();
+    const isEmailIdentity = lowerIdentity.includes("@");
+    const registeredPhone = `${registerForm.countryCode}${registerForm.phoneNumber}`;
+
+    const identityMatchesPending =
+      lowerIdentity === pending.email.toLowerCase() ||
+      lowerIdentity === pending.userName.toLowerCase() ||
+      phoneMatches(normalizedIdentity, pending.phone);
+
+    const identityMatchesCurrentForm =
+      lowerIdentity === registerForm.email.trim().toLowerCase() ||
+      lowerIdentity === registerForm.userName.trim().toLowerCase() ||
+      phoneMatches(normalizedIdentity, registeredPhone);
+
+    return {
+      userId: pending.userId,
+      email:
+        (identityMatchesPending && pending.email) ||
+        (identityMatchesCurrentForm && registerForm.email.trim()) ||
+        (isEmailIdentity ? normalizedIdentity : ""),
+      phone:
+        (identityMatchesPending && pending.phone) ||
+        (identityMatchesCurrentForm && registeredPhone) ||
+        (isPhoneIdentity(normalizedIdentity) && !isEmailIdentity ? normalizedIdentity : ""),
+      userName: pending.userName || registerForm.userName.trim(),
+      emailConfirmed: pending.emailConfirmed
+    };
+  }
+
+  async function resendEmailConfirmationLink(email: string) {
+    try {
+      const response = await api.resendEmailConfirmation(email);
+      pushToast(response.isAuthenticated ? "info" : "success", "Email verification request", response.message);
+      return true;
+    } catch (error) {
+      if (isEmailConfirmationSentResponse(error)) {
+        pushToast("success", "Email verification request", getFriendlyErrorMessage(error));
+        return true;
+      }
+
+      pushToast("error", "Email confirmation failed", getFriendlyErrorMessage(error));
+      return false;
+    }
+  }
+
+  async function resumeEmailVerificationFromLogin(identity: string) {
+    const pending = resolvePendingVerificationForIdentity(identity);
+
+    setVerifyDraft((current) => ({
+      ...current,
+      email: pending.email,
+      phone: pending.phone,
+      phoneCode: ""
+    }));
+
+    if (pending.email || pending.phone || pending.userName) {
+      localStorage.setItem(PENDING_VERIFICATION_KEY, JSON.stringify(pending));
+    }
+
+    setAuthMode("verify");
+    setVerificationStep("email");
+    navigate("/auth/verify", { replace: true, scroll: false });
+
+    if (!pending.email) {
+      pushToast("info", "Confirm your email", "Enter the email address used during registration to send a new confirmation link.");
+      return;
+    }
+
+    await resendEmailConfirmationLink(pending.email);
+  }
+
   async function handleLogin(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -947,6 +1069,11 @@ export default function App() {
       navigate("/", { replace: true });
       pushToast("success", "Signed in", `Welcome back${nextSession.userName ? `, ${nextSession.userName}` : ""}.`);
     } catch (loginError) {
+      if (isUnconfirmedEmailResponse(loginError)) {
+        await resumeEmailVerificationFromLogin(loginForm.identity);
+        return;
+      }
+
       pushToast("error", "Login failed", getFriendlyErrorMessage(loginError));
     } finally {
       setBusy(false);
@@ -962,7 +1089,13 @@ export default function App() {
         const registeredPhone = `${registerForm.countryCode}${registerForm.phoneNumber}`;
         localStorage.setItem(
           PENDING_VERIFICATION_KEY,
-          JSON.stringify({ userId: response.id ?? "", email: registerForm.email, phone: registeredPhone })
+          JSON.stringify({
+            userId: response.id ?? "",
+            email: registerForm.email,
+            phone: registeredPhone,
+            userName: registerForm.userName,
+            emailConfirmed: false
+          })
         );
         setVerifyDraft((current) => ({
           ...current,
@@ -988,9 +1121,8 @@ export default function App() {
       "Email confirmation sent",
       async () => {
         const email = verifyDraft.email.trim() || registerForm.email.trim();
-        const response = await api.resendEmailConfirmation(email);
-        pushToast(response.isAuthenticated ? "info" : "success", "Email verification request", response.message);
-        return response;
+        const sent = await resendEmailConfirmationLink(email);
+        return { sent };
       },
       { successToast: false, refresh: false }
     );
@@ -1001,10 +1133,16 @@ export default function App() {
     setBusy(true);
 
     try {
+      const pending = loadPendingVerification();
+      if (pending.emailConfirmed) {
+        setVerificationStep("phone");
+        pushToast("success", "Email confirmed", "Enter the 6-digit code sent to your registered phone.");
+        return;
+      }
+
       const identity = verifyDraft.email.trim() || registerForm.email.trim();
       if (!identity || !registerForm.password) {
-        setVerificationStep("phone");
-        pushToast("info", "Continue to phone verification", "Enter the 6-digit code sent to your registered phone.");
+        pushToast("info", "Use your email link", "Open the confirmation link from your inbox. We will move you to phone verification automatically.");
         return;
       }
 
@@ -1059,7 +1197,8 @@ export default function App() {
 
     try {
       const response = await api.confirmPhone(verifyDraft.phone.trim(), code);
-      if (!response.isAuthenticated) {
+      const phoneConfirmed = response.isAuthenticated || response.message.toLowerCase().includes("phone number confirmed");
+      if (!phoneConfirmed) {
         pushToast("error", "Phone verification failed", response.message || "The code is invalid or expired.");
         return;
       }
