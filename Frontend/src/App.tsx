@@ -169,8 +169,6 @@ function canQueryInvoicesForShipment(shipment?: Shipment) {
   return Boolean(shipment) && status !== "created" && status !== "clientconfirmed";
 }
 
-const localConfirmationOrigins = ["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:5174", "http://localhost:5174"];
-
 function readConfirmationLink(path: string) {
   const url = new URL(path, window.location.origin);
   const pathname = getAppPathname(url.pathname).toLowerCase();
@@ -180,7 +178,7 @@ function readConfirmationLink(path: string) {
   if (!isEmailConfirmation && !isEmailChangeConfirmation) return null;
 
   return {
-    type: isEmailConfirmation ? "registration-email" : "profile-email",
+    type: isEmailConfirmation ? ("registration-email" as const) : ("profile-email" as const),
     userId: url.searchParams.get("userId") ?? url.searchParams.get("UserId") ?? "",
     token: (url.searchParams.get("token") ?? url.searchParams.get("Token") ?? "").replace(/ /g, "+")
   };
@@ -188,41 +186,10 @@ function readConfirmationLink(path: string) {
 
 type ConfirmationRequestResult =
   | { type: "registration-email"; response: AuthResponse }
-  | { type: "profile-email"; response: ProfileUpdateResponse }
-  | { type: "redirected" };
+  | { type: "profile-email"; response: ProfileUpdateResponse };
 
-function shouldBridgeConfirmationToLocal(path: string) {
-  const confirmationLink = readConfirmationLink(path);
-  return Boolean(confirmationLink && window.location.hostname.toLowerCase() === "karimtarekdotnet.github.io");
-}
-
-function canLoadLocalAsset(origin: string) {
-  return new Promise<boolean>((resolve) => {
-    const image = new Image();
-    const timeout = window.setTimeout(() => {
-      image.onload = null;
-      image.onerror = null;
-      resolve(false);
-    }, 700);
-
-    image.onload = () => {
-      window.clearTimeout(timeout);
-      resolve(true);
-    };
-    image.onerror = () => {
-      window.clearTimeout(timeout);
-      resolve(false);
-    };
-    image.src = `${origin}/confirm-bridge.svg?confirm-bridge=${Date.now()}`;
-  });
-}
-
-async function findLocalConfirmationOrigin() {
-  for (const origin of localConfirmationOrigins) {
-    if (await canLoadLocalAsset(origin)) return origin;
-  }
-
-  return "";
+function getConfirmationSafePath(type: "registration-email" | "profile-email") {
+  return type === "registration-email" ? "/confirm-email" : "/confirm-email-change";
 }
 
 function CustomerRequiredView(props: { onGoToSettings: () => void }) {
@@ -388,7 +355,6 @@ export default function App() {
   const workspace = useShipmentWorkspace(session, setData);
   const loadSequenceRef = useRef(0);
   const pageLoadingTimerRef = useRef<number | null>(null);
-  const localConfirmationBridgeRef = useRef<Set<string>>(new Set());
   const completedConfirmationLinksRef = useRef<Set<string>>(new Set());
   const confirmationRequestsRef = useRef<Map<string, Promise<ConfirmationRequestResult>>>(new Map());
   const [appliedRateBookFilters, setAppliedRateBookFilters] = useState<RateBookFilterDraft>(initialRateBookFilters);
@@ -716,6 +682,7 @@ export default function App() {
 
     const { type, userId, token } = confirmationLink;
     const isEmailConfirmation = type === "registration-email";
+    window.history.replaceState(null, "", toBrowserPath(getConfirmationSafePath(type)));
 
     if (!userId || !token) {
       if (isEmailConfirmation) {
@@ -758,15 +725,6 @@ export default function App() {
       if (existing) return existing;
 
       const request = (async (): Promise<ConfirmationRequestResult> => {
-        if (shouldBridgeConfirmationToLocal(path) && !localConfirmationBridgeRef.current.has(path)) {
-          localConfirmationBridgeRef.current.add(path);
-          const localOrigin = await findLocalConfirmationOrigin();
-          if (localOrigin) {
-            window.location.replace(`${localOrigin}${path}`);
-            return { type: "redirected" };
-          }
-        }
-
         if (isEmailConfirmation) {
           return { type: "registration-email", response: await api.confirmEmail(userId, token) };
         }
@@ -782,7 +740,7 @@ export default function App() {
 
     void runConfirmationRequest()
       .then((result) => {
-        if (cancelled || result.type === "redirected") return;
+        if (cancelled) return;
 
         completedConfirmationLinksRef.current.add(confirmationKey);
 
