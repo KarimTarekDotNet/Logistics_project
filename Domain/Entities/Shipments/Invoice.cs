@@ -1,4 +1,6 @@
 ﻿using Domain.Enums;
+using Domain.Exceptions;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Domain.Entities.Shipments
 {
@@ -17,19 +19,25 @@ namespace Domain.Entities.Shipments
         public decimal SubTotal { get; set; }
         public decimal TaxAmount { get; set; }
         public decimal TotalAmount { get; set; }
-        public decimal? PaidPart { get; set; }
+
+        public ICollection<InvoicePayment> Payments { get; set; } = new List<InvoicePayment>();
+
+        [NotMapped]
+        public decimal TotalPaid => Payments.Sum(x => x.Amount);
+
+        [NotMapped]
+        public decimal RemainingAmount => TotalAmount - TotalPaid;
 
         public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Draft;
 
         public DateTimeOffset IssuedAt { get; set; }
         public DateTimeOffset DueDate { get; set; }
-        public DateTimeOffset? PaidAt { get; set; }
-        public DateTimeOffset? PaidPartAt { get; set; }
 
         public PayerType PayerType { get; set; }
 
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset? UpdatedAt { get; set; }
+        public DateTimeOffset? PaidAt { get; set; }
 
         public DateTimeOffset? CancelledAt { get; set; }
         public string? CancelledByUserId { get; set; }

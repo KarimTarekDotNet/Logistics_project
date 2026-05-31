@@ -112,6 +112,10 @@ namespace API.Mapping
             CreateMap<Invoice, InvoiceResponse>();
             CreateMap<CreateInvoiceRequest, Invoice>();
 
+            // ── Invoice Payment ────────────────────────────────────────────────────
+            CreateMap<InvoicePayment, InvoicePaymentResponse>();
+            CreateMap<CreateInvoicePaymentRequest, InvoicePayment>();
+
             // ── Shipment Documents ─────────────────────────────────────
             CreateMap<ShipmentDocument, ShipmentDocumentResponse>()
                 .ForMember(d => d.Type,

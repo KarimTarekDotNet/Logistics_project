@@ -36,6 +36,7 @@ namespace Infrastructure.Repositories.Shipments.Core
             return await _context.Invoices
                 .Include(x => x.Charges)
                 .Include(x => x.Shipment)
+                .Include(x => x.Payments)
                 .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         }
 

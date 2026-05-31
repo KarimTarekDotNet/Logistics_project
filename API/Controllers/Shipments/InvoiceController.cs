@@ -14,10 +14,12 @@ namespace API.Controllers.Shipments
     public class InvoiceController : ControllerBase
     {
         private readonly IInvoiceService invoiceService;
+        public readonly IInvoicePaymentService invoicePaymentService;
 
-        public InvoiceController(IInvoiceService invoiceService)
+        public InvoiceController(IInvoiceService invoiceService, IInvoicePaymentService invoicePaymentService)
         {
             this.invoiceService = invoiceService;
+            this.invoicePaymentService = invoicePaymentService;
         }
 
         [HttpGet("{id}")]
@@ -31,6 +33,19 @@ namespace API.Controllers.Shipments
                 return NotFound();
 
             return Ok(invoice);
+        }
+
+        [HttpGet("payments/{invoiceId}")]
+        public async Task<IActionResult> GetPaymentsByInvoiceId(Guid invoiceId)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
+
+            var payments = await invoicePaymentService.GetPaymentsByInvoiceIdAsync(invoiceId, userId, isPrivileged);
+            if (!payments.Any())
+                return NotFound();
+
+            return Ok(payments);
         }
 
         [HttpGet("shipment/{shipmentId}")]
@@ -88,12 +103,10 @@ namespace API.Controllers.Shipments
 
         [HttpPatch("{id}/mark-as-paid")]
         [EnableRateLimiting("HeavyPolicy")]
-        public async Task<IActionResult> MarkAsPaid(Guid id)
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> MarkAsPaid(Guid id, [FromBody] CreateInvoicePaymentRequest request)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
-
-            var paidInvoice = await invoiceService.MarkAsPaidAsync(id, userId, isPrivileged);
+            var paidInvoice = await invoicePaymentService.MarkAsPaidAsync(id, request);
             if (paidInvoice == null)
                 return NotFound();
 
@@ -103,9 +116,9 @@ namespace API.Controllers.Shipments
         [HttpPatch("{id}/mark-as-partially-paid")]
         [EnableRateLimiting("HeavyPolicy")]
         [Authorize(Roles = "Admin,Staff")]
-        public async Task<IActionResult> MarkAsPartiallyPaid(Guid id, PriceRequest price)
+        public async Task<IActionResult> MarkAsPartiallyPaid(Guid id, [FromBody] CreateInvoicePaymentRequest request)
         {
-            var paidInvoice = await invoiceService.MarkAsPartiallyPaidAsync(id, price.Price);
+            var paidInvoice = await invoicePaymentService.MarkAsPartiallyPaidAsync(id, request);
             if (paidInvoice == null)
                 return NotFound();
 
@@ -117,7 +130,7 @@ namespace API.Controllers.Shipments
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> MarkAsRefunded(Guid id)
         {
-            var paidInvoice = await invoiceService.MarkAsRefundedAsync(id);
+            var paidInvoice = await invoicePaymentService.MarkAsRefundedAsync(id);
             if (paidInvoice == null)
                 return NotFound();
 

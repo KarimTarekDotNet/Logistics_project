@@ -33,6 +33,7 @@ namespace Infrastructure.Repositories.Patterns
         public IAliasRepository Alias { get; }
         public IQuoteRequestRepository QuoteRequest { get; }
         public IShipmentChargeRuleRepository ShipmentChargeRule { get; }
+        public IInvoicePaymentRepository InvoicePayments { get; }
 
         public UnitOfWork(
             ApplicationDbContext context,
@@ -52,7 +53,8 @@ namespace Infrastructure.Repositories.Patterns
             IShipmentDocumentRepository shipmentDocuments,
             IAliasRepository alias,
             IQuoteRequestRepository quoteRequest,
-            IShipmentChargeRuleRepository shipmentChargeRule)
+            IShipmentChargeRuleRepository shipmentChargeRule,
+            IInvoicePaymentRepository invoicePayments)
         {
             _context = context;
             Carriers = carrierRepository;
@@ -72,6 +74,7 @@ namespace Infrastructure.Repositories.Patterns
             Alias = alias;
             QuoteRequest = quoteRequest;
             ShipmentChargeRule = shipmentChargeRule;
+            InvoicePayments = invoicePayments;
         }
 
         public async Task<int> SaveChangesAsync()

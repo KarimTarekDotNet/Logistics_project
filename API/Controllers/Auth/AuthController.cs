@@ -159,10 +159,7 @@ namespace API.Controllers.Auth
         {
             var tokens = antiforgery.GetAndStoreTokens(HttpContext);
 
-            return Ok(new
-            {
-                token = tokens.RequestToken
-            });
+            return Ok(new { token = tokens.RequestToken });
         }
 
         private string GetUserId()

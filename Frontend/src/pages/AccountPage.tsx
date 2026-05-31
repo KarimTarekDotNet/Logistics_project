@@ -1,7 +1,6 @@
 import { Building2, CheckCircle2, KeyRound, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { ConfirmDialog, Field, PanelTitle, PasswordInput, SectionHeader, StatusBadge } from "../components/ui";
-import { ACTION_CONFIRM_LABEL, ACTION_CONFIRM_MESSAGE } from "../constants/actionConfirmation";
 import type { Customer, CustomerDraft, PasswordDraft, ProfileDraft, ProfileResponse, VerifyDraft } from "../types";
 import { formatDate } from "../utils/format";
 
@@ -53,37 +52,10 @@ export function AccountPage(props: {
   } = props;
   const [confirmCustomerDelete, setConfirmCustomerDelete] = useState(false);
   const [confirmLogoutAll, setConfirmLogoutAll] = useState(false);
-  const profileCompletion = [profileDraft.firstName, profileDraft.lastName, profileDraft.email, profileDraft.phoneNumber, currentCustomer?.id].filter(Boolean).length;
 
   return (
     <div className="view-stack">
       <SectionHeader icon={<UserRound size={22} />} title="Settings Profile" meta={profile?.username || "Profile settings"} />
-
-      <section className="workspace-hero account-hero">
-        <div className="workspace-hero-copy">
-          <span className="hero-kicker">Account readiness</span>
-          <h2>Identity, security, and customer profile controls in a focused settings workspace.</h2>
-          <p>Keep personal details, verification handoffs, password updates, and customer data clean before entering operational workflows.</p>
-        </div>
-        <div className="hero-metric-strip">
-          <div>
-            <span>Profile</span>
-            <strong>{profile?.username ? "Loaded" : "Pending"}</strong>
-          </div>
-          <div>
-            <span>Customer</span>
-            <strong>{currentCustomer ? "Ready" : "Missing"}</strong>
-          </div>
-          <div>
-            <span>Fields</span>
-            <strong>{profileCompletion}/5</strong>
-          </div>
-          <div>
-            <span>Mode</span>
-            <strong>{customerDraft.mode}</strong>
-          </div>
-        </div>
-      </section>
 
       <div className="two-column account-layout">
         <section className="panel">
@@ -270,8 +242,8 @@ export function AccountPage(props: {
       <ConfirmDialog
         open={confirmCustomerDelete}
         title="Delete customer profile"
-        message={ACTION_CONFIRM_MESSAGE}
-        confirmLabel={ACTION_CONFIRM_LABEL}
+        message="This removes your customer profile from the portal."
+        confirmLabel="Delete profile"
         tone="danger"
         busy={busy}
         onClose={() => setConfirmCustomerDelete(false)}
@@ -284,8 +256,8 @@ export function AccountPage(props: {
       <ConfirmDialog
         open={confirmLogoutAll}
         title="Logout all sessions"
-        message={ACTION_CONFIRM_MESSAGE}
-        confirmLabel={ACTION_CONFIRM_LABEL}
+        message="All refresh tokens for your account will be revoked."
+        confirmLabel="Logout all"
         tone="danger"
         busy={busy}
         onClose={() => setConfirmLogoutAll(false)}

@@ -97,8 +97,18 @@ namespace Infrastructure.Helper
                 throw new UnauthorizedAccessException("You do not have access to this shipment.");
         }
 
+        public static async Task<(Invoice Invoice, Domain.Entities.Shipments.Shipment Shipment)>
+        GetInvoiceContextAsync(Guid invoiceId, IUnitOfWork unitOfWork)
+        {
+            var invoice = await GetInvoiceOrThrowAsync(invoiceId, unitOfWork);
+
+            var shipment = await GetShipmentOrThrowAsync(invoice.ShipmentId, unitOfWork);
+
+            return (invoice, shipment);
+        }
+
         public static async Task<(ApplicationUser User, Invoice Invoice, Domain.Entities.Shipments.Shipment Shipment)>
-        GetInvoiceContextAsync(Guid invoiceId, string userId, bool isPrivileged, UserManager<ApplicationUser> userManager, IUnitOfWork unitOfWork)
+GetInvoiceContextAsync(Guid invoiceId, string userId, bool isPrivileged, UserManager<ApplicationUser> userManager, IUnitOfWork unitOfWork)
         {
             var user = await GetUserOrThrowAsync(userId, userManager);
 
@@ -136,31 +146,35 @@ namespace Infrastructure.Helper
                 throw new BusinessRuleException("Invoice is cancelled.");
         }
 
-        public static void EnsurePartialPaymentAmountIsValid(Invoice invoice, decimal price)
+        public static void EnsurePartialPaymentAmountIsValid(Invoice invoice, decimal amount)
         {
-            if (price <= 0)
+            var paidAmount = invoice.Payments
+                .Where(p => p.Status == PaymentTransactionStatus.Succeeded)
+                .Sum(p => p.Amount);
+
+            if (amount <= 0)
                 throw new BusinessRuleException("Payment amount must be greater than zero.");
 
-            if (price > invoice.TotalAmount)
-                throw new BusinessRuleException("Cannot partially pay invoice because the value is greater than the invoice amount.");
+            if (amount >= invoice.TotalAmount)
+                throw new BusinessRuleException("Use full payment, not partial payment.");
 
-            if ((invoice.PaidPart + price) > invoice.TotalAmount)
-                throw new BusinessRuleException("Cannot partially pay invoice because the total paid value is greater than the invoice amount.");
+            if (paidAmount + amount > invoice.TotalAmount)
+                throw new BusinessRuleException("Total paid amount cannot exceed invoice amount.");
         }
 
-        public static void ApplyPartialPayment(Invoice invoice, decimal price)
+        public static void ApplyPaymentStatus(Invoice invoice)
         {
-            var newPaidPart = invoice.PaidPart + price;
+            var paidAmount = invoice.Payments
+                .Where(p => p.Status == PaymentTransactionStatus.Succeeded)
+                .Sum(p => p.Amount);
 
-            if (newPaidPart >= invoice.TotalAmount)
+            if (paidAmount >= invoice.TotalAmount)
             {
-                invoice.PaidPart = invoice.TotalAmount;
                 invoice.PaymentStatus = PaymentStatus.Paid;
                 invoice.PaidAt = DateTimeOffset.UtcNow;
             }
-            else
+            else if (paidAmount > 0)
             {
-                invoice.PaidPart = newPaidPart;
                 invoice.PaymentStatus = PaymentStatus.PartiallyPaid;
             }
 

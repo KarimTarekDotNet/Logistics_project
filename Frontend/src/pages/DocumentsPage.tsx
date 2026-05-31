@@ -1,7 +1,6 @@
 import { CloudUpload, Download, FileText, Trash2, Upload } from "lucide-react";
 import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import { ConfirmDialog, EmptyState, EntityActions, Field, PanelTitle, SectionHeader } from "../components/ui";
-import { ACTION_CONFIRM_LABEL, ACTION_CONFIRM_MESSAGE } from "../constants/actionConfirmation";
 import { documentTypes } from "../constants/logistics";
 import { ShipmentContextPanel } from "../features/shipments/ShipmentContextPanel";
 import { openApiAsset } from "../services/api";
@@ -54,32 +53,6 @@ export function DocumentsPage(props: {
 
       {selectedShipment ? (
         <>
-          <section className="workspace-hero documents-hero">
-            <div className="workspace-hero-copy">
-              <span className="hero-kicker">Document room</span>
-              <h2>Keep shipment files, upload controls, and document history connected to the same operational record.</h2>
-              <p>Operators can upload, review, and open shipment documents without jumping between disconnected folders.</p>
-            </div>
-            <div className="hero-metric-strip">
-              <div>
-                <span>Documents</span>
-                <strong>{documents.length}</strong>
-              </div>
-              <div>
-                <span>Cargo items</span>
-                <strong>{selectedShipment.items?.length ?? 0}</strong>
-              </div>
-              <div>
-                <span>Charges</span>
-                <strong>{selectedShipment.charges?.length ?? 0}</strong>
-              </div>
-              <div>
-                <span>Selected file</span>
-                <strong>{draft.file ? "Ready" : "Waiting"}</strong>
-              </div>
-            </div>
-          </section>
-
           <ShipmentContextPanel
             shipment={selectedShipment}
             extra={[
@@ -173,8 +146,8 @@ export function DocumentsPage(props: {
       <ConfirmDialog
         open={Boolean(deleteId)}
         title="Delete document"
-        message={ACTION_CONFIRM_MESSAGE}
-        confirmLabel={ACTION_CONFIRM_LABEL}
+        message="This removes the document from the shipment document set."
+        confirmLabel="Delete document"
         tone="danger"
         busy={busy}
         onClose={() => setDeleteId(null)}

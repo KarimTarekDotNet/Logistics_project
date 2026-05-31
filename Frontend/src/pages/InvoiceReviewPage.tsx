@@ -25,28 +25,6 @@ export function InvoiceReviewPage(props: {
 
       {selectedShipment ? (
         <>
-          <section className="workspace-hero workflow-hero">
-            <div className="workspace-hero-copy">
-              <span className="hero-kicker">Billing step 2</span>
-              <h2>Review the draft invoice against generated charges before releasing it to payment.</h2>
-              <p>The invoice review keeps amount, due date, status, and charge rows visible before the confirmation action.</p>
-            </div>
-            <div className="hero-metric-strip">
-              <div>
-                <span>Invoice</span>
-                <strong>{invoice?.invoiceNumber ?? "Drafting"}</strong>
-              </div>
-              <div>
-                <span>Total</span>
-                <strong>{formatMoney(invoiceTotal, currency)}</strong>
-              </div>
-              <div>
-                <span>Charges</span>
-                <strong>{visibleCharges.length}</strong>
-              </div>
-            </div>
-          </section>
-
           <ShipmentContextPanel shipment={selectedShipment} extra={[{ label: "Invoice total", value: formatMoney(invoiceTotal, currency) }]} />
 
           {invoice ? (

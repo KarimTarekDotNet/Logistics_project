@@ -1,5 +1,4 @@
 ﻿using Domain.Entities.Shipments;
-using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -34,9 +33,6 @@ namespace Infrastructure.Data.Configuration.Shipments
                 .HasPrecision(18, 2);
 
             builder.Property(x => x.TotalAmount)
-                .HasPrecision(18, 2);
-
-            builder.Property(x => x.PaidPart)
                 .HasPrecision(18, 2);
 
             builder.Property(x => x.PaymentStatus)

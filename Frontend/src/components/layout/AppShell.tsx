@@ -12,11 +12,7 @@ import {
   UserRound,
   WalletCards,
   X,
-  CircleDollarSign,
-  BarChart3,
-  Sparkles,
-  Box,
-  ReceiptText
+  CircleDollarSign
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { BrandLogo } from "../brand/BrandLogo";
@@ -28,52 +24,17 @@ type NavItem = {
   label: string;
   icon: ReactNode;
   privileged?: boolean;
-  children?: Array<{ label: string; targetId: string; icon: ReactNode; privileged?: boolean }>;
 };
 
-type NavSection = {
-  label: string;
-  items: NavItem[];
-};
-
-const navSections: NavSection[] = [
-  {
-    label: "Command",
-    items: [{ view: "overview", label: "Overview", icon: <LayoutDashboard size={18} /> }]
-  },
-  {
-    label: "Pricing",
-    items: [
-      {
-        view: "pricing",
-        label: "Pricing Hub",
-        icon: <CircleDollarSign size={18} />,
-        children: [
-          { label: "Rate book", targetId: "pricing-rate-book", icon: <Box size={15} /> },
-          { label: "Analytics", targetId: "pricing-analytics", icon: <BarChart3 size={15} /> },
-          { label: "Recommendations", targetId: "pricing-recommendations", icon: <Sparkles size={15} /> },
-          { label: "Rate editor", targetId: "pricing-rate-editor", icon: <CircleDollarSign size={15} />, privileged: true },
-          { label: "Rate details", targetId: "pricing-rate-details", icon: <ReceiptText size={15} /> }
-        ]
-      }
-    ]
-  },
-  {
-    label: "Operations",
-    items: [
-      { view: "quotes", label: "Quotes", icon: <ClipboardList size={18} /> },
-      { view: "shipments", label: "Shipments", icon: <Ship size={18} /> },
-      { view: "finance", label: "Finance", icon: <WalletCards size={18} /> },
-      { view: "documents", label: "Documents", icon: <FileText size={18} /> }
-    ]
-  },
-  {
-    label: "Control",
-    items: [
-      { view: "master-data", label: "Master Data", icon: <Database size={18} />, privileged: true },
-      { view: "account", label: "Settings Profile", icon: <Settings size={18} /> }
-    ]
-  }
+const navItems: NavItem[] = [
+  { view: "overview", label: "Overview", icon: <LayoutDashboard size={18} /> },
+  { view: "pricing", label: "Pricing", icon: <CircleDollarSign size={18} /> },
+  { view: "master-data", label: "Master Data", icon: <Database size={18} />, privileged: true },
+  { view: "quotes", label: "Quotes", icon: <ClipboardList size={18} /> },
+  { view: "shipments", label: "Shipments", icon: <Ship size={18} /> },
+  { view: "finance", label: "Finance", icon: <WalletCards size={18} /> },
+  { view: "documents", label: "Documents", icon: <FileText size={18} /> },
+  { view: "account", label: "Settings Profile", icon: <Settings size={18} /> }
 ];
 
 export function AppShell(props: {
@@ -91,18 +52,7 @@ export function AppShell(props: {
   onOpenProfilePreview: () => void;
   onLogout: () => void;
 }) {
-  const visibleSections = navSections
-    .map((section) => ({
-      ...section,
-      items: section.items
-        .filter((item) => !item.privileged || props.isPrivileged)
-        .map((item) => ({
-          ...item,
-          children: item.children?.filter((child) => !child.privileged || props.isPrivileged)
-        }))
-    }))
-    .filter((section) => section.items.length > 0);
-  const visibleNav = visibleSections.flatMap((section) => section.items);
+  const visibleNav = navItems.filter((item) => !item.privileged || props.isPrivileged);
   const activeLabel = visibleNav.find((item) => item.view === props.activeView)?.label ?? "Workspace";
 
   function toggleNavigation() {
@@ -111,14 +61,6 @@ export function AppShell(props: {
       return;
     }
     props.setSidebarCollapsed(!props.sidebarCollapsed);
-  }
-
-  function selectNavItem(view: View, targetId?: string) {
-    props.setActiveView(view);
-    props.setSidebarOpen(false);
-    if (targetId) {
-      window.setTimeout(() => document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
-    }
   }
 
   return (
@@ -134,32 +76,19 @@ export function AppShell(props: {
         </div>
 
         <nav className="nav-list" aria-label="Primary">
-          {visibleSections.map((section) => (
-            <div className="nav-section" key={section.label}>
-              <span className="nav-section-label">{section.label}</span>
-              {section.items.map((item) => (
-                <div className={`nav-group ${props.activeView === item.view ? "active" : ""}`} key={item.view}>
-                  <button
-                    type="button"
-                    className={`nav-button ${props.activeView === item.view ? "active" : ""}`}
-                    onClick={() => selectNavItem(item.view)}
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </button>
-                  {item.children && props.activeView === item.view && (
-                    <div className="nav-sublist">
-                      {item.children.map((child) => (
-                        <button type="button" className="nav-subbutton" key={child.targetId} onClick={() => selectNavItem(item.view, child.targetId)}>
-                          {child.icon}
-                          <span>{child.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+          {visibleNav.map((item) => (
+            <button
+              type="button"
+              className={`nav-button ${props.activeView === item.view ? "active" : ""}`}
+              onClick={() => {
+                props.setActiveView(item.view);
+                props.setSidebarOpen(false);
+              }}
+              key={item.view}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
           ))}
         </nav>
 

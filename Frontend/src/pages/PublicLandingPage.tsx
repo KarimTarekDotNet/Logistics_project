@@ -132,7 +132,6 @@ export function PublicLandingPage(props: {
       )}
 
       <section className="landing-hero" id="top">
-        <img className="landing-hero-bg" src="/assets/logistics-control-tower.png" alt="" aria-hidden="true" />
         <div className="landing-hero-copy">
           <span className="landing-kicker">Freight forwarding operating system</span>
           <h1>Freight forwarding operations, automated from rate to release.</h1>
@@ -165,16 +164,50 @@ export function PublicLandingPage(props: {
           </div>
         </div>
 
-        <div className="landing-hero-signal" aria-label={`${BRAND_NAME} platform preview`}>
-          <div>
-            <span>Rate</span>
-            <strong>Quote</strong>
-            <span>Booking</span>
-            <strong>B/L</strong>
-            <span>Invoice</span>
-            <strong>Release</strong>
+        <div className="landing-visual" aria-label={`${BRAND_NAME} dashboard preview`}>
+          <div className="visual-topline">
+            <span>Operations control tower</span>
+            <strong>Live shipment desk</strong>
           </div>
-          <small>Live control tower with pricing, cargo, finance, and documents connected to the same shipment file.</small>
+          <div className="visual-automation-flow" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="visual-grid">
+            <div className="visual-card pipeline-card">
+              <div className="visual-card-head">
+                <span>Shipment pipeline</span>
+                <b>Booking confirmed</b>
+              </div>
+              <div className="pipeline-line">
+                {["Rate", "Quote", "Booking", "B/L", "Release"].map((item, index) => (
+                  <span className={index < 3 ? "done" : ""} key={item}>
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="visual-card rate-preview-card">
+              <span>Active lane</span>
+              <strong>CNSHA to NLRTM</strong>
+              <small>20ft Standard - EUR 1,500 - Valid 30 days</small>
+            </div>
+            <div className="visual-card map-preview-card">
+              <span>Route monitor</span>
+              <div className="route-map-preview" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </div>
+              <strong>ETA variance: +12 min</strong>
+            </div>
+            <div className="visual-card finance-preview-card">
+              <span>Invoice state</span>
+              <strong>Payment pending</strong>
+              <small>Charges linked - Customer documents received</small>
+            </div>
+          </div>
         </div>
       </section>
 

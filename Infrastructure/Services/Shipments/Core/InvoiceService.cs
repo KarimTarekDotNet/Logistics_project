@@ -194,25 +194,6 @@ namespace Infrastructure.Services.Shipments.Core
             return _mapper.Map<IReadOnlyList<InvoiceResponse>>(invoices);
         }
 
-        public async Task<InvoiceResponse?> MarkAsPaidAsync(Guid id, string userId, bool isPrivileged)
-        {
-            var (_, invoice, shipment) = await InvoiceHelper
-            .GetInvoiceContextAsync(id, userId, isPrivileged, _userManager, _unitOfWork);
-
-            if (!ShipmentStatusRules.CanPayInvoice(shipment.Status))
-                throw new BusinessRuleException("Cannot pay invoice for the current shipment status.");
-
-            InvoiceHelper.EnsureInvoiceCanBePaid(invoice);
-
-            invoice.PaidAt = DateTimeOffset.UtcNow;
-            invoice.UpdatedAt = DateTimeOffset.UtcNow;
-            invoice.PaymentStatus = PaymentStatus.Paid;
-
-            await _unitOfWork.SaveChangesAsync();
-
-            return _mapper.Map<InvoiceResponse>(invoice);
-        }
-
         public async Task<InvoiceResponse?> ConfirmAsync(Guid id, string userId)
         {
             var (_, invoice, shipment) = await InvoiceHelper
@@ -225,45 +206,6 @@ namespace Infrastructure.Services.Shipments.Core
 
             invoice.UpdatedAt = DateTimeOffset.UtcNow;
             invoice.PaymentStatus = PaymentStatus.Pending;
-
-            await _unitOfWork.SaveChangesAsync();
-
-            return _mapper.Map<InvoiceResponse>(invoice);
-        }
-
-        public async Task<InvoiceResponse?> MarkAsPartiallyPaidAsync(Guid id, decimal price)
-        {
-            var invoice = await InvoiceHelper.GetInvoiceOrThrowAsync(id, _unitOfWork);
-
-            var shipment = await InvoiceHelper.GetShipmentOrThrowAsync(invoice.ShipmentId, _unitOfWork);
-
-            if (!ShipmentStatusRules.CanPartiallyPayInvoice(shipment.Status))
-                throw new BusinessRuleException("Cannot partially pay invoice for the current shipment status.");
-
-            InvoiceHelper.EnsureInvoiceCanBePartiallyPaid(invoice);
-
-            InvoiceHelper.EnsurePartialPaymentAmountIsValid(invoice, price);
-
-            InvoiceHelper.ApplyPartialPayment(invoice, price);
-
-            await _unitOfWork.SaveChangesAsync();
-
-            return _mapper.Map<InvoiceResponse>(invoice);
-        }
-
-        public async Task<InvoiceResponse?> MarkAsRefundedAsync(Guid id)
-        {
-            var invoice = await InvoiceHelper.GetInvoiceOrThrowAsync(id, _unitOfWork);
-
-            var shipment = await InvoiceHelper.GetShipmentOrThrowAsync(invoice.ShipmentId, _unitOfWork);
-
-            if (!ShipmentStatusRules.CanRefundInvoice(shipment.Status))
-                throw new BusinessRuleException("Cannot refund invoice for the current shipment status.");
-
-            InvoiceHelper.EnsureInvoiceCanBeRefunded(invoice);
-
-            invoice.UpdatedAt = DateTimeOffset.UtcNow;
-            invoice.PaymentStatus = PaymentStatus.Refunded;
 
             await _unitOfWork.SaveChangesAsync();
 

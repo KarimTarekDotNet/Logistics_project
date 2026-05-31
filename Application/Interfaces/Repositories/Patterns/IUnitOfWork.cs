@@ -5,7 +5,6 @@ using Application.Interfaces.Repositories.Pricing.Quotation;
 using Application.Interfaces.Repositories.Shipments.Core;
 using Application.Interfaces.Repositories.Shipments.User;
 using Application.Interfaces.Repositories.ShippingCore;
-using Application.Interfaces.Services.Auth;
 
 namespace Application.Interfaces.Repositories.Patterns
 {
@@ -28,6 +27,7 @@ namespace Application.Interfaces.Repositories.Patterns
         IAliasRepository Alias { get; }
         IQuoteRequestRepository QuoteRequest { get; }
         IShipmentChargeRuleRepository ShipmentChargeRule { get; }
+        IInvoicePaymentRepository InvoicePayments { get; }
 
         Task<int> SaveChangesAsync();
         Task BeginTransactionAsync();

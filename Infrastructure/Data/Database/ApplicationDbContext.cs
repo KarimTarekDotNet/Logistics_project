@@ -34,6 +34,7 @@ namespace Infrastructure.Data.Database
         public DbSet<ShipmentCharge> ShipmentCharges { get; set; }
         public DbSet<ShipmentChargeRule> ShipmentChargeRules { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
+        public DbSet<InvoicePayment> InvoicePayments { get; set; }
         public DbSet<ShipmentDocument> ShipmentDocuments { get; set; }
         public DbSet<Customer> Customers { get; set; }
 
