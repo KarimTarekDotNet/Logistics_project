@@ -333,6 +333,28 @@ export type Invoice = {
   payerType: string;
 };
 
+export type PaymentMethod = 0 | 1 | 2 | 3 | 4;
+export type PaymentProvider = 0 | 1 | 2 | 3 | 4;
+export type PaymentTransactionStatus = 0 | 1 | 2 | 3 | 4;
+
+export type InvoicePaymentRequest = {
+  amount: number;
+  currency: string;
+  paymentMethod: PaymentMethod;
+  paymentProvider: PaymentProvider;
+  status: PaymentTransactionStatus;
+  transactionId?: string;
+  referenceNumber?: string;
+};
+
+export type InvoicePayment = {
+  id: string;
+  transactionId?: string | null;
+  referenceNumber?: string | null;
+  amount: number;
+  paidAt: string;
+};
+
 export type ShipmentDocument = {
   id: string;
   shipmentId: string;

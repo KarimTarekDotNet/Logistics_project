@@ -47,6 +47,27 @@ export function isNotFoundError(error: unknown) {
   return error instanceof ApiError && error.status === 404;
 }
 
+export function isBackendUnavailableError(error: unknown) {
+  if (error instanceof ApiError) {
+    const payloadText = typeof error.payload === "string" ? error.payload.trim().toLowerCase() : "";
+    const message = error.message.toLowerCase();
+    return (
+      [502, 503, 504].includes(error.status) ||
+      (error.status === 500 && (!payloadText || message.includes("proxy") || payloadText.includes("proxy")))
+    );
+  }
+
+  if (error instanceof TypeError) return true;
+
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes("failed to fetch") ||
+    message.includes("networkerror") ||
+    message.includes("load failed") ||
+    message.includes("network request failed")
+  );
+}
+
 export async function safe<T>(call: () => Promise<T>, fallback: T) {
   try {
     return await call();

@@ -5,6 +5,8 @@ import type {
   ContainerType,
   Customer,
   Invoice,
+  InvoicePayment,
+  InvoicePaymentRequest,
   MarketAnalytics,
   Port,
   ProfileResponse,
@@ -52,6 +54,7 @@ type RequestOptions = {
   token?: string;
   headers?: Record<string, string>;
   skipAuthRefresh?: boolean;
+  skipCsrfRetry?: boolean;
 };
 
 let refreshPromise: Promise<AuthSession | null> | null = null;
@@ -183,7 +186,7 @@ function readCookie(name: string) {
 }
 
 async function ensureCsrfToken(force = false) {
-  if (!force && readCookie(CSRF_COOKIE_NAME) && csrfRequestToken) return;
+  if (!force && csrfRequestToken) return;
   if (csrfPromise) return csrfPromise;
 
   csrfPromise = fetch(`${API_BASE_URL}/api/auth/csrf-token`, {
@@ -199,7 +202,11 @@ async function ensureCsrfToken(force = false) {
       const payload = await parseResponse(response);
 
       if (!response.ok) {
-        throw new ApiError(response.status, "Could not prepare request security token", payload);
+        const message =
+          response.status === 429
+            ? "Too many security token requests. Please wait about a minute, then try again."
+            : "Could not prepare request security token";
+        throw new ApiError(response.status, message, payload);
       }
 
       csrfRequestToken =
@@ -221,6 +228,14 @@ async function ensureCsrfToken(force = false) {
     });
 
   return csrfPromise;
+}
+
+function isPotentialCsrfFailure(status: number, payload: unknown) {
+  if (status !== 400 && status !== 419) return false;
+  if (payload === null || payload === undefined || payload === "") return true;
+
+  const message = extractApiMessage(payload, status).toLowerCase();
+  return message.includes("csrf") || message.includes("xsrf") || message.includes("antiforgery");
 }
 
 function notifySessionRefresh(session: AuthSession | null) {
@@ -347,6 +362,15 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         skipAuthRefresh: true
       });
     }
+  }
+
+  if (isUnsafeMethod(upperMethod) && !options.skipCsrfRetry && isPotentialCsrfFailure(response.status, payload)) {
+    csrfRequestToken = "";
+    await ensureCsrfToken(true);
+    return request<T>(path, {
+      ...options,
+      skipCsrfRetry: true
+    });
   }
 
   if (!response.ok) {
@@ -861,15 +885,24 @@ export const api = {
     return request<Invoice[]>(`/api/Invoice/shipment/${shipmentId}`, { token });
   },
 
+  getInvoicePayments(token: string, invoiceId: string) {
+    return request<InvoicePayment[]>(`/api/Invoice/payments/${invoiceId}`, { token });
+  },
+
   createInvoice(token: string, shipmentId: string) {
     return request<Invoice>(`/api/Invoice/${shipmentId}`, { method: "POST", token });
   },
 
-  invoiceStatus(token: string, id: string, action: "mark-as-paid" | "mark-as-partially-paid" | "mark-as-refunded", price?: number) {
+  invoiceStatus(
+    token: string,
+    id: string,
+    action: "mark-as-paid" | "mark-as-partially-paid" | "mark-as-refunded",
+    payment?: InvoicePaymentRequest
+  ) {
     return request<Invoice>(`/api/Invoice/${id}/${action}`, {
       method: "PATCH",
       token,
-      body: action === "mark-as-partially-paid" && price !== undefined ? { Price: price } : {}
+      body: action === "mark-as-refunded" ? undefined : payment
     });
   },
 

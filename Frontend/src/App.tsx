@@ -1,8 +1,8 @@
 import { LockKeyhole, Settings } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { AppShell } from "./components/layout/AppShell";
 import { ProfilePreviewModal } from "./components/layout/ProfilePreviewModal";
-import { LoadingState, ToastHost } from "./components/ui";
+import { ConfirmDialog, LoadingState, ToastHost } from "./components/ui";
 import { THEME_KEY, PENDING_VERIFICATION_KEY } from "./constants/logistics";
 import {
   buildShipmentItemPayload,
@@ -34,6 +34,7 @@ import type {
   Customer,
   CustomerDraft,
   Invoice,
+  InvoicePaymentRequest,
   MarketAnalytics,
   PasswordDraft,
   Port,
@@ -59,7 +60,7 @@ import type {
   VerifyDraft,
   View
 } from "./types";
-import { getFriendlyErrorMessage, isNotFoundError, safe } from "./utils/errors";
+import { getFriendlyErrorMessage, isBackendUnavailableError, isNotFoundError, safe } from "./utils/errors";
 import { getLocalDateTime, isoToLocalDateTime, toIso } from "./utils/format";
 import { isValidId } from "./utils/ids";
 import { getAppPath, getAppPathname, toBrowserPath } from "./utils/navigation";
@@ -192,6 +193,34 @@ function getConfirmationSafePath(type: "registration-email" | "profile-email") {
   return type === "registration-email" ? "/confirm-email" : "/confirm-email-change";
 }
 
+const browserGuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function hasSensitiveUrlDetails(path: string) {
+  const confirmationLink = readConfirmationLink(path);
+  if (confirmationLink) return false;
+
+  const url = new URL(path, window.location.origin);
+  const pathname = getAppPathname(url.pathname);
+  const hasQuery = Array.from(url.searchParams.keys()).length > 0;
+  const hasRecordId = pathname
+    .split("/")
+    .filter(Boolean)
+    .some((segment) => browserGuidPattern.test(decodeURIComponent(segment)));
+
+  return hasQuery || hasRecordId;
+}
+
+type ActionConfirmationOptions = {
+  title?: string;
+  message?: string;
+  confirmLabel?: string;
+  tone?: "danger" | "default";
+};
+
+type PendingActionConfirmation = Required<ActionConfirmationOptions> & {
+  resolve: (confirmed: boolean) => void;
+};
+
 function CustomerRequiredView(props: { onGoToSettings: () => void }) {
   return (
     <div className="customer-lock-view">
@@ -255,9 +284,10 @@ function buildRateQuery(filters: RateBookFilterDraft): QueryParams {
 export default function App() {
   const [path, setPath] = useState(() => getAppPath());
   const pathname = getAppPathname(path);
-  const hasRecordIdInPath = /^\/rates\/[0-9a-f-]{36}$/i.test(pathname);
+  const hasSensitiveDetailsInPath = hasSensitiveUrlDetails(path);
   const [session, setSession] = useState<AuthSession | null>(() => loadStoredSession());
   const [restoringSession, setRestoringSession] = useState(true);
+  const [serverUnavailable, setServerUnavailable] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     return (localStorage.getItem(THEME_KEY) as "dark" | "light" | null) ?? "dark";
   });
@@ -267,6 +297,7 @@ export default function App() {
   const [data, setData] = useState<AppData>(initialData);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pendingActionConfirmation, setPendingActionConfirmation] = useState<PendingActionConfirmation | null>(null);
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [shipmentWorkflowStep, setShipmentWorkflowStep] = useState<"charges" | "invoice" | null>(null);
@@ -362,8 +393,9 @@ export default function App() {
 
   const navigate = useCallback((nextPath: string, options: { replace?: boolean; scroll?: boolean } = {}) => {
     const normalized = nextPath.startsWith("/") ? nextPath : `/${nextPath || ""}`;
-    if (getAppPath() !== normalized) {
-      const browserPath = toBrowserPath(normalized);
+    const safePath = hasSensitiveUrlDetails(normalized) ? "/" : normalized;
+    if (getAppPath() !== safePath) {
+      const browserPath = toBrowserPath(safePath);
       if (options.replace) {
         window.history.replaceState(null, "", browserPath);
       } else {
@@ -420,6 +452,32 @@ export default function App() {
       ? data.quotes
       : currentCustomer?.quotes ?? [];
 
+  const handleBackendUnavailable = useCallback(
+    (showToast = true) => {
+      loadSequenceRef.current += 1;
+      setServerUnavailable(true);
+      setSession(null);
+      persistSession(null);
+      setData(initialData);
+      setProfile(null);
+      setInvoices([]);
+      setWorkflowInvoice(null);
+      setShipmentWorkflowStep(null);
+      setItemUpdateReturnStep(null);
+      closeQuoteRequestDetails();
+      setProfilePreviewOpen(false);
+      setActiveView("overview");
+      setLoading(false);
+      setBusy(false);
+      workspace.clearShipmentContext();
+      navigate("/", { replace: true, scroll: false });
+      if (showToast) {
+        pushToast("info", "Server under development", "The backend is currently unavailable. The public landing page will stay available.");
+      }
+    },
+    [navigate, pushToast, workspace.clearShipmentContext]
+  );
+
   const loadData = useCallback(
     async (showNotice = false) => {
       if (!session?.accessToken) return;
@@ -435,6 +493,7 @@ export default function App() {
         try {
           return { preserve: false, value: await call() };
         } catch (error) {
+          if (isBackendUnavailableError(error)) throw error;
           if (isNotFoundError(error)) return { preserve: false, value: notFoundValue };
           preservedExistingData = true;
           return { preserve: true, value: undefined as T | undefined };
@@ -453,6 +512,7 @@ export default function App() {
 
         if (loadId !== loadSequenceRef.current) return;
 
+        setServerUnavailable(false);
         if (!profileResult.preserve) setProfile(profileResult.value ?? null);
 
         const currentCustomerResult = !isPrivileged
@@ -522,12 +582,17 @@ export default function App() {
           );
         }
       } catch (loadError) {
+        if (isBackendUnavailableError(loadError)) {
+          handleBackendUnavailable();
+          return;
+        }
         pushToast("error", "Could not refresh data", getFriendlyErrorMessage(loadError));
       } finally {
         if (loadId === loadSequenceRef.current) setLoading(false);
       }
     },
     [
+      handleBackendUnavailable,
       isPrivileged,
       pushToast,
       session?.accessToken,
@@ -536,6 +601,21 @@ export default function App() {
       workspace.setSelectedShipmentId
     ]
   );
+
+  useLayoutEffect(() => {
+    const currentPath = getAppPath();
+    const confirmationLink = readConfirmationLink(currentPath);
+
+    if (confirmationLink) {
+      window.history.replaceState(null, "", toBrowserPath(getConfirmationSafePath(confirmationLink.type)));
+      return;
+    }
+
+    if (hasSensitiveUrlDetails(currentPath)) {
+      window.history.replaceState(null, "", toBrowserPath("/"));
+      setPath(getAppPath());
+    }
+  }, []);
 
   useEffect(() => {
     const onPopState = () => setPath(getAppPath());
@@ -559,6 +639,7 @@ export default function App() {
         const nextSession = await resolveAuthenticatedSession(response);
         if (cancelled) return;
 
+        setServerUnavailable(false);
         setSession(nextSession);
         persistSession(nextSession);
         void api.prepareCsrfToken(true);
@@ -567,8 +648,12 @@ export default function App() {
         if (currentPathname.startsWith("/auth/")) {
           navigate("/", { replace: true, scroll: false });
         }
-      } catch {
+      } catch (error) {
         persistSession(null);
+        if (isBackendUnavailableError(error)) {
+          setServerUnavailable(true);
+          setSession(null);
+        }
       } finally {
         if (!cancelled) setRestoringSession(false);
       }
@@ -582,7 +667,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!hasRecordIdInPath) return;
+    if (!hasSensitiveDetailsInPath) return;
 
     navigate("/", { replace: true, scroll: false });
     pushToast(
@@ -590,7 +675,7 @@ export default function App() {
       "Protected link removed",
       "Open records from the workspace so internal identifiers stay out of the browser URL."
     );
-  }, [hasRecordIdInPath, navigate, pushToast]);
+  }, [hasSensitiveDetailsInPath, navigate, pushToast]);
 
   useEffect(() => {
     if (session) return;
@@ -598,15 +683,22 @@ export default function App() {
     let cancelled = false;
 
     async function loadAuthMetrics() {
-      const [publicRateCount, workflowStateCount] = await Promise.all([
-        safe(() => api.getPublicRateCount(), 0),
-        safe(() => api.getPublicShipmentCount(), 0)
+      const [publicRateCountResult, workflowStateCountResult] = await Promise.allSettled([
+        api.getPublicRateCount(),
+        api.getPublicShipmentCount()
       ]);
 
       if (!cancelled) {
+        const backendDown =
+          publicRateCountResult.status === "rejected" &&
+          workflowStateCountResult.status === "rejected" &&
+          isBackendUnavailableError(publicRateCountResult.reason) &&
+          isBackendUnavailableError(workflowStateCountResult.reason);
+
+        setServerUnavailable(backendDown);
         setAuthMetrics({
-          publicRateCount,
-          workflowStateCount
+          publicRateCount: publicRateCountResult.status === "fulfilled" ? publicRateCountResult.value : 0,
+          workflowStateCount: workflowStateCountResult.status === "fulfilled" ? workflowStateCountResult.value : 0
         });
       }
     }
@@ -617,6 +709,11 @@ export default function App() {
       cancelled = true;
     };
   }, [session]);
+
+  useEffect(() => {
+    if (!serverUnavailable || getAppPathname(path) === "/") return;
+    navigate("/", { replace: true, scroll: false });
+  }, [navigate, path, serverUnavailable]);
 
   useEffect(() => {
     function handleSessionRefresh(event: Event) {
@@ -863,6 +960,10 @@ export default function App() {
         const nextInvoices = await api.getInvoicesByShipment(token, selectedShipmentId);
         if (!cancelled) setInvoices(nextInvoices);
       } catch (error) {
+        if (!cancelled && isBackendUnavailableError(error)) {
+          handleBackendUnavailable();
+          return;
+        }
         if (!cancelled && isNotFoundError(error)) setInvoices([]);
       }
     })();
@@ -876,6 +977,7 @@ export default function App() {
     selectedShipmentId,
     session?.accessToken,
     shipmentWorkflowStep,
+    handleBackendUnavailable,
     workspace.timeline
   ]);
 
@@ -890,6 +992,23 @@ export default function App() {
     const shipmentValue = data.shipments.reduce((total, shipment) => total + shipment.agreedPrice, 0);
     return { activeRates, openShipments, quotedValue, shipmentValue };
   }, [data.quotes, data.rates, data.shipments]);
+
+  const requestActionConfirmation = useCallback((options: ActionConfirmationOptions = {}) => {
+    return new Promise<boolean>((resolve) => {
+      setPendingActionConfirmation({
+        title: options.title ?? "Confirm action",
+        message: options.message ?? "This request will update backend data. Continue?",
+        confirmLabel: options.confirmLabel ?? "OK",
+        tone: options.tone ?? "default",
+        resolve
+      });
+    });
+  }, []);
+
+  function settleActionConfirmation(confirmed: boolean) {
+    if (pendingActionConfirmation) pendingActionConfirmation.resolve(confirmed);
+    setPendingActionConfirmation(null);
+  }
 
   async function resolveAuthenticatedSession(response: AuthResponse) {
     const nextSession = sessionFromAuth(response);
@@ -907,11 +1026,25 @@ export default function App() {
   async function runMutation<T>(
     label: string,
     mutation: () => Promise<T>,
-    options: { refresh?: boolean; successToast?: boolean; successMessage?: string } = {}
+    options: { refresh?: boolean; successToast?: boolean; successMessage?: string; confirm?: boolean | ActionConfirmationOptions } = {}
   ): Promise<T | null> {
+    if (options.confirm !== false) {
+      const dangerousAction = /(delete|cancel|reject|revoke|refund|logout)/i.test(label);
+      const confirmationOptions = typeof options.confirm === "object" ? options.confirm : {};
+      const confirmed = await requestActionConfirmation({
+        title: confirmationOptions.title ?? "Confirm action",
+        message: confirmationOptions.message ?? "This request will be sent to the server and update live workspace data.",
+        confirmLabel: confirmationOptions.confirmLabel ?? "OK",
+        tone: confirmationOptions.tone ?? (dangerousAction ? "danger" : "default")
+      });
+
+      if (!confirmed) return null;
+    }
+
     setBusy(true);
     try {
       const result = await mutation();
+      setServerUnavailable(false);
       if (options.successToast !== false) {
         pushToast("success", label, options.successMessage ?? "The workspace has been updated successfully.");
       }
@@ -921,6 +1054,10 @@ export default function App() {
       }
       return result;
     } catch (mutationError) {
+      if (isBackendUnavailableError(mutationError)) {
+        handleBackendUnavailable();
+        return null;
+      }
       pushToast("error", `${label} failed`, getFriendlyErrorMessage(mutationError));
       return null;
     } finally {
@@ -1089,6 +1226,11 @@ export default function App() {
       pushToast(response.isAuthenticated ? "info" : "success", "Email verification request", response.message);
       return response;
     } catch (error) {
+      if (isBackendUnavailableError(error)) {
+        handleBackendUnavailable();
+        return null;
+      }
+
       if (isEmailConfirmationSentResponse(error)) {
         const message = getFriendlyErrorMessage(error);
         pushToast("success", "Email verification request", message);
@@ -1205,6 +1347,10 @@ export default function App() {
       navigate("/", { replace: true });
       pushToast("success", "Signed in", `Welcome back${nextSession.userName ? `, ${nextSession.userName}` : ""}.`);
     } catch (loginError) {
+      if (isBackendUnavailableError(loginError)) {
+        handleBackendUnavailable();
+        return;
+      }
       if (isUnconfirmedEmailResponse(loginError)) {
         await resumeEmailVerificationFromLogin(normalizedLoginForm.identity, loginError);
         return;
@@ -1238,6 +1384,10 @@ export default function App() {
       handleAuthModeChange("verify");
       setVerificationStep("email");
     } catch (registerError) {
+      if (isBackendUnavailableError(registerError)) {
+        handleBackendUnavailable();
+        return;
+      }
       if (isExistingRegistrationResponse(registerError)) {
         const resumed = await resumeExistingRegistration(normalizedForm, registerError);
         if (resumed) return;
@@ -1274,7 +1424,7 @@ export default function App() {
         }
         return response;
       },
-      { successToast: false, refresh: false }
+      { successToast: false, refresh: false, confirm: false }
     );
   }
 
@@ -1312,6 +1462,10 @@ export default function App() {
       setVerificationStep("phone");
       pushToast("success", "Email confirmed", "Enter the 6-digit code sent to your registered phone.");
     } catch (confirmationError) {
+      if (isBackendUnavailableError(confirmationError)) {
+        handleBackendUnavailable();
+        return;
+      }
       pushToast("error", "Email is not confirmed yet", getFriendlyErrorMessage(confirmationError));
     } finally {
       setBusy(false);
@@ -1332,7 +1486,7 @@ export default function App() {
         pushToast("success", "Phone verification code sent", response.message);
         return response;
       },
-      { successToast: false, refresh: false }
+      { successToast: false, refresh: false, confirm: false }
     );
   }
 
@@ -1369,6 +1523,10 @@ export default function App() {
       setVerifyDraft((current) => ({ ...current, email: identity, phoneCode: "" }));
       handleAuthModeChange("login");
     } catch (phoneError) {
+      if (isBackendUnavailableError(phoneError)) {
+        handleBackendUnavailable();
+        return;
+      }
       pushToast("error", "Phone verification failed", getFriendlyErrorMessage(phoneError));
     } finally {
       setBusy(false);
@@ -1399,7 +1557,7 @@ export default function App() {
 
   async function handleLogoutAll() {
     if (!session?.accessToken) return;
-    const result = await runMutation("Sessions revoked", () => api.logoutAll(session.accessToken), { refresh: false });
+    const result = await runMutation("Sessions revoked", () => api.logoutAll(session.accessToken), { refresh: false, confirm: false });
     if (result) await handleLogout();
   }
 
@@ -1417,6 +1575,10 @@ export default function App() {
       });
       setAnalytics(result);
     } catch (analyticsError) {
+      if (isBackendUnavailableError(analyticsError)) {
+        handleBackendUnavailable();
+        return;
+      }
       pushToast("error", "Market analytics failed", getFriendlyErrorMessage(analyticsError));
     } finally {
       setBusy(false);
@@ -1443,6 +1605,10 @@ export default function App() {
         pushToast("success", "Rate book filtered", "The rate book is now using the selected backend filters.");
       }
     } catch (error) {
+      if (isBackendUnavailableError(error)) {
+        handleBackendUnavailable();
+        return;
+      }
       if (isNotFoundError(error)) {
         setData((current) => ({ ...current, rates: [] }));
         pushToast("info", "No rates found", "No rates matched the selected filters.");
@@ -1498,6 +1664,10 @@ export default function App() {
         result.recommendations.length > 0 ? "Recommended rates are ready for review." : "No recommended rates matched this setup."
       );
     } catch (recommendationError) {
+      if (isBackendUnavailableError(recommendationError)) {
+        handleBackendUnavailable();
+        return;
+      }
       pushToast("error", "Recommendations failed", getFriendlyErrorMessage(recommendationError));
     } finally {
       setBusy(false);
@@ -1584,7 +1754,7 @@ export default function App() {
 
   function handleDeleteRate(id: string) {
     if (!session?.accessToken) return;
-    void runMutation("Rate deleted", () => api.deleteRate(session.accessToken, id));
+    void runMutation("Rate deleted", () => api.deleteRate(session.accessToken, id), { confirm: false });
   }
 
   function handleToggleRate(id: string) {
@@ -1649,7 +1819,7 @@ export default function App() {
 
   function handleDeleteQuote(id: string) {
     if (!session?.accessToken) return;
-    void runMutation("Quote deleted", () => api.deleteQuote(session.accessToken, id));
+    void runMutation("Quote deleted", () => api.deleteQuote(session.accessToken, id), { confirm: false });
   }
 
   function handleAcceptQuote(id: string) {
@@ -1685,6 +1855,10 @@ export default function App() {
         quoteRequests: [detail, ...current.quoteRequests.filter((request) => request.id !== detail.id)]
       }));
     } catch (error) {
+      if (isBackendUnavailableError(error)) {
+        handleBackendUnavailable();
+        return;
+      }
       setQuoteRequestDetailError(getFriendlyErrorMessage(error));
     } finally {
       setQuoteRequestDetailLoading(false);
@@ -1745,6 +1919,10 @@ export default function App() {
       setData((current) => ({ ...current, quotes }));
       pushToast("success", "Quotes loaded", "Customer quote lookup has been applied.");
     } catch (error) {
+      if (isBackendUnavailableError(error)) {
+        handleBackendUnavailable();
+        return;
+      }
       if (isNotFoundError(error)) {
         setData((current) => ({ ...current, quotes: [] }));
         pushToast("info", "No quotes found", "No quotes were found for this customer.");
@@ -1764,6 +1942,10 @@ export default function App() {
       setData((current) => ({ ...current, quotes }));
       pushToast("success", "Quotes loaded", "Route quote lookup has been applied.");
     } catch (error) {
+      if (isBackendUnavailableError(error)) {
+        handleBackendUnavailable();
+        return;
+      }
       if (isNotFoundError(error)) {
         setData((current) => ({ ...current, quotes: [] }));
         pushToast("info", "No quotes found", "No quotes were found for this route.");
@@ -1814,7 +1996,8 @@ export default function App() {
   async function handleShipmentAction(action: string) {
     if (!session?.accessToken || !selectedShipment) return null;
     const result = await runMutation("Shipment updated", () =>
-      api.shipmentAction(session.accessToken, selectedShipment.id, action, actionReason.trim() || undefined)
+      api.shipmentAction(session.accessToken, selectedShipment.id, action, actionReason.trim() || undefined),
+      { confirm: false }
     );
     if (result) setActionReason("");
     return result;
@@ -1840,7 +2023,7 @@ export default function App() {
 
   function handleDeleteShipment(id: string) {
     if (!session?.accessToken) return;
-    void runMutation("Shipment deleted", () => api.deleteShipment(session.accessToken, id));
+    void runMutation("Shipment deleted", () => api.deleteShipment(session.accessToken, id), { confirm: false });
   }
 
   async function handleSaveShipmentItem(event: FormEvent) {
@@ -1926,6 +2109,10 @@ export default function App() {
       const nextInvoices = await api.getInvoicesByShipment(session.accessToken, selectedShipment.id);
       setInvoices(nextInvoices);
     } catch (error) {
+      if (isBackendUnavailableError(error)) {
+        handleBackendUnavailable();
+        return;
+      }
       const message = getFriendlyErrorMessage(error);
       if (isNotFoundError(error) || message.toLowerCase().includes("invoice not found")) {
         setInvoices([]);
@@ -1944,7 +2131,15 @@ export default function App() {
     const generatedCharges = await runMutation(
       "Charges generated",
       () => api.generateCharges(session.accessToken, selectedShipment.id),
-      { refresh: false, successToast: false }
+      {
+        refresh: false,
+        successToast: false,
+        confirm: {
+          title: "Confirm billing action",
+          message: "Charges will be generated from the selected shipment and linked to the invoice workflow.",
+          confirmLabel: "OK"
+        }
+      }
     );
 
     if (!generatedCharges) return;
@@ -1961,7 +2156,7 @@ export default function App() {
     const draftInvoice = await runMutation(
       "Draft invoice created",
       () => api.createInvoice(session.accessToken, selectedShipment.id),
-      { refresh: false, successToast: false }
+      { refresh: false, successToast: false, confirm: false }
     );
 
     if (!draftInvoice) return;
@@ -2031,6 +2226,10 @@ export default function App() {
 
       pushToast("info", "Cargo items needed", "Add at least one cargo item before continuing the invoice cycle.");
     } catch (error) {
+      if (isBackendUnavailableError(error)) {
+        handleBackendUnavailable();
+        return;
+      }
       pushToast("error", "Could not continue invoice", getFriendlyErrorMessage(error));
     } finally {
       setBusy(false);
@@ -2044,7 +2243,15 @@ export default function App() {
     const createdInvoice = await runMutation(
       "Draft invoice created",
       () => api.createInvoice(session.accessToken, selectedShipment.id),
-      { refresh: false, successToast: false }
+      {
+        refresh: false,
+        successToast: false,
+        confirm: {
+          title: "Create draft invoice",
+          message: "A draft invoice will be created or updated for the selected shipment.",
+          confirmLabel: "OK"
+        }
+      }
     );
 
     if (createdInvoice) {
@@ -2055,10 +2262,10 @@ export default function App() {
     }
   }
 
-  function handleInvoiceStatus(id: string, action: "mark-as-paid" | "mark-as-partially-paid" | "mark-as-refunded", price?: number) {
+  function handleInvoiceStatus(id: string, action: "mark-as-paid" | "mark-as-partially-paid" | "mark-as-refunded", payment?: InvoicePaymentRequest) {
     if (!session?.accessToken) return;
     void (async () => {
-      const updated = await runMutation("Invoice updated", () => api.invoiceStatus(session.accessToken, id, action, price), {
+      const updated = await runMutation("Invoice updated", () => api.invoiceStatus(session.accessToken, id, action, payment), {
         refresh: false
       });
       if (updated) {
@@ -2071,9 +2278,21 @@ export default function App() {
   function handleConfirmInvoice(id: string) {
     if (!session?.accessToken) return;
     void (async () => {
-      setBusy(true);
-      try {
-        const updated = await api.confirmInvoice(session.accessToken, id);
+      const updated = await runMutation(
+        "Invoice confirmed",
+        () => api.confirmInvoice(session.accessToken, id),
+        {
+          refresh: false,
+          successToast: false,
+          confirm: {
+            title: "Confirm invoice",
+            message: "The draft invoice will move to payment pending and become payable.",
+            confirmLabel: "OK"
+          }
+        }
+      );
+
+      if (updated) {
         setInvoices((current) => [updated, ...current.filter((invoice) => invoice.id !== updated.id)]);
         setWorkflowInvoice(null);
         setShipmentWorkflowStep(null);
@@ -2082,30 +2301,27 @@ export default function App() {
           try {
             const nextInvoices = await api.getInvoicesByShipment(session.accessToken, selectedShipment.id);
             setInvoices(nextInvoices);
-          } catch {
+          } catch (error) {
+            if (isBackendUnavailableError(error)) {
+              handleBackendUnavailable();
+              return;
+            }
             setInvoices((current) => [updated, ...current.filter((invoice) => invoice.id !== updated.id)]);
           }
 
           try {
             await workspace.loadShipmentRelated(selectedShipment.id);
-          } catch {
+          } catch (error) {
+            if (isBackendUnavailableError(error)) {
+              handleBackendUnavailable();
+              return;
+            }
             // Keep the payment handoff moving even if related shipment data refresh lags.
           }
         }
 
         setActiveView("finance");
         pushToast("success", "Invoice confirmed", "The invoice is ready for payment.");
-      } catch (error) {
-        const isMissingConfirmEndpoint = isNotFoundError(error);
-        pushToast(
-          "error",
-          isMissingConfirmEndpoint ? "Invoice confirm endpoint is missing" : "Invoice confirm failed",
-          isMissingConfirmEndpoint
-            ? "The backend has InvoiceService.ConfirmAsync, but InvoiceController does not expose PATCH /api/Invoice/{id}/confirm yet."
-            : getFriendlyErrorMessage(error)
-        );
-      } finally {
-        setBusy(false);
       }
     })();
   }
@@ -2114,7 +2330,8 @@ export default function App() {
     if (!session?.accessToken) return;
     void (async () => {
       const updated = await runMutation("Invoice cancelled", () => api.cancelInvoice(session.accessToken, id, reason), {
-        refresh: false
+        refresh: false,
+        confirm: false
       });
       if (updated) setInvoices((current) => current.map((invoice) => (invoice.id === updated.id ? updated : invoice)));
     })();
@@ -2124,7 +2341,8 @@ export default function App() {
     if (!session?.accessToken) return;
     void (async () => {
       const deleted = await runMutation("Invoice deleted", () => api.deleteInvoice(session.accessToken, id), {
-        refresh: false
+        refresh: false,
+        confirm: false
       });
       if (deleted) setInvoices((current) => current.filter((invoice) => invoice.id !== id));
     })();
@@ -2144,7 +2362,7 @@ export default function App() {
 
   function handleDeleteDocument(id: string) {
     if (!session?.accessToken) return;
-    void runMutation("Document deleted", () => api.deleteDocument(session.accessToken, id));
+    void runMutation("Document deleted", () => api.deleteDocument(session.accessToken, id), { confirm: false });
   }
 
   async function handleUpdateProfile(event: FormEvent) {
@@ -2262,7 +2480,7 @@ export default function App() {
       setData((current) => ({ ...current, currentCustomer: undefined }));
       setProfile((current) => (current ? { ...current, customer: undefined } : current));
       return result;
-    });
+    }, { confirm: false });
   }
 
   function handleCreateCarrier(body: { name: string; code: string }) {
@@ -2277,7 +2495,7 @@ export default function App() {
 
   function handleDeleteCarrier(id: string) {
     if (!session?.accessToken) return;
-    void runMutation("Carrier deleted", () => api.deleteCarrier(session.accessToken, id));
+    void runMutation("Carrier deleted", () => api.deleteCarrier(session.accessToken, id), { confirm: false });
   }
 
   function handleCreatePort(body: { name: string; code: string; country: string }) {
@@ -2292,7 +2510,7 @@ export default function App() {
 
   function handleDeletePort(id: string) {
     if (!session?.accessToken) return;
-    void runMutation("Port deleted", () => api.deletePort(session.accessToken, id));
+    void runMutation("Port deleted", () => api.deletePort(session.accessToken, id), { confirm: false });
   }
 
   function handleCreateRoute(body: { fromPortId: string; toPortId: string }) {
@@ -2307,7 +2525,7 @@ export default function App() {
 
   function handleDeleteRoute(id: string) {
     if (!session?.accessToken) return;
-    void runMutation("Route deleted", () => api.deleteRoute(session.accessToken, id));
+    void runMutation("Route deleted", () => api.deleteRoute(session.accessToken, id), { confirm: false });
   }
 
   function handleCreateContainerType(body: { name: string }) {
@@ -2322,7 +2540,7 @@ export default function App() {
 
   function handleDeleteContainerType(id: string) {
     if (!session?.accessToken) return;
-    void runMutation("Container type deleted", () => api.deleteContainerType(session.accessToken, id));
+    void runMutation("Container type deleted", () => api.deleteContainerType(session.accessToken, id), { confirm: false });
   }
 
   async function handleFilterPortsByCountry(country: string) {
@@ -2333,6 +2551,10 @@ export default function App() {
       setData((current) => ({ ...current, ports }));
       pushToast("success", "Ports loaded", "Country lookup has been applied.");
     } catch (error) {
+      if (isBackendUnavailableError(error)) {
+        handleBackendUnavailable();
+        return;
+      }
       if (isNotFoundError(error)) {
         setData((current) => ({ ...current, ports: [] }));
         pushToast("info", "No ports found", "No ports were found for this country.");
@@ -2355,6 +2577,10 @@ export default function App() {
       setData((current) => ({ ...current, routes }));
       pushToast("success", "Routes loaded", "Port route lookup has been applied.");
     } catch (error) {
+      if (isBackendUnavailableError(error)) {
+        handleBackendUnavailable();
+        return;
+      }
       if (isNotFoundError(error)) {
         setData((current) => ({ ...current, routes: [] }));
         pushToast("info", "No routes found", "No routes were found for this port.");
@@ -2633,6 +2859,19 @@ export default function App() {
     );
   }
 
+  const actionConfirmationDialog = (
+    <ConfirmDialog
+      open={Boolean(pendingActionConfirmation)}
+      title={pendingActionConfirmation?.title ?? "Confirm action"}
+      message={pendingActionConfirmation?.message ?? "This request will update backend data. Continue?"}
+      confirmLabel={pendingActionConfirmation?.confirmLabel ?? "OK"}
+      tone={pendingActionConfirmation?.tone ?? "default"}
+      busy={busy}
+      onClose={() => settleActionConfirmation(false)}
+      onConfirm={() => settleActionConfirmation(true)}
+    />
+  );
+
   if (restoringSession && !session) {
     return (
       <>
@@ -2655,11 +2894,12 @@ export default function App() {
   if (!session) {
     const lowerPathname = pathname.toLowerCase();
     const showAuth =
-      lowerPathname === "/auth/login" ||
-      lowerPathname === "/auth/register" ||
-      lowerPathname === "/auth/verify" ||
-      lowerPathname === "/confirm-email" ||
-      lowerPathname === "/confirm-email-change";
+      !serverUnavailable &&
+      (lowerPathname === "/auth/login" ||
+        lowerPathname === "/auth/register" ||
+        lowerPathname === "/auth/verify" ||
+        lowerPathname === "/confirm-email" ||
+        lowerPathname === "/confirm-email-change");
 
     return (
       <>
@@ -2694,16 +2934,20 @@ export default function App() {
           <PublicLandingPage
             theme={theme}
             onToggleTheme={handleToggleTheme}
+            serverUnavailable={serverUnavailable}
             onSignIn={() => {
+              if (serverUnavailable) return;
               setAuthMode("login");
               navigate("/auth/login");
             }}
             onGetStarted={() => {
+              if (serverUnavailable) return;
               setAuthMode("register");
               navigate("/auth/register");
             }}
           />
         )}
+        {actionConfirmationDialog}
         <ToastHost toasts={toasts} onDismiss={dismissToast} />
       </>
     );
@@ -2742,6 +2986,7 @@ export default function App() {
           selectWorkspaceView("account");
         }}
       />
+      {actionConfirmationDialog}
       <ToastHost toasts={toasts} onDismiss={dismissToast} />
     </>
   );

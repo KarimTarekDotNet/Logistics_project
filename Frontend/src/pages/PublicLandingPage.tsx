@@ -12,6 +12,7 @@ import {
   Network,
   ReceiptText,
   Route,
+  ServerCog,
   ShieldCheck,
   Ship,
   Sun,
@@ -34,8 +35,8 @@ const modules = [
 const navSections = [
   { id: "platform", label: "Platform" },
   { id: "workflow", label: "Workflow" },
-  { id: "security", label: "Security" },
-  { id: "modules", label: "Modules" }
+  { id: "modules", label: "Modules" },
+  { id: "security", label: "Security" }
 ];
 
 const workflow = [
@@ -61,9 +62,11 @@ export function PublicLandingPage(props: {
   onGetStarted: () => void;
   theme: "light" | "dark";
   onToggleTheme: () => void;
+  serverUnavailable?: boolean;
 }) {
   const [activeSection, setActiveSection] = useState("platform");
   const currentYear = new Date().getFullYear();
+  const authDisabled = Boolean(props.serverUnavailable);
 
   useEffect(() => {
     const sections = navSections
@@ -108,15 +111,25 @@ export function PublicLandingPage(props: {
           <button className="landing-nav-theme" type="button" onClick={props.onToggleTheme} aria-label="Toggle theme" title="Toggle theme">
             {props.theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
           </button>
-          <button className="ghost-button" type="button" onClick={props.onSignIn}>
+          <button className="ghost-button" type="button" onClick={props.onSignIn} disabled={authDisabled}>
             Sign in
           </button>
-          <button className="primary-button compact" type="button" onClick={props.onGetStarted}>
+          <button className="primary-button compact" type="button" onClick={props.onGetStarted} disabled={authDisabled}>
             Get started
             <ArrowRight size={16} />
           </button>
         </div>
       </nav>
+
+      {props.serverUnavailable && (
+        <section className="server-status-banner" role="status" aria-live="polite">
+          <ServerCog size={22} />
+          <div>
+            <strong>Server currently under development</strong>
+            <span>The public site is available, but protected workspace actions are paused until the backend is online.</span>
+          </div>
+        </section>
+      )}
 
       <section className="landing-hero" id="top">
         <div className="landing-hero-copy">
@@ -127,10 +140,10 @@ export function PublicLandingPage(props: {
             forwarders, logistics teams, admins, staff, customers, and automation-ready operations.
           </p>
           <div className="landing-hero-actions">
-            <button className="primary-button" type="button" onClick={props.onSignIn}>
+            <button className="primary-button" type="button" onClick={props.onSignIn} disabled={authDisabled}>
               Sign in
             </button>
-            <button className="secondary-button" type="button" onClick={props.onGetStarted}>
+            <button className="secondary-button" type="button" onClick={props.onGetStarted} disabled={authDisabled}>
               Create account
               <ArrowRight size={17} />
             </button>
@@ -342,10 +355,10 @@ export function PublicLandingPage(props: {
         <span className="landing-kicker">Move forwarding work into one system</span>
         <h2>Start with a protected portal. Scale into connected logistics operations.</h2>
         <div className="landing-hero-actions">
-          <button className="primary-button" type="button" onClick={props.onSignIn}>
+          <button className="primary-button" type="button" onClick={props.onSignIn} disabled={authDisabled}>
             Sign in
           </button>
-          <button className="secondary-button" type="button" onClick={props.onGetStarted}>
+          <button className="secondary-button" type="button" onClick={props.onGetStarted} disabled={authDisabled}>
             Get started
           </button>
         </div>

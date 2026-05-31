@@ -1,9 +1,19 @@
-  import { Banknote, CreditCard, FileText, Landmark, Plus, ReceiptText, Trash2, WalletCards } from "lucide-react";
+import { Banknote, CreditCard, FileText, Landmark, Plus, ReceiptText, RotateCcw, Trash2, WalletCards } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { ConfirmDialog, EmptyState, Field, PanelTitle, SectionHeader, StatusBadge } from "../components/ui";
 import { ShipmentContextPanel } from "../features/shipments/ShipmentContextPanel";
-import type { Invoice, Shipment, ShipmentCharge } from "../types";
+import type { Invoice, InvoicePaymentRequest, PaymentMethod, Shipment, ShipmentCharge } from "../types";
 import { formatDate, formatMoney } from "../utils/format";
+
+type InvoiceStatusAction = "mark-as-paid" | "mark-as-partially-paid" | "mark-as-refunded";
+
+const paymentMethodOptions: Array<{ value: PaymentMethod; label: string }> = [
+  { value: 0, label: "Cash" },
+  { value: 1, label: "Bank transfer" },
+  { value: 2, label: "Credit card" },
+  { value: 3, label: "Wallet" },
+  { value: 4, label: "Fawry" }
+];
 
 export function FinancePage(props: {
   selectedShipment?: Shipment;
@@ -14,7 +24,7 @@ export function FinancePage(props: {
   busy: boolean;
   onCreateInvoice: (event: FormEvent) => void;
   onLoadInvoices: () => void;
-  onInvoiceStatus: (id: string, action: "mark-as-paid" | "mark-as-partially-paid" | "mark-as-refunded", price?: number) => void;
+  onInvoiceStatus: (id: string, action: InvoiceStatusAction, payment?: InvoicePaymentRequest) => void;
   onCancelInvoice: (id: string, reason: string) => void;
   onDeleteInvoice: (id: string) => void;
 }) {
@@ -32,6 +42,8 @@ export function FinancePage(props: {
     onDeleteInvoice
   } = props;
   const [partialAmounts, setPartialAmounts] = useState<Record<string, string>>({});
+  const [paymentMethods, setPaymentMethods] = useState<Record<string, PaymentMethod>>({});
+  const [paymentReferences, setPaymentReferences] = useState<Record<string, string>>({});
   const [deleteInvoiceId, setDeleteInvoiceId] = useState<string | null>(null);
   const [cancelInvoiceId, setCancelInvoiceId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("Cancelled from operations console");
@@ -59,6 +71,19 @@ export function FinancePage(props: {
     return status.replace(/\s+/g, "").toLowerCase();
   }
 
+  function buildManualPayment(invoice: Invoice, amount: number): InvoicePaymentRequest {
+    const referenceNumber = paymentReferences[invoice.id]?.trim().slice(0, 80);
+
+    return {
+      amount: Number(amount.toFixed(2)),
+      currency: invoice.currency,
+      paymentMethod: paymentMethods[invoice.id] ?? 0,
+      paymentProvider: 0,
+      status: 1,
+      ...(referenceNumber ? { referenceNumber } : {})
+    };
+  }
+
   const invoiceCurrency = invoices[0]?.currency ?? selectedShipment?.currency ?? "USD";
   const invoiceSummary = invoices.reduce(
     (summary, invoice) => {
@@ -69,15 +94,20 @@ export function FinancePage(props: {
         total: summary.total + balance.total,
         paid: summary.paid + (status === "paid" ? balance.total : balance.paidPart),
         remaining: summary.remaining + balance.remaining,
-        actionable: summary.actionable + (status === "pending" || status === "partiallypaid" ? 1 : 0)
+        actionable: summary.actionable + (status === "pending" || status === "partiallypaid" ? 1 : 0),
+        drafts: summary.drafts + (status === "draft" ? 1 : 0),
+        settled: summary.settled + (status === "paid" ? 1 : 0),
+        exceptions: summary.exceptions + (status === "cancelled" || status === "refunded" ? 1 : 0)
       };
     },
-    { total: 0, paid: 0, remaining: 0, actionable: 0 }
+    { total: 0, paid: 0, remaining: 0, actionable: 0, drafts: 0, settled: 0, exceptions: 0 }
   );
+  const collectionRatio = invoiceSummary.total > 0 ? Math.round((invoiceSummary.paid / invoiceSummary.total) * 100) : 0;
+  const chargeCoverageRatio = chargeTotal > 0 ? Math.min(100, Math.round((invoiceSummary.total / chargeTotal) * 100)) : 0;
 
   return (
     <div className="view-stack">
-      <SectionHeader icon={<WalletCards size={22} />} title="Finance" meta={selectedShipment ? `Shipment finance` : "No shipment"} />
+      <SectionHeader icon={<WalletCards size={22} />} title="Finance" meta={selectedShipment ? "Shipment finance" : "No shipment"} />
 
       {selectedShipment ? (
         <>
@@ -90,186 +120,259 @@ export function FinancePage(props: {
           />
 
           <section className="panel finance-invoices-panel">
-              <div className="panel-title-row">
-                <PanelTitle icon={<FileText size={18} />} title="Invoices" />
-                <button className="mini-button" type="button" onClick={onLoadInvoices} disabled={busy}>
-                  Load
+            <div className="panel-title-row">
+              <PanelTitle icon={<FileText size={18} />} title="Invoices" />
+              <button className="mini-button" type="button" onClick={onLoadInvoices} disabled={busy}>
+                Load
+              </button>
+            </div>
+
+            <div className="payment-overview-grid">
+              <div>
+                <span>Total invoices</span>
+                <strong>{formatMoney(invoiceSummary.total, invoiceCurrency)}</strong>
+              </div>
+              <div>
+                <span>Collected</span>
+                <strong>{formatMoney(invoiceSummary.paid, invoiceCurrency)}</strong>
+              </div>
+              <div>
+                <span>Outstanding</span>
+                <strong>{formatMoney(invoiceSummary.remaining, invoiceCurrency)}</strong>
+              </div>
+              <div>
+                <span>Payable</span>
+                <strong>{invoiceSummary.actionable}</strong>
+              </div>
+            </div>
+
+            <div className="finance-signal-grid">
+              <div>
+                <span>Collection health</span>
+                <strong>{collectionRatio}%</strong>
+                <small>Paid value against issued invoices</small>
+                <div className="signal-meter" aria-hidden="true">
+                  <i style={{ width: `${collectionRatio}%` }} />
+                </div>
+              </div>
+              <div>
+                <span>Charge coverage</span>
+                <strong>{chargeCoverageRatio}%</strong>
+                <small>Invoice value against loaded charges</small>
+                <div className="signal-meter" aria-hidden="true">
+                  <i style={{ width: `${chargeCoverageRatio}%` }} />
+                </div>
+              </div>
+              <div>
+                <span>Control queue</span>
+                <strong>{invoiceSummary.drafts + invoiceSummary.actionable}</strong>
+                <small>{invoiceSummary.drafts} drafts / {invoiceSummary.actionable} payment actions</small>
+              </div>
+              <div>
+                <span>Exceptions</span>
+                <strong>{invoiceSummary.exceptions}</strong>
+                <small>Cancelled or refunded invoices</small>
+              </div>
+            </div>
+
+            {isPrivileged && (
+              <form className="form-stack" onSubmit={onCreateInvoice}>
+                <div className="invoice-draft-summary">
+                  <span>{charges.length > 0 ? "Ready to draft" : "No billing lines"}</span>
+                  <strong>{formatMoney(chargeTotal, selectedShipment.currency)}</strong>
+                </div>
+                <button className="primary-button compact" type="submit" disabled={busy || charges.length === 0}>
+                  <Plus size={17} />
+                  Create draft invoice
                 </button>
-              </div>
-              <div className="payment-overview-grid">
-                <div>
-                  <span>Total invoices</span>
-                  <strong>{formatMoney(invoiceSummary.total, invoiceCurrency)}</strong>
-                </div>
-                <div>
-                  <span>Collected</span>
-                  <strong>{formatMoney(invoiceSummary.paid, invoiceCurrency)}</strong>
-                </div>
-                <div>
-                  <span>Outstanding</span>
-                  <strong>{formatMoney(invoiceSummary.remaining, invoiceCurrency)}</strong>
-                </div>
-                <div>
-                  <span>Payable</span>
-                  <strong>{invoiceSummary.actionable}</strong>
-                </div>
-              </div>
-              {isPrivileged && (
-                <form className="form-stack" onSubmit={onCreateInvoice}>
-                  <div className="invoice-draft-summary">
-                    <span>{charges.length > 0 ? "Ready to draft" : "No billing lines"}</span>
-                    <strong>{formatMoney(chargeTotal, selectedShipment.currency)}</strong>
-                  </div>
-                  <button className="primary-button compact" type="submit" disabled={busy || charges.length === 0}>
-                    <Plus size={17} />
-                    Create draft invoice
-                  </button>
-                </form>
-              )}
+              </form>
+            )}
 
-              <div className="compact-list invoice-list">
-                {invoices.map((invoice) => {
-                  const balance = resolveInvoiceBalance(invoice);
-                  const status = normalizePaymentStatus(invoice.paymentStatus);
-                  const isDraft = status === "draft";
-                  const isPending = status === "pending";
-                  const isCancelled = status === "cancelled";
-                  const isRefunded = status === "refunded";
-                  const isPaid = status === "paid";
-                  const isPartiallyPaid = status === "partiallypaid";
-                  const canPay = (isPending || isPartiallyPaid) && !isPaid && !isCancelled && !isRefunded;
-                  const canPartialPay = isPrivileged && canPay && balance.remaining > 0;
-                  const canRefund = isPrivileged && isPending && !isCancelled && !isRefunded;
-                  const canCancel = (isDraft || isPending) && !isPaid && !isPartiallyPaid && !isCancelled && !isRefunded;
-                  const paymentLabel = isPaid
-                    ? "Settled"
-                    : isPartiallyPaid
-                      ? "Part paid"
-                      : isDraft
-                        ? "Draft"
-                        : isCancelled
-                          ? "Cancelled"
-                          : isRefunded
-                            ? "Refunded"
-                            : "Payment due";
+            <div className="compact-list invoice-list">
+              {invoices.map((invoice) => {
+                const balance = resolveInvoiceBalance(invoice);
+                const status = normalizePaymentStatus(invoice.paymentStatus);
+                const isDraft = status === "draft";
+                const isPending = status === "pending";
+                const isCancelled = status === "cancelled";
+                const isRefunded = status === "refunded";
+                const isPaid = status === "paid";
+                const isPartiallyPaid = status === "partiallypaid";
+                const canPay = isPrivileged && (isPending || isPartiallyPaid) && !isPaid && !isCancelled && !isRefunded && balance.remaining > 0;
+                const canPartialPay = canPay;
+                const canRefund = isPrivileged && (isPaid || isPartiallyPaid) && !isCancelled && !isRefunded;
+                const canCancel = (isDraft || isPending) && !isPaid && !isPartiallyPaid && !isCancelled && !isRefunded;
+                const fullPayAmount = balance.remaining > 0 ? balance.remaining : balance.total;
+                const currentPartialAmount = Number(partialAmounts[invoice.id] ?? "");
+                const paymentLabel = isPaid
+                  ? "Settled"
+                  : isPartiallyPaid
+                    ? "Part paid"
+                    : isDraft
+                      ? "Draft"
+                      : isCancelled
+                        ? "Cancelled"
+                        : isRefunded
+                          ? "Refunded"
+                          : "Payment due";
 
-                  return (
-                    <div className="invoice-row payment-card" key={invoice.id}>
-                      <div className="invoice-card-head">
-                        <div className="invoice-title-block">
-                          <span className="invoice-kicker">
-                            <ReceiptText size={14} />
-                            Invoice
-                          </span>
-                          <strong>{invoice.invoiceNumber}</strong>
-                          <small>
-                            Issued {formatDate(invoice.issuedAt)} - Due {formatDate(invoice.dueDate)}
-                          </small>
-                        </div>
-                        <div className="invoice-status-stack">
-                          <StatusBadge status={invoice.paymentStatus} />
-                          <span className="payment-state">{paymentLabel}</span>
-                        </div>
-                      </div>
-
-                      <div className="payment-summary-grid">
-                        <div>
-                          <span>Total</span>
-                          <strong>{formatMoney(balance.total, invoice.currency)}</strong>
-                        </div>
-                        <div>
-                          <span>Paid</span>
-                          <strong>{formatMoney(isPaid ? balance.total : balance.paidPart, invoice.currency)}</strong>
-                        </div>
-                        <div>
-                          <span>Remaining</span>
-                          <strong>{formatMoney(balance.remaining, invoice.currency)}</strong>
-                        </div>
-                        <div>
-                          <span>Payer</span>
-                          <strong>{invoice.payerType || "Customer"}</strong>
-                        </div>
-                      </div>
-
-                      <div className="payment-method-strip">
-                        <span>
-                          <CreditCard size={14} />
-                          Gateway
+                return (
+                  <div className="invoice-row payment-card" key={invoice.id}>
+                    <div className="invoice-card-head">
+                      <div className="invoice-title-block">
+                        <span className="invoice-kicker">
+                          <ReceiptText size={14} />
+                          Invoice
                         </span>
-                        <span>
-                          <Banknote size={14} />
-                          Cash
-                        </span>
-                        <span>
-                          <Landmark size={14} />
-                          Bank transfer
-                        </span>
+                        <strong>{invoice.invoiceNumber}</strong>
+                        <small>
+                          Issued {formatDate(invoice.issuedAt)} - Due {formatDate(invoice.dueDate)}
+                        </small>
                       </div>
-
-                      <div className="invoice-actions payment-actions">
-                        <div className="invoice-balance">
-                          <span>{formatMoney(balance.remaining, invoice.currency)}</span>
-                          {balance.hasPartialPayment && (
-                            <small>
-                              Remaining after {formatMoney(balance.paidPart, invoice.currency)} paid
-                            </small>
-                          )}
-                        </div>
-                        <button className="mini-button" type="button" onClick={() => onInvoiceStatus(invoice.id, "mark-as-paid")} disabled={busy || !canPay}>
-                          Paid
-                        </button>
-                        {canPartialPay && (
-                          <>
-                            <div className="partial-pay-row">
-                              <input
-                                type="number"
-                                min="0.01"
-                                max={balance.remaining || undefined}
-                                step="0.01"
-                                placeholder="Amount"
-                                className="mini-input"
-                                value={partialAmounts[invoice.id] ?? ""}
-                                onChange={(event) => setPartialAmounts((current) => ({ ...current, [invoice.id]: event.target.value }))}
-                              />
-                              <button
-                                className="mini-button"
-                                type="button"
-                                disabled={
-                                  !partialAmounts[invoice.id] ||
-                                  Number(partialAmounts[invoice.id]) <= 0 ||
-                                  Number(partialAmounts[invoice.id]) > balance.remaining
-                                }
-                                onClick={() => {
-                                  const price = Number(partialAmounts[invoice.id]);
-                                  if (!price || price <= 0 || price > balance.remaining) return;
-                                  onInvoiceStatus(invoice.id, "mark-as-partially-paid", price);
-                                  setPartialAmounts((current) => ({ ...current, [invoice.id]: "" }));
-                                }}
-                              >
-                                Partial
-                              </button>
-                            </div>
-                          </>
-                        )}
-                        {isPrivileged && (
-                          <button className="mini-button" type="button" onClick={() => onInvoiceStatus(invoice.id, "mark-as-refunded")} disabled={busy || !canRefund}>
-                            Refund
-                          </button>
-                        )}
-                        <button className="mini-button danger" type="button" onClick={() => setCancelInvoiceId(invoice.id)} disabled={busy || !canCancel}>
-                          Cancel
-                        </button>
-                        {isAdmin && (
-                          <button className="icon-mini danger" type="button" onClick={() => setDeleteInvoiceId(invoice.id)} title="Delete invoice">
-                            <Trash2 size={14} />
-                          </button>
-                        )}
+                      <div className="invoice-status-stack">
+                        <StatusBadge status={invoice.paymentStatus} />
+                        <span className="payment-state">{paymentLabel}</span>
                       </div>
                     </div>
-                  );
-                })}
-                {invoices.length === 0 && <EmptyState icon={<FileText size={24} />} title="No invoices loaded" description="Load shipment invoices or create one when billing lines are ready." />}
-              </div>
+
+                    <div className="payment-summary-grid">
+                      <div>
+                        <span>Total</span>
+                        <strong>{formatMoney(balance.total, invoice.currency)}</strong>
+                      </div>
+                      <div>
+                        <span>Paid</span>
+                        <strong>{formatMoney(isPaid ? balance.total : balance.paidPart, invoice.currency)}</strong>
+                      </div>
+                      <div>
+                        <span>Remaining</span>
+                        <strong>{formatMoney(balance.remaining, invoice.currency)}</strong>
+                      </div>
+                      <div>
+                        <span>Payer</span>
+                        <strong>{invoice.payerType || "Customer"}</strong>
+                      </div>
+                    </div>
+
+                    <div className="payment-method-strip">
+                      <span>
+                        <CreditCard size={14} />
+                        Manual provider
+                      </span>
+                      <span>
+                        <Banknote size={14} />
+                        Cash supported
+                      </span>
+                      <span>
+                        <Landmark size={14} />
+                        Bank transfer
+                      </span>
+                    </div>
+
+                    {canPay && (
+                      <div className="payment-capture-panel">
+                        <label>
+                          <span>Method</span>
+                          <select
+                            value={paymentMethods[invoice.id] ?? 0}
+                            onChange={(event) =>
+                              setPaymentMethods((current) => ({
+                                ...current,
+                                [invoice.id]: Number(event.target.value) as PaymentMethod
+                              }))
+                            }
+                            disabled={busy}
+                          >
+                            {paymentMethodOptions.map((method) => (
+                              <option value={method.value} key={method.value}>
+                                {method.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          <span>Reference</span>
+                          <input
+                            value={paymentReferences[invoice.id] ?? ""}
+                            onChange={(event) =>
+                              setPaymentReferences((current) => ({
+                                ...current,
+                                [invoice.id]: event.target.value.slice(0, 80)
+                              }))
+                            }
+                            placeholder="Optional manual reference"
+                            disabled={busy}
+                          />
+                        </label>
+                      </div>
+                    )}
+
+                    <div className="invoice-actions payment-actions">
+                      <div className="invoice-balance">
+                        <span>{formatMoney(balance.remaining, invoice.currency)}</span>
+                        {balance.hasPartialPayment && (
+                          <small>
+                            Remaining after {formatMoney(balance.paidPart, invoice.currency)} paid
+                          </small>
+                        )}
+                      </div>
+                      {isPrivileged && (
+                        <button
+                          className="mini-button"
+                          type="button"
+                          onClick={() => onInvoiceStatus(invoice.id, "mark-as-paid", buildManualPayment(invoice, fullPayAmount))}
+                          disabled={busy || !canPay}
+                        >
+                          Mark paid
+                        </button>
+                      )}
+                      {canPartialPay && (
+                        <div className="partial-pay-row">
+                          <input
+                            type="number"
+                            min="0.01"
+                            max={balance.remaining || undefined}
+                            step="0.01"
+                            placeholder="Amount"
+                            className="mini-input"
+                            value={partialAmounts[invoice.id] ?? ""}
+                            onChange={(event) => setPartialAmounts((current) => ({ ...current, [invoice.id]: event.target.value }))}
+                            disabled={busy}
+                          />
+                          <button
+                            className="mini-button"
+                            type="button"
+                            disabled={busy || !currentPartialAmount || currentPartialAmount <= 0 || currentPartialAmount > balance.remaining}
+                            onClick={() => {
+                              if (!currentPartialAmount || currentPartialAmount <= 0 || currentPartialAmount > balance.remaining) return;
+                              onInvoiceStatus(invoice.id, "mark-as-partially-paid", buildManualPayment(invoice, currentPartialAmount));
+                              setPartialAmounts((current) => ({ ...current, [invoice.id]: "" }));
+                            }}
+                          >
+                            Partial
+                          </button>
+                        </div>
+                      )}
+                      {isPrivileged && (
+                        <button className="mini-button" type="button" onClick={() => onInvoiceStatus(invoice.id, "mark-as-refunded")} disabled={busy || !canRefund}>
+                          <RotateCcw size={14} />
+                          Refund
+                        </button>
+                      )}
+                      <button className="mini-button danger" type="button" onClick={() => setCancelInvoiceId(invoice.id)} disabled={busy || !canCancel}>
+                        Cancel
+                      </button>
+                      {isAdmin && (
+                        <button className="icon-mini danger" type="button" onClick={() => setDeleteInvoiceId(invoice.id)} title="Delete invoice" disabled={busy}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {invoices.length === 0 && <EmptyState icon={<FileText size={24} />} title="No invoices loaded" description="Load shipment invoices or create one when billing lines are ready." />}
+            </div>
           </section>
         </>
       ) : (
@@ -294,7 +397,7 @@ export function FinancePage(props: {
       <ConfirmDialog
         open={Boolean(cancelInvoiceId)}
         title="Cancel invoice"
-        message={cancelReason}
+        message="Write the operational reason that will be saved with this invoice cancellation."
         confirmLabel="Cancel invoice"
         tone="danger"
         busy={busy}
@@ -304,14 +407,11 @@ export function FinancePage(props: {
           onCancelInvoice(cancelInvoiceId, cancelReason);
           setCancelInvoiceId(null);
         }}
-      />
-      {cancelInvoiceId && (
-        <div className="floating-reason">
-          <Field label="Cancellation reason">
-            <input value={cancelReason} onChange={(event) => setCancelReason(event.target.value.slice(0, 300))} maxLength={300} />
-          </Field>
-        </div>
-      )}
+      >
+        <Field label="Cancellation reason">
+          <input value={cancelReason} onChange={(event) => setCancelReason(event.target.value.slice(0, 300))} maxLength={300} />
+        </Field>
+      </ConfirmDialog>
     </div>
   );
 }

@@ -2300,6 +2300,62 @@ tbody tr:hover {
   color: var(--accent);
 }
 
+.finance-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.finance-signal-grid>div {
+  min-width: 0;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.finance-signal-grid span,
+.payment-capture-panel span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.finance-signal-grid strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  margin-bottom: 2px;
+}
+
+.finance-signal-grid small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.signal-meter {
+  height: 6px;
+  margin-top: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+
+.signal-meter i {
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--success));
+  border-radius: inherit;
+}
+
 .payment-method-strip {
   display: flex;
   flex-wrap: wrap;
@@ -2324,6 +2380,37 @@ tbody tr:hover {
 .payment-method-strip svg {
   color: var(--accent);
   flex-shrink: 0;
+}
+
+.payment-capture-panel {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.6fr) minmax(180px, 1fr);
+  gap: 10px;
+  padding: 12px;
+  background: rgba(137, 206, 255, 0.045);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.payment-capture-panel label {
+  min-width: 0;
+}
+
+.payment-capture-panel select,
+.payment-capture-panel input {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.payment-capture-panel select:focus,
+.payment-capture-panel input:focus {
+  border-color: var(--accent);
 }
 
 .invoice-actions {
@@ -2389,7 +2476,8 @@ tbody tr:hover {
 
 @media (max-width: 900px) {
   .payment-overview-grid,
-  .payment-summary-grid {
+  .payment-summary-grid,
+  .finance-signal-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -2404,7 +2492,9 @@ tbody tr:hover {
   }
 
   .payment-overview-grid,
-  .payment-summary-grid {
+  .payment-summary-grid,
+  .finance-signal-grid,
+  .payment-capture-panel {
     grid-template-columns: 1fr;
   }
 
@@ -4559,8 +4649,8 @@ tbody td {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(1, 8, 16, 0.48);
+  backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
   z-index: 100;
@@ -4578,6 +4668,7 @@ tbody td {
 }
 
 .confirm-dialog {
+  position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -4589,6 +4680,33 @@ tbody td {
   gap: 16px;
   box-shadow: var(--shadow-lg);
   animation: dialogSlideIn 0.25s ease-out;
+}
+
+.dialog-close-button {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.dialog-close-button:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.dialog-close-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 @keyframes dialogSlideIn {
@@ -4627,6 +4745,11 @@ tbody td {
   font-size: 0.88rem;
   color: var(--text-secondary);
   line-height: 1.6;
+}
+
+.dialog-extra {
+  display: grid;
+  gap: 10px;
 }
 
 .dialog-actions {
@@ -4813,8 +4936,17 @@ tbody td {
   color: var(--text-secondary);
 }
 
+.ghost-button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
 :root.light .ghost-button:hover {
   color: var(--danger);
+}
+
+.ghost-button:disabled:hover {
+  color: var(--text-muted);
 }
 
 :root.light .primary-button {
@@ -4877,7 +5009,9 @@ tbody td {
 
 :root.light .payment-overview-grid>div,
 :root.light .payment-summary-grid>div,
-:root.light .payment-method-strip span {
+:root.light .payment-method-strip span,
+:root.light .finance-signal-grid>div,
+:root.light .payment-capture-panel {
   background: #f7f9fd;
   border-color: #dce4f0;
 }
@@ -5067,6 +5201,39 @@ html {
 }
 
 /* ── Landing Kicker ── */
+.server-status-banner {
+  max-width: 1180px;
+  margin: 18px auto 0;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-primary);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: var(--radius-md);
+}
+
+.server-status-banner svg {
+  color: var(--warning);
+  flex-shrink: 0;
+}
+
+.server-status-banner strong,
+.server-status-banner span {
+  display: block;
+}
+
+.server-status-banner strong {
+  font-size: 0.92rem;
+}
+
+.server-status-banner span {
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
 .landing-kicker {
   display: inline-block;
   font-family: var(--font-mono);

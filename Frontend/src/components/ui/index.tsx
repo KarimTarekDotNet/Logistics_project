@@ -135,8 +135,10 @@ export function ConfirmDialog(props: {
   title: string;
   message: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   tone?: "danger" | "default";
   busy?: boolean;
+  children?: ReactNode;
   onConfirm: () => void;
   onClose: () => void;
 }) {
@@ -145,6 +147,9 @@ export function ConfirmDialog(props: {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={props.onClose}>
       <section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" onMouseDown={(event) => event.stopPropagation()}>
+        <button type="button" className="dialog-close-button" onClick={props.onClose} disabled={props.busy} aria-label="Close confirmation">
+          <X size={16} />
+        </button>
         <div className={`confirm-icon ${props.tone === "danger" ? "danger" : ""}`}>
           <AlertTriangle size={22} />
         </div>
@@ -152,12 +157,13 @@ export function ConfirmDialog(props: {
           <h2 id="confirm-title">{props.title}</h2>
           <p>{props.message}</p>
         </div>
+        {props.children && <div className="dialog-extra">{props.children}</div>}
         <div className="dialog-actions">
           <button type="button" className="secondary-button" onClick={props.onClose} disabled={props.busy}>
-            Keep
+            {props.cancelLabel ?? "Cancel"}
           </button>
           <button type="button" className={props.tone === "danger" ? "danger-button" : "primary-button"} onClick={props.onConfirm} disabled={props.busy}>
-            {props.confirmLabel ?? "Confirm"}
+            {props.confirmLabel ?? "OK"}
           </button>
         </div>
       </section>
