@@ -1,7 +1,8 @@
 import { ArrowLeft, CheckCircle2, CircleDollarSign, ExternalLink, Moon, Send, ShieldCheck, Sun, Weight } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { BrandLogo } from "../components/brand/BrandLogo";
-import { EmptyState, Field, LoadingState, MetricLine, PanelTitle, StatusBadge } from "../components/ui";
+import { ConfirmDialog, EmptyState, Field, LoadingState, MetricLine, PanelTitle, StatusBadge } from "../components/ui";
+import { ACTION_CONFIRM_LABEL, ACTION_CONFIRM_MESSAGE } from "../constants/actionConfirmation";
 import { BRAND_NAME } from "../constants/brand";
 import { api } from "../services/api";
 import type { AuthSession, QuoteRequest, QuoteRequestDraft, Rate } from "../types";
@@ -43,6 +44,13 @@ function leaveDetailPage() {
   window.location.assign(toBrowserPath("/"));
 }
 
+type ActionConfirmationOptions = {
+  title?: string;
+  message?: string;
+  confirmLabel?: string;
+  tone?: "danger" | "default";
+};
+
 export function RateDetailsPage(props: {
   rateId: string;
   session: AuthSession;
@@ -55,6 +63,7 @@ export function RateDetailsPage(props: {
   onBack?: () => void;
   onCreateCustomerProfile?: () => void;
   onRequestCreated?: (request: QuoteRequest) => void;
+  onConfirmAction?: (options?: ActionConfirmationOptions) => Promise<boolean>;
 }) {
   const isEmbedded = Boolean(props.embedded);
   const [rate, setRate] = useState<Rate | null>(() => props.initialRate ?? null);
@@ -63,6 +72,7 @@ export function RateDetailsPage(props: {
   const [loading, setLoading] = useState(() => !props.initialRate);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [localConfirmResolve, setLocalConfirmResolve] = useState<((confirmed: boolean) => void) | null>(null);
 
   useEffect(() => {
     setDraft((current) => ({ ...current, rateId: props.rateId }));
@@ -124,6 +134,15 @@ export function RateDetailsPage(props: {
     return null;
   }, [draft, rate]);
 
+  function requestLocalConfirmation() {
+    return new Promise<boolean>((resolve) => setLocalConfirmResolve(() => resolve));
+  }
+
+  function settleLocalConfirmation(confirmed: boolean) {
+    localConfirmResolve?.(confirmed);
+    setLocalConfirmResolve(null);
+  }
+
   async function submitQuoteRequest(event: FormEvent) {
     event.preventDefault();
     if (!canRequestQuote) {
@@ -138,6 +157,15 @@ export function RateDetailsPage(props: {
     const requiredTemperatureCelsius = optionalNumber(draft.requiredTemperatureCelsius);
 
     if (!requestedGrossWeightKg || !requestedNetWeightKg || !requestedVolumeCbm) return;
+
+    const confirmed = props.onConfirmAction
+      ? await props.onConfirmAction({
+          title: "Request quote",
+          message: ACTION_CONFIRM_MESSAGE,
+          confirmLabel: ACTION_CONFIRM_LABEL
+        })
+      : await requestLocalConfirmation();
+    if (!confirmed) return;
 
     setBusy(true);
     setError(null);
@@ -382,6 +410,16 @@ export function RateDetailsPage(props: {
           </section>
         </section>
       )}
+
+      <ConfirmDialog
+        open={Boolean(localConfirmResolve)}
+        title="Request quote"
+        message={ACTION_CONFIRM_MESSAGE}
+        confirmLabel={ACTION_CONFIRM_LABEL}
+        busy={busy}
+        onClose={() => settleLocalConfirmation(false)}
+        onConfirm={() => settleLocalConfirmation(true)}
+      />
     </section>
   );
 }

@@ -14,10 +14,37 @@ export function OverviewPage(props: {
   const { stats, shipments, rates, quotes, loading, onSelectShipment } = props;
   const urgentShipments = shipments.filter((shipment) => ["PaymentPending", "OnHold", "BookingRequested"].includes(shipment.status)).slice(0, 5);
   const highestRate = Math.max(0, ...rates.map((rate) => rate.price));
+  const liveShipments = shipments.filter((shipment) => !["Closed", "Cancelled", "Delivered"].includes(shipment.status)).length;
 
   return (
     <div className="view-stack">
       <SectionHeader icon={<LayoutDashboard size={22} />} title="Operations Overview" meta={loading ? "Syncing live workspace" : "Live workspace"} />
+
+      <section className="workspace-hero overview-hero">
+        <div className="workspace-hero-copy">
+          <span className="hero-kicker">Control tower</span>
+          <h2>Every commercial, operational, and finance signal starts from the same live desk.</h2>
+          <p>Scan shipment pressure, rate capacity, quote value, and attention queues before moving into the detailed workspaces.</p>
+        </div>
+        <div className="hero-metric-strip">
+          <div>
+            <span>Live files</span>
+            <strong>{liveShipments}</strong>
+          </div>
+          <div>
+            <span>Urgent</span>
+            <strong>{urgentShipments.length}</strong>
+          </div>
+          <div>
+            <span>Rates</span>
+            <strong>{rates.length}</strong>
+          </div>
+          <div>
+            <span>Highest rate</span>
+            <strong>{formatMoney(highestRate)}</strong>
+          </div>
+        </div>
+      </section>
 
       <div className="stat-grid">
         <StatCard icon={<Activity size={20} />} label="Open shipments" value={stats.openShipments} tone="blue" />

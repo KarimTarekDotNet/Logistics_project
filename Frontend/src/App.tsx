@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { AppShell } from "./components/layout/AppShell";
 import { ProfilePreviewModal } from "./components/layout/ProfilePreviewModal";
 import { ConfirmDialog, LoadingState, ToastHost } from "./components/ui";
+import { ACTION_CONFIRM_LABEL, ACTION_CONFIRM_MESSAGE, ACTION_CONFIRM_TITLE } from "./constants/actionConfirmation";
 import { THEME_KEY, PENDING_VERIFICATION_KEY } from "./constants/logistics";
 import {
   buildShipmentItemPayload,
@@ -996,9 +997,9 @@ export default function App() {
   const requestActionConfirmation = useCallback((options: ActionConfirmationOptions = {}) => {
     return new Promise<boolean>((resolve) => {
       setPendingActionConfirmation({
-        title: options.title ?? "Confirm action",
-        message: options.message ?? "This request will update backend data. Continue?",
-        confirmLabel: options.confirmLabel ?? "OK",
+        title: options.title ?? ACTION_CONFIRM_TITLE,
+        message: options.message ?? ACTION_CONFIRM_MESSAGE,
+        confirmLabel: options.confirmLabel ?? ACTION_CONFIRM_LABEL,
         tone: options.tone ?? "default",
         resolve
       });
@@ -1032,9 +1033,9 @@ export default function App() {
       const dangerousAction = /(delete|cancel|reject|revoke|refund|logout)/i.test(label);
       const confirmationOptions = typeof options.confirm === "object" ? options.confirm : {};
       const confirmed = await requestActionConfirmation({
-        title: confirmationOptions.title ?? "Confirm action",
-        message: confirmationOptions.message ?? "This request will be sent to the server and update live workspace data.",
-        confirmLabel: confirmationOptions.confirmLabel ?? "OK",
+        title: confirmationOptions.title ?? ACTION_CONFIRM_TITLE,
+        message: confirmationOptions.message ?? ACTION_CONFIRM_MESSAGE,
+        confirmLabel: confirmationOptions.confirmLabel ?? ACTION_CONFIRM_LABEL,
         tone: confirmationOptions.tone ?? (dangerousAction ? "danger" : "default")
       });
 
@@ -2136,8 +2137,8 @@ export default function App() {
         successToast: false,
         confirm: {
           title: "Confirm billing action",
-          message: "Charges will be generated from the selected shipment and linked to the invoice workflow.",
-          confirmLabel: "OK"
+          message: ACTION_CONFIRM_MESSAGE,
+          confirmLabel: ACTION_CONFIRM_LABEL
         }
       }
     );
@@ -2248,8 +2249,8 @@ export default function App() {
         successToast: false,
         confirm: {
           title: "Create draft invoice",
-          message: "A draft invoice will be created or updated for the selected shipment.",
-          confirmLabel: "OK"
+          message: ACTION_CONFIRM_MESSAGE,
+          confirmLabel: ACTION_CONFIRM_LABEL
         }
       }
     );
@@ -2286,8 +2287,8 @@ export default function App() {
           successToast: false,
           confirm: {
             title: "Confirm invoice",
-            message: "The draft invoice will move to payment pending and become payable.",
-            confirmLabel: "OK"
+            message: ACTION_CONFIRM_MESSAGE,
+            confirmLabel: ACTION_CONFIRM_LABEL
           }
         }
       );
@@ -2645,6 +2646,7 @@ export default function App() {
             setData((current) => ({ ...current, quoteRequests: [request, ...current.quoteRequests] }));
             pushToast("success", "Quote request submitted", "Your request is under review. We will email you as soon as it is approved or rejected.");
           }}
+          onConfirmAction={requestActionConfirmation}
           hasCustomerProfile={Boolean(currentCustomer)}
           onCreateCustomerProfile={() => selectWorkspaceView("account")}
         />
@@ -2727,6 +2729,7 @@ export default function App() {
             setData((current) => ({ ...current, quoteRequests: [request, ...current.quoteRequests] }));
             pushToast("success", "Quote request submitted", "Your request is under review. We will email you as soon as it is approved or rejected.");
           }}
+          onConfirmAction={requestActionConfirmation}
           hasCustomerProfile={Boolean(currentCustomer)}
           onCreateCustomerProfile={() => selectWorkspaceView("account")}
         />
@@ -2862,9 +2865,9 @@ export default function App() {
   const actionConfirmationDialog = (
     <ConfirmDialog
       open={Boolean(pendingActionConfirmation)}
-      title={pendingActionConfirmation?.title ?? "Confirm action"}
-      message={pendingActionConfirmation?.message ?? "This request will update backend data. Continue?"}
-      confirmLabel={pendingActionConfirmation?.confirmLabel ?? "OK"}
+      title={pendingActionConfirmation?.title ?? ACTION_CONFIRM_TITLE}
+      message={pendingActionConfirmation?.message ?? ACTION_CONFIRM_MESSAGE}
+      confirmLabel={pendingActionConfirmation?.confirmLabel ?? ACTION_CONFIRM_LABEL}
       tone={pendingActionConfirmation?.tone ?? "default"}
       busy={busy}
       onClose={() => settleActionConfirmation(false)}

@@ -1,6 +1,7 @@
 import { Banknote, CreditCard, FileText, Landmark, Plus, ReceiptText, RotateCcw, Trash2, WalletCards } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { ConfirmDialog, EmptyState, Field, PanelTitle, SectionHeader, StatusBadge } from "../components/ui";
+import { ACTION_CONFIRM_LABEL, ACTION_CONFIRM_MESSAGE } from "../constants/actionConfirmation";
 import { ShipmentContextPanel } from "../features/shipments/ShipmentContextPanel";
 import type { Invoice, InvoicePaymentRequest, PaymentMethod, Shipment, ShipmentCharge } from "../types";
 import { formatDate, formatMoney } from "../utils/format";
@@ -111,6 +112,32 @@ export function FinancePage(props: {
 
       {selectedShipment ? (
         <>
+          <section className="workspace-hero finance-hero">
+            <div className="workspace-hero-copy">
+              <span className="hero-kicker">Finance control</span>
+              <h2>Turn operational charges into invoices, payments, refunds, and clear collection signals.</h2>
+              <p>Finance stays attached to the shipment context so billing decisions do not happen away from cargo, documents, or milestones.</p>
+            </div>
+            <div className="hero-metric-strip">
+              <div>
+                <span>Invoices</span>
+                <strong>{invoices.length}</strong>
+              </div>
+              <div>
+                <span>Drafts</span>
+                <strong>{invoiceSummary.drafts}</strong>
+              </div>
+              <div>
+                <span>Outstanding</span>
+                <strong>{formatMoney(invoiceSummary.remaining, invoiceCurrency)}</strong>
+              </div>
+              <div>
+                <span>Collection</span>
+                <strong>{collectionRatio}%</strong>
+              </div>
+            </div>
+          </section>
+
           <ShipmentContextPanel
             shipment={selectedShipment}
             extra={[
@@ -382,8 +409,8 @@ export function FinancePage(props: {
       <ConfirmDialog
         open={Boolean(deleteInvoiceId)}
         title="Delete invoice"
-        message="This admin-only action removes the invoice record."
-        confirmLabel="Delete invoice"
+        message={ACTION_CONFIRM_MESSAGE}
+        confirmLabel={ACTION_CONFIRM_LABEL}
         tone="danger"
         busy={busy}
         onClose={() => setDeleteInvoiceId(null)}
@@ -397,8 +424,8 @@ export function FinancePage(props: {
       <ConfirmDialog
         open={Boolean(cancelInvoiceId)}
         title="Cancel invoice"
-        message="Write the operational reason that will be saved with this invoice cancellation."
-        confirmLabel="Cancel invoice"
+        message={ACTION_CONFIRM_MESSAGE}
+        confirmLabel={ACTION_CONFIRM_LABEL}
         tone="danger"
         busy={busy}
         onClose={() => setCancelInvoiceId(null)}

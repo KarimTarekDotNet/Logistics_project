@@ -20,6 +20,28 @@ export function ChargeGenerationPage(props: {
 
       {selectedShipment ? (
         <>
+          <section className="workspace-hero workflow-hero">
+            <div className="workspace-hero-copy">
+              <span className="hero-kicker">Billing step 1</span>
+              <h2>Generate charge lines from the confirmed cargo profile before drafting the invoice.</h2>
+              <p>Use this focused step when cargo is ready and finance needs clean charge visibility before invoice review.</p>
+            </div>
+            <div className="hero-metric-strip">
+              <div>
+                <span>Charges</span>
+                <strong>{charges.length}</strong>
+              </div>
+              <div>
+                <span>Total</span>
+                <strong>{formatMoney(chargeTotal, selectedShipment.currency)}</strong>
+              </div>
+              <div>
+                <span>Status</span>
+                <strong>{selectedShipment.status}</strong>
+              </div>
+            </div>
+          </section>
+
           <ShipmentContextPanel
             shipment={selectedShipment}
             extra={[

@@ -1,6 +1,7 @@
 import { Box, Building2, Database, MapPin, Pencil, Plus, RouteIcon, Search, Trash2 } from "lucide-react";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { ConfirmDialog, EmptyState, EntityActions, Field, PanelTitle, SectionHeader } from "../components/ui";
+import { ACTION_CONFIRM_LABEL, ACTION_CONFIRM_MESSAGE } from "../constants/actionConfirmation";
 import type { Carrier, ContainerType, Port, Route } from "../types";
 import { includesSearch } from "../utils/search";
 
@@ -61,6 +62,7 @@ export function MasterDataPage(props: {
   const routeFromPortId = routeDraft.fromPortId || props.ports[0]?.id || "";
   const routeToPortId = routeDraft.toPortId || props.ports.find((port) => port.id !== routeFromPortId)?.id || "";
   const canSubmitRoute = Boolean(routeFromPortId && routeToPortId && routeFromPortId !== routeToPortId);
+  const masterDataTotal = props.carriers.length + props.ports.length + props.routes.length + props.containerTypes.length;
 
   function submitCarrier(event: FormEvent) {
     event.preventDefault();
@@ -129,6 +131,32 @@ export function MasterDataPage(props: {
   return (
     <div className="view-stack">
       <SectionHeader icon={<Database size={22} />} title="Master Data" meta="Network, equipment, and carrier setup" />
+
+      <section className="workspace-hero masterdata-hero">
+        <div className="workspace-hero-copy">
+          <span className="hero-kicker">Data control</span>
+          <h2>Govern carriers, ports, routes, and containers before they reach pricing and operations.</h2>
+          <p>The page is organized as a compact command center with focused tabs, quick lookups, and admin-only deletion control.</p>
+        </div>
+        <div className="hero-metric-strip">
+          <div>
+            <span>Total records</span>
+            <strong>{masterDataTotal}</strong>
+          </div>
+          <div>
+            <span>Carriers</span>
+            <strong>{props.carriers.length}</strong>
+          </div>
+          <div>
+            <span>Ports</span>
+            <strong>{props.ports.length}</strong>
+          </div>
+          <div>
+            <span>Routes</span>
+            <strong>{props.routes.length}</strong>
+          </div>
+        </div>
+      </section>
 
       <section className="panel">
         <div className="toolbar master-toolbar">
@@ -340,8 +368,8 @@ export function MasterDataPage(props: {
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         title="Delete master data"
-        message="This action is restricted to admins and can affect future pricing setup."
-        confirmLabel="Delete"
+        message={ACTION_CONFIRM_MESSAGE}
+        confirmLabel={ACTION_CONFIRM_LABEL}
         tone="danger"
         busy={props.busy}
         onClose={() => setDeleteTarget(null)}

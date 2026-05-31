@@ -1,6 +1,7 @@
 import { BarChart3, Box, CheckCircle2, CircleDollarSign, Eye, Pencil, Plus, RotateCcw, Search, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ConfirmDialog, EmptyState, EntityActions, Field, MetricLine, PanelTitle, SectionHeader, StatusBadge } from "../components/ui";
+import { ACTION_CONFIRM_LABEL, ACTION_CONFIRM_MESSAGE } from "../constants/actionConfirmation";
 import { RateDetailsPage } from "./RateDetailsPage";
 import type { AuthSession, Carrier, ContainerType, MarketAnalytics, QuoteRequest, Rate, RateBookFilterDraft, RateDraft, RateRecommendationDraft, RateRecommendationResponse, RecommendationPriority, Route } from "../types";
 import { formatMoney, formatShortDate, isoToLocalDateTime } from "../utils/format";
@@ -86,6 +87,7 @@ export function PricingPage(props: {
   onLoadRecommendations: (event: FormEvent) => void;
   onToggleTheme: () => void;
   onRateRequestCreated: (request: QuoteRequest) => void;
+  onConfirmAction: (options?: { title?: string; message?: string; confirmLabel?: string; tone?: "danger" | "default" }) => Promise<boolean>;
   hasCustomerProfile: boolean;
   onCreateCustomerProfile: () => void;
 }) {
@@ -119,6 +121,7 @@ export function PricingPage(props: {
     onLoadRecommendations,
     onToggleTheme,
     onRateRequestCreated,
+    onConfirmAction,
     hasCustomerProfile,
     onCreateCustomerProfile
   } = props;
@@ -160,6 +163,9 @@ export function PricingPage(props: {
     return Array.from({ length: 5 }, (_, index) => start + index);
   }, [currentPage]);
   const selectedRate = useMemo(() => rates.find((rate) => rate.id === selectedRateId) ?? null, [rates, selectedRateId]);
+  const activeRateCount = rates.filter((rate) => rate.isActive).length;
+  const averageRate = rates.length > 0 ? rates.reduce((total, rate) => total + rate.price, 0) / rates.length : 0;
+  const laneCount = new Set(rates.map((rate) => rate.routeId)).size;
 
   function applyFilterDraft(nextDraft: RateBookFilterDraft) {
     setFilterDraft(nextDraft);
@@ -168,7 +174,7 @@ export function PricingPage(props: {
 
   function openRateDetails(rateId: string) {
     setSelectedRateId(rateId);
-    window.setTimeout(() => document.getElementById("rate-details-inline")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+    window.setTimeout(() => document.getElementById("pricing-rate-details")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
   }
 
   async function submitEdit(event: FormEvent) {
@@ -185,9 +191,49 @@ export function PricingPage(props: {
     <div className="view-stack">
       <SectionHeader icon={<CircleDollarSign size={22} />} title="Pricing" meta={`${rates.length} rate cards`} />
 
+      <section className="workspace-hero pricing-hero">
+        <div className="workspace-hero-copy">
+          <span className="hero-kicker">Pricing command</span>
+          <h2>Rate intelligence, quote requests, and market decisions in one clean pricing floor.</h2>
+          <p>Use the focused lanes below to create rates, review analytics, open live rate cards, and send customer quote requests without crowding one giant screen.</p>
+        </div>
+        <div className="hero-metric-strip">
+          <div>
+            <span>Active rates</span>
+            <strong>{activeRateCount}</strong>
+          </div>
+          <div>
+            <span>Lanes</span>
+            <strong>{laneCount}</strong>
+          </div>
+          <div>
+            <span>Average rate</span>
+            <strong>{averageRate ? formatMoney(averageRate, rates[0]?.currency) : "Pending"}</strong>
+          </div>
+          <div>
+            <span>Requests</span>
+            <strong>{isUser ? "Enabled" : "Review desk"}</strong>
+          </div>
+        </div>
+      </section>
+
+      <div className="section-anchor-nav" aria-label="Pricing sections">
+        {[
+          ["pricing-rate-book", "Rate book"],
+          ["pricing-analytics", "Analytics"],
+          ["pricing-recommendations", "Recommendations"],
+          ...(isPrivileged ? [["pricing-rate-editor", "Rate editor"]] : []),
+          ["pricing-rate-details", "Rate details"]
+        ].map(([id, label]) => (
+          <button type="button" key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="two-column pricing-top">
         {isPrivileged && (
-          <section className="panel">
+          <section className="panel" id="pricing-rate-editor">
             <PanelTitle icon={<Plus size={18} />} title={editingRate ? "Edit rate" : "New rate"} />
             <form className="rate-form" onSubmit={editingRate ? submitEdit : onCreateRate}>
               <Field label="Carrier">
@@ -394,7 +440,7 @@ export function PricingPage(props: {
           </section>
         )}
 
-        <section className="panel">
+        <section className="panel" id="pricing-analytics">
           <PanelTitle icon={<BarChart3 size={18} />} title="Market analytics" />
           <form className="form-stack" onSubmit={onLoadAnalytics}>
             <div className="form-grid">
@@ -447,7 +493,7 @@ export function PricingPage(props: {
           )}
         </section>
 
-        <section className="panel recommendation-panel">
+        <section className="panel recommendation-panel" id="pricing-recommendations">
           <PanelTitle
             icon={<Sparkles size={18} />}
             title="Rate recommendations"
@@ -579,7 +625,7 @@ export function PricingPage(props: {
       </div>
 
       {selectedRateId && (
-        <div id="rate-details-inline" className="inline-rate-details">
+        <div id="pricing-rate-details" className="inline-rate-details">
           <RateDetailsPage
             rateId={selectedRateId}
             session={session}
@@ -592,11 +638,12 @@ export function PricingPage(props: {
             onBack={() => setSelectedRateId(null)}
             onCreateCustomerProfile={onCreateCustomerProfile}
             onRequestCreated={onRateRequestCreated}
+            onConfirmAction={onConfirmAction}
           />
         </div>
       )}
 
-      <section className="panel">
+      <section className="panel" id="pricing-rate-book">
         <PanelTitle icon={<Box size={18} />} title="Rate book" meta={`${rates.length} shown`} />
         <form
           className="rate-filter-panel"
@@ -830,8 +877,8 @@ export function PricingPage(props: {
       <ConfirmDialog
         open={Boolean(deleteId)}
         title="Delete rate"
-        message="This removes the rate card from the pricing engine. Existing quotes remain unchanged."
-        confirmLabel="Delete rate"
+        message={ACTION_CONFIRM_MESSAGE}
+        confirmLabel={ACTION_CONFIRM_LABEL}
         tone="danger"
         busy={busy}
         onClose={() => setDeleteId(null)}

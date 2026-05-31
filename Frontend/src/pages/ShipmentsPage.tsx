@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { ConfirmDialog, EmptyState, Field, PanelTitle, SectionHeader, StatusBadge } from "../components/ui";
+import { ACTION_CONFIRM_LABEL, ACTION_CONFIRM_MESSAGE } from "../constants/actionConfirmation";
 import type { Quote, Shipment, ShipmentHistory, ShipmentItem, ShipmentItemDraft, TimelineItem, TrackingDraft } from "../types";
 import { ShipmentContextPanel } from "../features/shipments/ShipmentContextPanel";
 import { canModifyShipmentItems, estimateChargeableWeight } from "../features/shipments/shipmentItems";
@@ -155,7 +156,7 @@ export function ShipmentsPage(props: {
   } = props;
   const [quotePickerOpen, setQuotePickerOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ action: string; dangerous?: boolean } | null>(null);
   const [deleteShipmentId, setDeleteShipmentId] = useState<string | null>(null);
   const actions = selectedShipment ? lifecycleByStatus[selectedShipment.status] ?? [] : [];
   const visibleQuotes = quoteOptions
@@ -167,6 +168,9 @@ export function ShipmentsPage(props: {
     [shipments, statusFilter]
   );
   const statusOptions = Array.from(new Set(shipments.map((shipment) => shipment.status)));
+  const activeShipments = shipments.filter((shipment) => !["Closed", "Cancelled", "Delivered"].includes(shipment.status)).length;
+  const exceptionShipments = shipments.filter((shipment) => ["OnHold", "Cancelled"].includes(shipment.status)).length;
+  const selectedShipmentValue = selectedShipment ? formatMoney(selectedShipment.agreedPrice, selectedShipment.currency) : "Select a file";
   const itemTotals = useMemo(
     () =>
       shipmentItems.reduce(
@@ -185,16 +189,38 @@ export function ShipmentsPage(props: {
   const isEditingItem = Boolean(editingItemId);
 
   function runAction(action: string, dangerous?: boolean) {
-    if (dangerous) {
-      setPendingAction(action);
-      return;
-    }
-    void onShipmentAction(action);
+    setPendingAction({ action, dangerous });
   }
 
   return (
     <div className="view-stack">
       <SectionHeader icon={<Ship size={22} />} title="Shipments" meta={`${shipments.length} records`} />
+
+      <section className="workspace-hero shipments-hero">
+        <div className="workspace-hero-copy">
+          <span className="hero-kicker">Shipment execution</span>
+          <h2>Move files through booking, B/L, payment, telex release, delivery, and close with context in view.</h2>
+          <p>The page is split into a searchable command list and a detail console so operators can work fast without losing audit history.</p>
+        </div>
+        <div className="hero-metric-strip">
+          <div>
+            <span>Active files</span>
+            <strong>{activeShipments}</strong>
+          </div>
+          <div>
+            <span>Exceptions</span>
+            <strong>{exceptionShipments}</strong>
+          </div>
+          <div>
+            <span>Statuses</span>
+            <strong>{statusOptions.length}</strong>
+          </div>
+          <div>
+            <span>Selected value</span>
+            <strong>{selectedShipmentValue}</strong>
+          </div>
+        </div>
+      </section>
 
       {isUser && (
         <section className="panel">
@@ -455,14 +481,14 @@ export function ShipmentsPage(props: {
       <ConfirmDialog
         open={Boolean(pendingAction)}
         title="Confirm shipment action"
-        message="This operation changes the shipment lifecycle and writes to the audit history."
-        confirmLabel="Apply action"
-        tone="danger"
+        message={ACTION_CONFIRM_MESSAGE}
+        confirmLabel={ACTION_CONFIRM_LABEL}
+        tone={pendingAction?.dangerous ? "danger" : "default"}
         busy={busy}
         onClose={() => setPendingAction(null)}
         onConfirm={async () => {
           if (!pendingAction) return;
-          const action = pendingAction;
+          const action = pendingAction.action;
           setPendingAction(null);
           await onShipmentAction(action);
         }}
@@ -471,8 +497,8 @@ export function ShipmentsPage(props: {
       <ConfirmDialog
         open={Boolean(deleteShipmentId)}
         title="Delete shipment"
-        message="This removes the shipment record. Use this only for test or invalid operational records."
-        confirmLabel="Delete shipment"
+        message={ACTION_CONFIRM_MESSAGE}
+        confirmLabel={ACTION_CONFIRM_LABEL}
         tone="danger"
         busy={busy}
         onClose={() => setDeleteShipmentId(null)}

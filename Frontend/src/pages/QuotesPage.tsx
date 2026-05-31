@@ -1,6 +1,7 @@
 import { CheckCircle2, ClipboardList, Eye, Plus, Search, Trash2, XCircle } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { ConfirmDialog, EmptyState, EntityActions, Field, PanelTitle, SectionHeader, StatusBadge } from "../components/ui";
+import { ACTION_CONFIRM_LABEL, ACTION_CONFIRM_MESSAGE } from "../constants/actionConfirmation";
 import { RateDetailsPage } from "./RateDetailsPage";
 import type { AuthSession, Customer, Quote, QuoteDraft, QuoteRequest, Rate, Route } from "../types";
 import { formatDate, formatMoney } from "../utils/format";
@@ -33,6 +34,7 @@ export function QuotesPage(props: {
   onFilterByRoute: (routeId: string) => void;
   onToggleTheme: () => void;
   onRateRequestCreated: (request: QuoteRequest) => void;
+  onConfirmAction: (options?: { title?: string; message?: string; confirmLabel?: string; tone?: "danger" | "default" }) => Promise<boolean>;
   hasCustomerProfile: boolean;
   onCreateCustomerProfile: () => void;
 }) {
@@ -101,6 +103,9 @@ export function QuotesPage(props: {
     [quoteRequests, requestQuery]
   );
   const selectedRate = useMemo(() => rates.find((rate) => rate.id === selectedRateId) ?? null, [rates, selectedRateId]);
+  const pendingRequests = quoteRequests.filter((request) => request.status === "PendingReview" || request.status === 0).length;
+  const acceptedQuotes = quotes.filter((quote) => quote.status === "Accepted" || quote.status === 1).length;
+  const quotedValue = quotes.reduce((total, quote) => total + quote.finalPrice, 0);
 
   function openRateDetails(rateId: string) {
     setSelectedRateId(rateId);
@@ -120,6 +125,32 @@ export function QuotesPage(props: {
   return (
     <div className="view-stack">
       <SectionHeader icon={<ClipboardList size={22} />} title="Quotes" meta={`${quotes.length} quotes / ${quoteRequests.length} requests`} />
+
+      <section className="workspace-hero quotes-hero">
+        <div className="workspace-hero-copy">
+          <span className="hero-kicker">Commercial desk</span>
+          <h2>Quote requests, approvals, and customer decisions without losing rate context.</h2>
+          <p>Open a rate, review the submitted cargo, approve or reject requests, and keep created quotes ready for shipment conversion.</p>
+        </div>
+        <div className="hero-metric-strip">
+          <div>
+            <span>Pending requests</span>
+            <strong>{pendingRequests}</strong>
+          </div>
+          <div>
+            <span>Quotes</span>
+            <strong>{quotes.length}</strong>
+          </div>
+          <div>
+            <span>Accepted</span>
+            <strong>{acceptedQuotes}</strong>
+          </div>
+          <div>
+            <span>Quoted value</span>
+            <strong>{formatMoney(quotedValue)}</strong>
+          </div>
+        </div>
+      </section>
 
       {isPrivileged && (
         <section className="panel">
@@ -243,6 +274,7 @@ export function QuotesPage(props: {
             onBack={() => setSelectedRateId(null)}
             onCreateCustomerProfile={props.onCreateCustomerProfile}
             onRequestCreated={props.onRateRequestCreated}
+            onConfirmAction={props.onConfirmAction}
           />
         </div>
       )}
@@ -404,8 +436,8 @@ export function QuotesPage(props: {
       <ConfirmDialog
         open={Boolean(deleteId)}
         title="Delete quote"
-        message="This removes the quote from the quoting workspace. Shipments already created from it are not changed."
-        confirmLabel="Delete quote"
+        message={ACTION_CONFIRM_MESSAGE}
+        confirmLabel={ACTION_CONFIRM_LABEL}
         tone="danger"
         busy={busy}
         onClose={() => setDeleteId(null)}
