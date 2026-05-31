@@ -726,8 +726,6 @@ export default function App() {
     if (handledConfirmationLinksRef.current.has(confirmationKey)) return;
     handledConfirmationLinksRef.current.add(confirmationKey);
 
-    navigate(isEmailConfirmation ? "/auth/verify" : session ? "/" : "/auth/login", { replace: true, scroll: false });
-
     if (isEmailConfirmation) {
       const pending = loadPendingVerification();
       if (pending.userId && pending.userId !== userId) {
@@ -804,6 +802,7 @@ export default function App() {
     return () => {
       cancelled = true;
       window.clearTimeout(confirmationTimer);
+      setBusy(false);
     };
   }, [navigate, path, pushToast, session]);
 
