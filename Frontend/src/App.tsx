@@ -39,6 +39,7 @@ import type {
   Port,
   ProfileDraft,
   ProfileResponse,
+  ProfileUpdateResponse,
   QueryParams,
   Quote,
   QuoteDraft,
@@ -184,6 +185,11 @@ function readConfirmationLink(path: string) {
     token: (url.searchParams.get("token") ?? url.searchParams.get("Token") ?? "").replace(/ /g, "+")
   };
 }
+
+type ConfirmationRequestResult =
+  | { type: "registration-email"; response: AuthResponse }
+  | { type: "profile-email"; response: ProfileUpdateResponse }
+  | { type: "redirected" };
 
 function shouldBridgeConfirmationToLocal(path: string) {
   const confirmationLink = readConfirmationLink(path);
@@ -383,7 +389,8 @@ export default function App() {
   const loadSequenceRef = useRef(0);
   const pageLoadingTimerRef = useRef<number | null>(null);
   const localConfirmationBridgeRef = useRef<Set<string>>(new Set());
-  const handledConfirmationLinksRef = useRef<Set<string>>(new Set());
+  const completedConfirmationLinksRef = useRef<Set<string>>(new Set());
+  const confirmationRequestsRef = useRef<Map<string, Promise<ConfirmationRequestResult>>>(new Map());
   const [appliedRateBookFilters, setAppliedRateBookFilters] = useState<RateBookFilterDraft>(initialRateBookFilters);
   const appliedRateBookFiltersRef = useRef<RateBookFilterDraft>(initialRateBookFilters);
 
@@ -723,8 +730,7 @@ export default function App() {
     }
 
     const confirmationKey = `${type}:${userId}:${token}`;
-    if (handledConfirmationLinksRef.current.has(confirmationKey)) return;
-    handledConfirmationLinksRef.current.add(confirmationKey);
+    if (completedConfirmationLinksRef.current.has(confirmationKey)) return;
 
     if (isEmailConfirmation) {
       const pending = loadPendingVerification();
@@ -747,61 +753,79 @@ export default function App() {
     setBusy(true);
     let cancelled = false;
 
-    const confirmationTimer = window.setTimeout(() => {
-      void (async () => {
-        try {
-          if (shouldBridgeConfirmationToLocal(path) && !localConfirmationBridgeRef.current.has(path)) {
-            localConfirmationBridgeRef.current.add(path);
-            const localOrigin = await findLocalConfirmationOrigin();
-            if (localOrigin) {
-              window.location.replace(`${localOrigin}${path}`);
-              return;
-            }
-          }
+    function runConfirmationRequest() {
+      const existing = confirmationRequestsRef.current.get(confirmationKey);
+      if (existing) return existing;
 
-          if (isEmailConfirmation) {
-            const response = await api.confirmEmail(userId, token);
-            if (cancelled) return;
-            const pending = loadPendingVerification();
-            const nextPending = {
-              ...pending,
-              userId,
-              email: response.email || pending.email,
-              phone: response.phoneNumber || pending.phone,
-              userName: response.userName || pending.userName,
-              emailConfirmed: true
-            };
-            localStorage.setItem(PENDING_VERIFICATION_KEY, JSON.stringify(nextPending));
-            setVerifyDraft((current) => ({
-              ...current,
-              email: nextPending.email,
-              phone: nextPending.phone,
-              phoneCode: ""
-            }));
-            setAuthMode("verify");
-            setVerificationStep("phone");
-            navigate("/auth/verify", { replace: true, scroll: false });
-            pushToast("success", "Email confirmed", response.message || "Enter the 6-digit code sent to your phone.");
-          } else {
-            const response = await api.confirmProfileEmailChange(userId, token);
-            if (cancelled) return;
-            if (response.updatedProfile) setProfile(response.updatedProfile);
-            navigate(session ? "/" : "/auth/login", { replace: true, scroll: false });
-            pushToast("success", "Email change confirmed", response.message || "Your profile email has been updated.");
+      const request = (async (): Promise<ConfirmationRequestResult> => {
+        if (shouldBridgeConfirmationToLocal(path) && !localConfirmationBridgeRef.current.has(path)) {
+          localConfirmationBridgeRef.current.add(path);
+          const localOrigin = await findLocalConfirmationOrigin();
+          if (localOrigin) {
+            window.location.replace(`${localOrigin}${path}`);
+            return { type: "redirected" };
           }
-        } catch (confirmationError) {
-          if (cancelled) return;
-          handledConfirmationLinksRef.current.delete(confirmationKey);
-          pushToast("error", "Email confirmation failed", getFriendlyErrorMessage(confirmationError));
-        } finally {
-          if (!cancelled) setBusy(false);
         }
-      })();
-    }, 80);
+
+        if (isEmailConfirmation) {
+          return { type: "registration-email", response: await api.confirmEmail(userId, token) };
+        }
+
+        return { type: "profile-email", response: await api.confirmProfileEmailChange(userId, token) };
+      })().finally(() => {
+        confirmationRequestsRef.current.delete(confirmationKey);
+      });
+
+      confirmationRequestsRef.current.set(confirmationKey, request);
+      return request;
+    }
+
+    void runConfirmationRequest()
+      .then((result) => {
+        if (cancelled || result.type === "redirected") return;
+
+        completedConfirmationLinksRef.current.add(confirmationKey);
+
+        if (result.type === "registration-email") {
+          const response = result.response;
+          const pending = loadPendingVerification();
+          const nextPending = {
+            ...pending,
+            userId,
+            email: response.email || pending.email,
+            phone: response.phoneNumber || pending.phone,
+            userName: response.userName || pending.userName,
+            emailConfirmed: true
+          };
+          localStorage.setItem(PENDING_VERIFICATION_KEY, JSON.stringify(nextPending));
+          setVerifyDraft((current) => ({
+            ...current,
+            email: nextPending.email,
+            phone: nextPending.phone,
+            phoneCode: ""
+          }));
+          setAuthMode("verify");
+          setVerificationStep("phone");
+          navigate("/auth/verify", { replace: true, scroll: false });
+          pushToast("success", "Email confirmed", response.message || "Enter the 6-digit code sent to your phone.");
+          return;
+        }
+
+        if (result.response.updatedProfile) setProfile(result.response.updatedProfile);
+        navigate(session ? "/" : "/auth/login", { replace: true, scroll: false });
+        pushToast("success", "Email change confirmed", result.response.message || "Your profile email has been updated.");
+      })
+      .catch((confirmationError) => {
+        if (cancelled) return;
+        navigate("/auth/login", { replace: true, scroll: false });
+        pushToast("error", "Email confirmation failed", getFriendlyErrorMessage(confirmationError));
+      })
+      .finally(() => {
+        if (!cancelled) setBusy(false);
+      });
 
     return () => {
       cancelled = true;
-      window.clearTimeout(confirmationTimer);
       setBusy(false);
     };
   }, [navigate, path, pushToast, session]);
@@ -1272,10 +1296,15 @@ export default function App() {
     await runMutation(
       "Email confirmation sent",
       async () => {
-        const email = verifyDraft.email.trim() || registerForm.email.trim();
+        const pending = loadPendingVerification();
+        const email = verifyDraft.email.trim() || pending.email;
+        if (!email) {
+          pushToast("info", "Email verification unavailable", "Start from login or registration so we can use the email returned by the server.");
+          return null;
+        }
+
         const response = await resendEmailConfirmationLink(email);
         if (isEmailAlreadyConfirmedResponse(response)) {
-          const pending = loadPendingVerification();
           storePendingVerification({
             ...pending,
             email: response?.email || email,
@@ -1303,9 +1332,9 @@ export default function App() {
         return;
       }
 
-      const email = verifyDraft.email.trim() || registerForm.email.trim() || pending.email;
+      const email = verifyDraft.email.trim() || pending.email;
       if (!email) {
-        pushToast("info", "Confirm your email", "Enter the email address used during registration to request a new confirmation link.");
+        pushToast("info", "Email verification unavailable", "Start from login or registration so we can use the email returned by the server.");
         return;
       }
 
@@ -2650,6 +2679,16 @@ export default function App() {
     return (
       <>
         <LoadingState label="Opening secure session" />
+        <ToastHost toasts={toasts} onDismiss={dismissToast} />
+      </>
+    );
+  }
+
+  const activeConfirmationLink = readConfirmationLink(path);
+  if (activeConfirmationLink) {
+    return (
+      <>
+        <LoadingState label={activeConfirmationLink.type === "registration-email" ? "Confirming email" : "Confirming email change"} />
         <ToastHost toasts={toasts} onDismiss={dismissToast} />
       </>
     );

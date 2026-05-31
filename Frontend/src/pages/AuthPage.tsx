@@ -174,31 +174,19 @@ export function AuthPage(props: {
                   <CheckCircle2 size={26} />
                   <div>
                     <strong>Confirmation sent to</strong>
-                    <span>{verifyDraft.email || registerForm.email || "your registered email"}</span>
+                    <span>{verifyDraft.email || "your registered email"}</span>
                   </div>
                 </div>
 
-                {!verifyDraft.email && (
-                  <Field label="Email address">
-                    <input
-                      type="email"
-                      value={verifyDraft.email}
-                      onChange={(event) => setVerifyDraft({ ...verifyDraft, email: event.target.value })}
-                      placeholder="your@email.com"
-                      required
-                    />
-                  </Field>
-                )}
-
                 <div className="verify-actions">
                   <form onSubmit={onResendEmail}>
-                    <button className="secondary-button" type="submit" disabled={busy || !(verifyDraft.email || registerForm.email)}>
+                    <button className="secondary-button" type="submit" disabled={busy || !verifyDraft.email.trim()}>
                       <Send size={16} />
                       Resend email
                     </button>
                   </form>
                   <form onSubmit={onConfirmEmail}>
-                    <button className="primary-button" type="submit" disabled={busy}>
+                    <button className="primary-button" type="submit" disabled={busy || !verifyDraft.email.trim()}>
                       <CheckCircle2 size={16} />
                       I confirmed my email
                     </button>
