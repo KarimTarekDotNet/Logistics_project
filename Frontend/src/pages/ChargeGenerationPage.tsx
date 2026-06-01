@@ -13,6 +13,7 @@ export function ChargeGenerationPage(props: {
 }) {
   const { selectedShipment, charges, busy, onGenerate, onUpdateItems } = props;
   const chargeTotal = charges.reduce((total, charge) => total + charge.amount + charge.taxAmount, 0);
+  const hasCharges = charges.length > 0;
 
   return (
     <div className="view-stack workflow-page">
@@ -31,12 +32,16 @@ export function ChargeGenerationPage(props: {
           <section className="workflow-center-panel">
             <div className="workflow-center-copy">
               <span className="workflow-step-mark">2</span>
-              <h2>Generate shipment charges</h2>
-              <p>Charges are calculated from the active rules for this shipment currency, cargo totals, volume, and agreed value.</p>
+              <h2>{hasCharges ? "Charges are ready" : "Generate shipment charges"}</h2>
+              <p>
+                {hasCharges
+                  ? "Saved shipment charges are loaded, so you can continue to invoice review without regenerating them."
+                  : "Charges are calculated from the active rules for this shipment currency, cargo totals, volume, and agreed value."}
+              </p>
             </div>
             <button className="primary-button workflow-primary-action" type="button" onClick={onGenerate} disabled={busy}>
               <Calculator size={22} />
-              Generate
+              {hasCharges ? "Continue" : "Generate"}
             </button>
             <button className="secondary-button compact" type="button" onClick={onUpdateItems} disabled={busy}>
               <Pencil size={16} />

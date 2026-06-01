@@ -66,9 +66,6 @@ namespace Infrastructure.Services.Shipments.Core
 
             InvoiceHelper.EnsureInvoiceCanBePaid(invoice);
 
-            if (request.PaymentProvider != PaymentProvider.Manual)
-                throw new BusinessRuleException("Online payments must be confirmed by webhook.");
-
             var previousPayments = await _unitOfWork.InvoicePayments.GetByInvoiceIdAsync(invoiceId);
 
             var alreadyPaid = previousPayments
@@ -78,24 +75,24 @@ namespace Infrastructure.Services.Shipments.Core
             var remainingAmount = invoice.TotalAmount - alreadyPaid;
 
             if (request.Amount <= 0)
-                throw new InvalidOperationException("Payment amount must be greater than zero.");
+                throw new BusinessRuleException("Payment amount must be greater than zero.");
 
             if (request.Amount > remainingAmount)
-                throw new InvalidOperationException("Payment amount exceeds remaining invoice amount.");
+                throw new BusinessRuleException("Payment amount exceeds remaining invoice amount.");
 
             if (request.Amount != remainingAmount)
-                throw new InvalidOperationException("Payment amount must equal remaining amount to mark invoice as paid.");
+                throw new BusinessRuleException("Payment amount must equal remaining amount to mark invoice as paid.");
 
             var payment = new InvoicePayment
             {
                 InvoiceId = invoice.Id,
                 Amount = request.Amount,
                 Currency = request.Currency,
-                PaymentMethod = request.PaymentMethod,
-                PaymentProvider = request.PaymentProvider,
+                PaymentMethod = PaymentMethod.Cash,
+                PaymentProvider = PaymentProvider.Manual,
                 Status = PaymentTransactionStatus.Succeeded,
-                TransactionId = request.TransactionId,
-                ReferenceNumber = request.ReferenceNumber,
+                TransactionId = Guid.NewGuid().ToString(),
+                ReferenceNumber = null,
                 PaidAt = DateTimeOffset.UtcNow,
                 CreatedAt = DateTimeOffset.UtcNow
             };
@@ -117,22 +114,33 @@ namespace Infrastructure.Services.Shipments.Core
             if (!ShipmentStatusRules.CanPartiallyPayInvoice(shipment.Status))
                 throw new BusinessRuleException("Cannot pay invoice for the current shipment status.");
 
-            if (request.PaymentProvider != PaymentProvider.Manual)
-                throw new BusinessRuleException("Online payments must be confirmed by webhook.");
-
             InvoiceHelper.EnsureInvoiceCanBePartiallyPaid(invoice);
 
             InvoiceHelper.EnsurePartialPaymentAmountIsValid(invoice, request.Amount);
+
+            var previousPayments = await _unitOfWork.InvoicePayments.GetByInvoiceIdAsync(invoiceId);
+
+            var alreadyPaid = previousPayments
+            .Where(x => x.Status == PaymentTransactionStatus.Succeeded)
+            .Sum(x => x.Amount);
+
+            var remainingAmount = invoice.TotalAmount - alreadyPaid;
+
+            if (request.Amount <= 0)
+                throw new BusinessRuleException("Payment amount must be greater than zero.");
+
+            if (request.Amount > remainingAmount)
+                throw new BusinessRuleException("Payment amount exceeds remaining invoice amount.");
 
             var payment = new InvoicePayment
             {
                 InvoiceId = invoice.Id,
                 Amount = request.Amount,
                 Currency = request.Currency,
-                PaymentMethod = request.PaymentMethod,
-                PaymentProvider = request.PaymentProvider,
+                PaymentMethod = PaymentMethod.Cash,
+                PaymentProvider = PaymentProvider.Manual,
                 Status = PaymentTransactionStatus.Succeeded,
-                TransactionId = request.TransactionId,
+                TransactionId = Guid.NewGuid().ToString(),
                 ReferenceNumber = request.ReferenceNumber,
                 PaidAt = DateTimeOffset.UtcNow,
                 CreatedAt = DateTimeOffset.UtcNow

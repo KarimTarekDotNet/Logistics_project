@@ -1,19 +1,11 @@
-import { Banknote, CreditCard, FileText, Landmark, Plus, ReceiptText, RotateCcw, Trash2, WalletCards } from "lucide-react";
+import { Banknote, CreditCard, FileText, Plus, ReceiptText, RotateCcw, Trash2, WalletCards } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { ConfirmDialog, EmptyState, Field, PanelTitle, SectionHeader, StatusBadge } from "../components/ui";
 import { ShipmentContextPanel } from "../features/shipments/ShipmentContextPanel";
-import type { Invoice, InvoicePaymentRequest, PaymentMethod, Shipment, ShipmentCharge } from "../types";
+import type { Invoice, InvoicePaymentRequest, Shipment, ShipmentCharge } from "../types";
 import { formatDate, formatMoney } from "../utils/format";
 
 type InvoiceStatusAction = "mark-as-paid" | "mark-as-partially-paid" | "mark-as-refunded";
-
-const paymentMethodOptions: Array<{ value: PaymentMethod; label: string }> = [
-  { value: 0, label: "Cash" },
-  { value: 1, label: "Bank transfer" },
-  { value: 2, label: "Credit card" },
-  { value: 3, label: "Wallet" },
-  { value: 4, label: "Fawry" }
-];
 
 export function FinancePage(props: {
   selectedShipment?: Shipment;
@@ -41,8 +33,7 @@ export function FinancePage(props: {
     onCancelInvoice,
     onDeleteInvoice
   } = props;
-  const [partialAmounts, setPartialAmounts] = useState<Record<string, string>>({});
-  const [paymentMethods, setPaymentMethods] = useState<Record<string, PaymentMethod>>({});
+  const [paymentAmounts, setPaymentAmounts] = useState<Record<string, string>>({});
   const [paymentReferences, setPaymentReferences] = useState<Record<string, string>>({});
   const [deleteInvoiceId, setDeleteInvoiceId] = useState<string | null>(null);
   const [cancelInvoiceId, setCancelInvoiceId] = useState<string | null>(null);
@@ -81,9 +72,6 @@ export function FinancePage(props: {
     return {
       amount: Number(amount.toFixed(2)),
       currency: invoice.currency,
-      paymentMethod: paymentMethods[invoice.id] ?? 0,
-      paymentProvider: 0,
-      status: 1,
       ...(referenceNumber ? { referenceNumber } : {})
     };
   }
@@ -203,11 +191,14 @@ export function FinancePage(props: {
                 const isPaid = status === "paid";
                 const isPartiallyPaid = status === "partiallypaid";
                 const canPay = isPrivileged && (isPending || isPartiallyPaid) && !isPaid && !isCancelled && !isRefunded && balance.remaining > 0;
-                const canPartialPay = canPay;
                 const canRefund = isPrivileged && (isPaid || isPartiallyPaid) && !isCancelled && !isRefunded;
                 const canCancel = (isDraft || isPending) && !isPaid && !isPartiallyPaid && !isCancelled && !isRefunded;
-                const fullPayAmount = balance.remaining > 0 ? balance.remaining : balance.total;
-                const currentPartialAmount = Number(partialAmounts[invoice.id] ?? "");
+                const paymentAmount = Number(paymentAmounts[invoice.id] ?? "");
+                const paymentCents = Math.round(paymentAmount * 100);
+                const remainingCents = Math.round(balance.remaining * 100);
+                const canRecordPayment = canPay && paymentCents > 0 && paymentCents <= remainingCents;
+                const paymentAction: InvoiceStatusAction =
+                  paymentCents >= remainingCents ? "mark-as-paid" : "mark-as-partially-paid";
                 const paymentLabel = isPaid
                   ? "Settled"
                   : isPartiallyPaid
@@ -261,39 +252,20 @@ export function FinancePage(props: {
                     <div className="payment-method-strip">
                       <span>
                         <CreditCard size={14} />
-                        Manual provider
+                        Manual receipt
                       </span>
                       <span>
                         <Banknote size={14} />
-                        Cash supported
+                        Cash default
                       </span>
                       <span>
-                        <Landmark size={14} />
-                        Bank transfer
+                        <ReceiptText size={14} />
+                        Reference optional
                       </span>
                     </div>
 
                     {canPay && (
                       <div className="payment-capture-panel">
-                        <label>
-                          <span>Method</span>
-                          <select
-                            value={paymentMethods[invoice.id] ?? 0}
-                            onChange={(event) =>
-                              setPaymentMethods((current) => ({
-                                ...current,
-                                [invoice.id]: Number(event.target.value) as PaymentMethod
-                              }))
-                            }
-                            disabled={busy}
-                          >
-                            {paymentMethodOptions.map((method) => (
-                              <option value={method.value} key={method.value}>
-                                {method.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
                         <label>
                           <span>Reference</span>
                           <input
@@ -320,17 +292,7 @@ export function FinancePage(props: {
                           </small>
                         )}
                       </div>
-                      {isPrivileged && (
-                        <button
-                          className="mini-button"
-                          type="button"
-                          onClick={() => onInvoiceStatus(invoice.id, "mark-as-paid", buildManualPayment(invoice, fullPayAmount))}
-                          disabled={busy || !canPay}
-                        >
-                          Mark paid
-                        </button>
-                      )}
-                      {canPartialPay && (
+                      {canPay && (
                         <div className="partial-pay-row">
                           <input
                             type="number"
@@ -339,21 +301,21 @@ export function FinancePage(props: {
                             step="0.01"
                             placeholder="Amount"
                             className="mini-input"
-                            value={partialAmounts[invoice.id] ?? ""}
-                            onChange={(event) => setPartialAmounts((current) => ({ ...current, [invoice.id]: event.target.value }))}
+                            value={paymentAmounts[invoice.id] ?? ""}
+                            onChange={(event) => setPaymentAmounts((current) => ({ ...current, [invoice.id]: event.target.value }))}
                             disabled={busy}
                           />
                           <button
                             className="mini-button"
                             type="button"
-                            disabled={busy || !currentPartialAmount || currentPartialAmount <= 0 || currentPartialAmount > balance.remaining}
+                            disabled={busy || !canRecordPayment}
                             onClick={() => {
-                              if (!currentPartialAmount || currentPartialAmount <= 0 || currentPartialAmount > balance.remaining) return;
-                              onInvoiceStatus(invoice.id, "mark-as-partially-paid", buildManualPayment(invoice, currentPartialAmount));
-                              setPartialAmounts((current) => ({ ...current, [invoice.id]: "" }));
+                              if (!canRecordPayment) return;
+                              onInvoiceStatus(invoice.id, paymentAction, buildManualPayment(invoice, paymentAmount));
+                              setPaymentAmounts((current) => ({ ...current, [invoice.id]: "" }));
                             }}
                           >
-                            Partial
+                            Paid
                           </button>
                         </div>
                       )}
