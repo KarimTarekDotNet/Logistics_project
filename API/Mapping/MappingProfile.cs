@@ -109,11 +109,18 @@ namespace API.Mapping
 
 
             // ── Invoice ────────────────────────────────────────────────────
-            CreateMap<Invoice, InvoiceResponse>();
+            CreateMap<Invoice, InvoiceResponse>()
+                .ForMember(d => d.PaidPart, o => o.MapFrom(s => s.TotalPaid))
+                .ForMember(d => d.RemainingAmount, o => o.MapFrom(s => s.RemainingAmount))
+                .ForMember(d => d.PaymentStatus, o => o.MapFrom(s => s.PaymentStatus.ToString()))
+                .ForMember(d => d.PayerType, o => o.MapFrom(s => s.PayerType.ToString()));
             CreateMap<CreateInvoiceRequest, Invoice>();
 
             // ── Invoice Payment ────────────────────────────────────────────────────
-            CreateMap<InvoicePayment, InvoicePaymentResponse>();
+            CreateMap<InvoicePayment, InvoicePaymentResponse>()
+                .ForMember(d => d.PaymentMethod, o => o.MapFrom(s => s.PaymentMethod.ToString()))
+                .ForMember(d => d.PaymentProvider, o => o.MapFrom(s => s.PaymentProvider.ToString()))
+                .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
             CreateMap<CreateInvoicePaymentRequest, InvoicePayment>();
 
             // ── Shipment Documents ─────────────────────────────────────

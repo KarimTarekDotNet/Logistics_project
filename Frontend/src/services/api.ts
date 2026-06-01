@@ -87,6 +87,76 @@ function buildQuery(params?: QueryParams | Record<string, string | number | bool
   return result ? `?${result}` : "";
 }
 
+function normalizeToken(value: unknown) {
+  return String(value ?? "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+function toSafeAmount(value: unknown) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function isSuccessfulInvoicePayment(payment: InvoicePayment) {
+  const status = normalizeToken(payment.status);
+  return !status || status === "succeeded" || status === "paid";
+}
+
+function hasInvoiceBalanceFields(invoice: Invoice) {
+  return (
+    invoice.paidPart != null &&
+    (invoice.remainingAmount != null ||
+      invoice.remainingBalance != null ||
+      invoice.amountDue != null ||
+      invoice.balanceDue != null)
+  );
+}
+
+function mergeInvoicePayments(invoice: Invoice, payments: InvoicePayment[] = []): Invoice {
+  const total = Math.max(0, toSafeAmount(invoice.totalAmount));
+  const status = normalizeToken(invoice.paymentStatus);
+  const responseRemaining =
+    invoice.remainingAmount ?? invoice.remainingBalance ?? invoice.amountDue ?? invoice.balanceDue;
+  const inferredPaidFromRemaining = responseRemaining != null ? total - toSafeAmount(responseRemaining) : 0;
+  const paidFromResponse = Math.max(
+    0,
+    toSafeAmount(invoice.paidPart ?? (status === "paid" ? total : inferredPaidFromRemaining))
+  );
+  const paidFromPayments = payments
+    .filter(isSuccessfulInvoicePayment)
+    .reduce((sum, payment) => sum + Math.max(0, toSafeAmount(payment.amount)), 0);
+  const paidPart = Math.min(total, payments.length > 0 ? paidFromPayments : paidFromResponse);
+  const shouldComputeRemaining = payments.length > 0 || paidPart > 0 || status === "paid" || responseRemaining == null;
+  const remainingAmount =
+    shouldComputeRemaining ? Math.max(0, total - paidPart) : Math.max(0, toSafeAmount(responseRemaining));
+
+  return {
+    ...invoice,
+    payments,
+    paidPart,
+    remainingAmount,
+    remainingBalance: remainingAmount,
+    amountDue: remainingAmount,
+    balanceDue: remainingAmount
+  };
+}
+
+async function hydrateInvoicePayments(token: string, invoice: Invoice) {
+  if (hasInvoiceBalanceFields(invoice)) return mergeInvoicePayments(invoice);
+
+  try {
+    const payments = await request<InvoicePayment[]>(`/api/Invoice/payments/${invoice.id}`, { token });
+    return mergeInvoicePayments(invoice, payments);
+  } catch {
+    return mergeInvoicePayments(invoice);
+  }
+}
+
+async function hydrateInvoicesPayments(token: string, invoices: Invoice[]) {
+  return Promise.all(invoices.map((invoice) => hydrateInvoicePayments(token, invoice)));
+}
+
 async function parseResponse(response: Response) {
   if (response.status === 204) return null;
 
@@ -877,12 +947,14 @@ export const api = {
     return request<string>(`/api/ShipmentCharge/${id}`, { method: "DELETE", token });
   },
 
-  getInvoice(token: string, id: string) {
-    return request<Invoice>(`/api/Invoice/${id}`, { token });
+  async getInvoice(token: string, id: string) {
+    const invoice = await request<Invoice>(`/api/Invoice/${id}`, { token });
+    return hydrateInvoicePayments(token, invoice);
   },
 
-  getInvoicesByShipment(token: string, shipmentId: string) {
-    return request<Invoice[]>(`/api/Invoice/shipment/${shipmentId}`, { token });
+  async getInvoicesByShipment(token: string, shipmentId: string) {
+    const invoices = await request<Invoice[]>(`/api/Invoice/shipment/${shipmentId}`, { token });
+    return hydrateInvoicesPayments(token, invoices);
   },
 
   getInvoicePayments(token: string, invoiceId: string) {
@@ -893,32 +965,35 @@ export const api = {
     return request<Invoice>(`/api/Invoice/${shipmentId}`, { method: "POST", token });
   },
 
-  invoiceStatus(
+  async invoiceStatus(
     token: string,
     id: string,
     action: "mark-as-paid" | "mark-as-partially-paid" | "mark-as-refunded",
     payment?: InvoicePaymentRequest
   ) {
-    return request<Invoice>(`/api/Invoice/${id}/${action}`, {
+    const invoice = await request<Invoice>(`/api/Invoice/${id}/${action}`, {
       method: "PATCH",
       token,
       body: action === "mark-as-refunded" ? undefined : payment
     });
+    return hydrateInvoicePayments(token, invoice);
   },
 
-  confirmInvoice(token: string, id: string) {
-    return request<Invoice>(`/api/Invoice/${id}/confirm`, {
+  async confirmInvoice(token: string, id: string) {
+    const invoice = await request<Invoice>(`/api/Invoice/${id}/confirm`, {
       method: "PATCH",
       token
     });
+    return hydrateInvoicePayments(token, invoice);
   },
 
-  cancelInvoice(token: string, id: string, reason: string) {
-    return request<Invoice>(`/api/Invoice/${id}/cancel`, {
+  async cancelInvoice(token: string, id: string, reason: string) {
+    const invoice = await request<Invoice>(`/api/Invoice/${id}/cancel`, {
       method: "PATCH",
       token,
       body: { reason }
     });
+    return hydrateInvoicePayments(token, invoice);
   },
 
   deleteInvoice(token: string, id: string) {

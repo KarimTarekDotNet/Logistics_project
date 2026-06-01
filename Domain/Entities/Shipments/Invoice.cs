@@ -23,10 +23,12 @@ namespace Domain.Entities.Shipments
         public ICollection<InvoicePayment> Payments { get; set; } = new List<InvoicePayment>();
 
         [NotMapped]
-        public decimal TotalPaid => Payments.Sum(x => x.Amount);
+        public decimal TotalPaid => Payments
+            .Where(x => x.Status == PaymentTransactionStatus.Succeeded)
+            .Sum(x => x.Amount);
 
         [NotMapped]
-        public decimal RemainingAmount => TotalAmount - TotalPaid;
+        public decimal RemainingAmount => Math.Max(0, TotalAmount - TotalPaid);
 
         public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Draft;
 

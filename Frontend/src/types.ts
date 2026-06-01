@@ -331,6 +331,7 @@ export type Invoice = {
   dueDate: string;
   paidAt?: string;
   payerType: string;
+  payments?: InvoicePayment[];
 };
 
 export type PaymentMethod = 0 | 1 | 2 | 3 | 4;
@@ -352,6 +353,10 @@ export type InvoicePayment = {
   transactionId?: string | null;
   referenceNumber?: string | null;
   amount: number;
+  currency?: string | null;
+  paymentMethod?: string | null;
+  paymentProvider?: string | null;
+  status?: string | null;
   paidAt: string;
 };
 

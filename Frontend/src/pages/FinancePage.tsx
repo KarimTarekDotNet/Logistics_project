@@ -53,16 +53,20 @@ export function FinancePage(props: {
   function resolveInvoiceBalance(invoice: Invoice) {
     const explicitRemaining =
       invoice.remainingAmount ?? invoice.remainingBalance ?? invoice.amountDue ?? invoice.balanceDue;
-    const paidPart = Math.max(0, Number(invoice.paidPart ?? 0));
     const total = Math.max(0, Number(invoice.totalAmount ?? 0));
-    const status = invoice.paymentStatus.toLowerCase();
+    const normalizedRemaining = explicitRemaining != null ? Math.max(0, Number(explicitRemaining)) : null;
+    const inferredPaidPart =
+      invoice.paidPart != null
+        ? Number(invoice.paidPart)
+        : normalizedRemaining != null
+          ? total - normalizedRemaining
+          : 0;
+    const status = normalizePaymentStatus(invoice.paymentStatus);
     const isPaid = status === "paid" || (status.includes("paid") && !status.includes("partial"));
+    const paidPart = isPaid ? total : Math.min(total, Math.max(0, inferredPaidPart));
+    const shouldComputeRemaining = paidPart > 0 || isPaid || normalizedRemaining == null;
     const remaining =
-      explicitRemaining != null
-        ? Math.max(0, Number(explicitRemaining))
-        : isPaid
-          ? 0
-          : Math.max(0, total - paidPart);
+      shouldComputeRemaining ? (isPaid ? 0 : Math.max(0, total - paidPart)) : normalizedRemaining;
 
     return { total, paidPart, remaining, hasPartialPayment: paidPart > 0 && remaining > 0 && remaining < total };
   }

@@ -54,6 +54,7 @@ namespace Infrastructure.Repositories.Shipments.Core
             return await _context.Invoices
                 .Include(x => x.Charges)
                 .Include(x => x.Shipment)
+                .Include(x => x.Payments)
                 .Where(x => x.ShipmentId == shipmentId && !x.IsDeleted)
                 .ToListAsync();
         }

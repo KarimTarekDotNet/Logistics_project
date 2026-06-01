@@ -29,6 +29,7 @@ namespace Application.DTOs.Shipments.Core
         public decimal TotalAmount { get; set; }
 
         public decimal? PaidPart { get; set; }
+        public decimal? RemainingAmount { get; set; }
 
         public string PaymentStatus { get; set; } = null!;
 

@@ -25,6 +25,10 @@ namespace Application.DTOs.Shipments.Core
         public string TransactionId { get; set; } = null!;
         public string ReferenceNumber { get; set; } = null!;
         public decimal Amount { get; set; }
+        public string Currency { get; set; } = null!;
+        public string PaymentMethod { get; set; } = null!;
+        public string PaymentProvider { get; set; } = null!;
+        public string Status { get; set; } = null!;
         public DateTimeOffset PaidAt { get; set; }
     }
 }
