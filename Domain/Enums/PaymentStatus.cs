@@ -9,4 +9,9 @@
         Cancelled,
         Refunded
     }
+    public enum InvoiceType
+    {
+        Base,
+        NewElements
+    }
 }

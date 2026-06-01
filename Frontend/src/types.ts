@@ -222,6 +222,7 @@ export type ShipmentItem = {
 export type ShipmentCharge = {
   id: string;
   shipmentId: string;
+  invoiceId?: string | null;
   description: string;
   amount: number;
   taxAmount: number;

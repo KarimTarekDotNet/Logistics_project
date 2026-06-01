@@ -8,6 +8,7 @@
         Insurance,
         Handling,
         Storage,
+        BaseFreight,
         Other
     }
 }

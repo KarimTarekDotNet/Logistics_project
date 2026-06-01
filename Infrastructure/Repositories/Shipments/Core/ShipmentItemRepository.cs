@@ -32,7 +32,8 @@ namespace Infrastructure.Repositories.Shipments.Core
 
         public async Task<ShipmentItem?> GetByIdAsync(Guid id)
         {
-           var item = await _context.ShipmentItems.FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted);
+           var item = await _context.ShipmentItems.Include(x => x.Shipment).ThenInclude(x => x.Customer)
+            .FirstOrDefaultAsync(i => i.Id == id && !i.IsDeleted);
             return item;
         }
 

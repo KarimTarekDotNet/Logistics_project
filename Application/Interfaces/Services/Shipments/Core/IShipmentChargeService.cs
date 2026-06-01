@@ -9,6 +9,6 @@ namespace Application.Interfaces.Services.Shipments.Core
 
         Task<IEnumerable<ShipmentChargeResponse>> GenerateAsync(GenerateShipmentChargesRequest request, string userId);
         Task<ShipmentChargeResponse?> UpdateAsync(Guid id, UpdateShipmentChargeRequest request);
-        Task<bool> DeleteAsync(Guid id);
+        Task<bool> DeleteAsync(Guid id, string userId, bool isPrivileged);
     }
 }

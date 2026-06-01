@@ -1,4 +1,4 @@
-import { CheckCircle2, FileText, Pencil, ReceiptText } from "lucide-react";
+import { CheckCircle2, FileText, Pencil, ReceiptText, XCircle } from "lucide-react";
 import { EmptyState, MetricLine, PanelTitle, SectionHeader, StatusBadge } from "../components/ui";
 import { ShipmentContextPanel } from "../features/shipments/ShipmentContextPanel";
 import type { Invoice, Shipment, ShipmentCharge } from "../types";
@@ -10,9 +10,10 @@ export function InvoiceReviewPage(props: {
   charges: ShipmentCharge[];
   busy: boolean;
   onConfirm: (id: string) => void;
+  onCancel: (invoice: Invoice) => void;
   onUpdateItems: () => void;
 }) {
-  const { selectedShipment, invoice, charges, busy, onConfirm, onUpdateItems } = props;
+  const { selectedShipment, invoice, charges, busy, onConfirm, onCancel, onUpdateItems } = props;
   const visibleCharges = invoice?.charges?.length ? invoice.charges : charges;
   const invoiceTotal =
     invoice?.totalAmount ?? visibleCharges.reduce((total, charge) => total + charge.amount + charge.taxAmount, 0);
@@ -63,6 +64,10 @@ export function InvoiceReviewPage(props: {
                 <button className="secondary-button" type="button" disabled={busy} onClick={onUpdateItems}>
                   <Pencil size={17} />
                   Update
+                </button>
+                <button className="danger-button subtle" type="button" disabled={busy || !canConfirm} onClick={() => onCancel(invoice)}>
+                  <XCircle size={17} />
+                  Cancel
                 </button>
               </div>
             </section>

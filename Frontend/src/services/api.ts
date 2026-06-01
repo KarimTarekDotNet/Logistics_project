@@ -935,7 +935,6 @@ export const api = {
   updateCharge(token: string, id: string, body: {
     description?: string;
     amount?: number;
-    taxAmount?: number;
     currency?: string;
     chargeType?: number;
     payerType?: number;

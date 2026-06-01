@@ -14,7 +14,6 @@ namespace Application.DTOs.Shipments.Core
         public ChargeType? ChargeType { get; init; }
         public PayerType? PayerType { get; init; }
         public decimal? Amount { get; init; }
-        public decimal? TaxAmount { get; init; }
         public string? Currency { get; init; }
         public string? Description { get; init; }
     }
@@ -23,6 +22,7 @@ namespace Application.DTOs.Shipments.Core
     {
         public Guid Id { get; set; }
         public Guid ShipmentId { get; set; }
+        public Guid? InvoiceId { get; set; }
         public string Description { get; set; } = null!;
         public decimal Amount { get; set; }
         public decimal TaxAmount { get; set; }

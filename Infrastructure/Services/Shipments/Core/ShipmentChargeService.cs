@@ -24,6 +24,15 @@ namespace Infrastructure.Services.Shipments.Core
             _userManager = userManager;
         }
 
+        private static bool IsAttachedToCancelledInvoice(Domain.Entities.Shipments.Shipment shipment, ShipmentCharge charge)
+        {
+            return charge.InvoiceId.HasValue &&
+                shipment.Invoices.Any(x =>
+                    x.Id == charge.InvoiceId.Value &&
+                    !x.IsDeleted &&
+                    x.PaymentStatus == PaymentStatus.Cancelled);
+        }
+
         public async Task<IEnumerable<ShipmentChargeResponse>> GenerateAsync(GenerateShipmentChargesRequest request, string userId)
         {
             var user = await _userManager.Users.Include(x => x.CustomerProfile)
@@ -36,6 +45,9 @@ namespace Infrastructure.Services.Shipments.Core
             if (shipment == null)
                 throw new KeyNotFoundException("Shipment not found.");
 
+            if (shipment.CustomerId != user.CustomerProfile.Id)
+                throw new BusinessRuleException("You do not have permission to modify this shipment.");
+
             if (!ShipmentStatusRules.CanModifyCharges(shipment.Status))
                 throw new BusinessRuleException("Cannot modify charges at this stage.");
 
@@ -45,11 +57,18 @@ namespace Infrastructure.Services.Shipments.Core
                 throw new BusinessRuleException("No active charge rules found.");
 
             var generatedCharges = new List<ShipmentCharge>();
+            var hasBaseFreightInvoice = shipment.Invoices.Any(x => !x.IsDeleted && x.NetShipmentPrice > 0);
 
 
             foreach (var rule in rules)
             {
-                var alreadyExists = shipment.Charges.Any(x => x.ChargeType == rule.ChargeType && !x.IsDeleted);
+                if (rule.ChargeType == ChargeType.OceanFreight && hasBaseFreightInvoice)
+                    continue;
+
+                var alreadyExists = shipment.Charges.Any(x =>
+                    x.ChargeType == rule.ChargeType &&
+                    !x.IsDeleted &&
+                    !IsAttachedToCancelledInvoice(shipment, x));
 
                 if (alreadyExists)
                     continue;
@@ -66,7 +85,7 @@ namespace Infrastructure.Services.Shipments.Core
                         shipment.TotalVolumeCbm * rule.Value,
 
                     ChargeCalculationType.PercentageOfAgreedPrice =>
-                        shipment.AgreedPrice * rule.Value / 100,
+                        shipment.AgreedPrice * rule.Value / 100m,
 
                     _ => throw new BusinessRuleException("Unsupported charge calculation type.")
                 };
@@ -74,10 +93,10 @@ namespace Infrastructure.Services.Shipments.Core
                 var charge = new ShipmentCharge
                 {
                     ShipmentId = shipment.Id,
-                    ChargeType = request.ChargeType,
+                    ChargeType = rule.ChargeType,
                     PayerType = request.PayerType,
                     Amount = amount,
-                    TaxAmount = 0,
+                    TaxAmount = 0.14m * amount,
                     Currency = shipment.Currency,
                     Description = $"{rule.ChargeType} auto generated charge",
                     CreatedAt = DateTimeOffset.UtcNow
@@ -95,11 +114,23 @@ namespace Infrastructure.Services.Shipments.Core
             return _mapper.Map<IEnumerable<ShipmentChargeResponse>>(generatedCharges);
         }
 
-        public async Task<bool> DeleteAsync(Guid id)
+        public async Task<bool> DeleteAsync(Guid id, string userId, bool isPrivileged)
         {
+            var user = await _userManager.Users.Include(x => x.CustomerProfile)
+                .FirstOrDefaultAsync(x => x.Id == userId);
+
+            if (user == null)
+                throw new KeyNotFoundException("User not found.");
+
+            if (!isPrivileged && user.CustomerProfile == null)
+                throw new BusinessRuleException("Customer profile not found.");
+
             var charge = await _unitOfWork.ShipmentCharges.GetByIdAsync(id);
 
             if (charge == null)
+                return false;
+
+            if (!isPrivileged && charge.Shipment.CustomerId != user.CustomerProfile!.Id)
                 return false;
 
             var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(charge.ShipmentId);
@@ -109,6 +140,23 @@ namespace Infrastructure.Services.Shipments.Core
 
             if (!ShipmentStatusRules.CanModifyCharges(shipment.Status))
                 throw new BusinessRuleException("Cannot modify charges at this stage.");
+
+            var invoice = charge.InvoiceId.HasValue
+                ? shipment.Invoices.FirstOrDefault(x => x.Id == charge.InvoiceId.Value && !x.IsDeleted)
+                : null;
+
+            if (!isPrivileged)
+            {
+                if (charge.ChargeType == ChargeType.OceanFreight || invoice?.NetShipmentPrice > 0)
+                    throw new BusinessRuleException("Base freight charges cannot be deleted by customer.");
+
+                if (invoice?.PaymentStatus is PaymentStatus.Pending or PaymentStatus.PartiallyPaid or PaymentStatus.Paid)
+                    throw new BusinessRuleException("Cannot delete charges from a confirmed invoice.");
+            }
+            else if (invoice?.PaymentStatus is PaymentStatus.PartiallyPaid or PaymentStatus.Paid)
+            {
+                throw new BusinessRuleException("Paid or partially paid invoice charges cannot be deleted.");
+            }
 
             _unitOfWork.ShipmentCharges.Delete(charge);
 
@@ -185,9 +233,6 @@ namespace Infrastructure.Services.Shipments.Core
 
             if (request.Amount.HasValue)
                 charge.Amount = request.Amount.Value;
-
-            if (request.TaxAmount.HasValue)
-                charge.TaxAmount = request.TaxAmount.Value;
 
             if (!string.IsNullOrWhiteSpace(request.Currency))
                 charge.Currency = request.Currency;

@@ -29,7 +29,10 @@ namespace Infrastructure.Data.Configuration.Shipments
             builder.Property(x => x.SubTotal)
                 .HasPrecision(18, 2);
 
-            builder.Property(x => x.TaxAmount)
+            builder.Property(x => x.NetShipmentPrice)
+                .HasPrecision(18, 2);
+
+            builder.Property(x => x.TotalAmount)
                 .HasPrecision(18, 2);
 
             builder.Property(x => x.TotalAmount)

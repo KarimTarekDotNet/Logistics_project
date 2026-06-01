@@ -85,6 +85,44 @@ namespace Infrastructure.Services.Pricing.Quotation
 
             await _unitOfWork.Shipments.AddAsync(shipment);
 
+            var invoice = new Invoice
+            {
+                Id = Guid.NewGuid(),
+                ShipmentId = shipment.Id,
+                Shipment = shipment,
+                InvoiceNumber = InvoiceHelper.GenerateInvoiceNumber(shipment.Customer.NationalId!),
+                Currency = InvoiceHelper.NormalizeAndValidateCurrency(shipment.Currency),
+                NetShipmentPrice = shipment.AgreedPrice,
+                SubTotal = shipment.AgreedPrice,
+                TaxAmount = 0.14m * shipment.AgreedPrice, // Assuming 14% tax
+                TotalAmount = shipment.AgreedPrice + (0.14m * shipment.AgreedPrice),
+                PaymentStatus = PaymentStatus.Pending,
+                IssuedAt = DateTimeOffset.UtcNow,
+                DueDate = DateTimeOffset.UtcNow.AddDays(7),
+                CreatedAt = DateTimeOffset.UtcNow,
+                PayerType = PayerType.Shipper,
+            };
+
+            var charge = new ShipmentCharge
+            {
+                Shipment = shipment,
+                InvoiceId = invoice.Id,
+                Invoice = invoice,
+                ChargeType = ChargeType.OceanFreight,
+                PayerType = invoice.PayerType,
+                Description = "Ocean freight charge based on approved quote request",
+                Amount = quote.FinalPrice,
+                TaxAmount = invoice.TaxAmount,
+                Currency = quote.Currency,
+                CreatedAt = DateTimeOffset.UtcNow,
+            };
+
+            invoice.Charges.Add(charge);
+
+            await _unitOfWork.ShipmentCharges.AddAsync(charge);
+
+            await _unitOfWork.Invoices.AddAsync(invoice);
+
             await SendApprovalEmailAsync(user, request);
 
             return await UpdateRequestStatusAsync(request, user, QuoteRequestStatus.Approved);

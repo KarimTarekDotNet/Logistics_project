@@ -1,5 +1,4 @@
 ﻿using Domain.Enums;
-using Domain.Exceptions;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Domain.Entities.Shipments
@@ -16,6 +15,7 @@ namespace Domain.Entities.Shipments
 
         public ICollection<ShipmentCharge> Charges { get; set; } = new List<ShipmentCharge>();
 
+        public decimal NetShipmentPrice { get; set; }
         public decimal SubTotal { get; set; }
         public decimal TaxAmount { get; set; }
         public decimal TotalAmount { get; set; }

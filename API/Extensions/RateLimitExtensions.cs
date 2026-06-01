@@ -14,7 +14,7 @@ namespace API.Extensions
                 options.AddFixedWindowLimiter("AuthPolicy", opt =>
                 {
                     opt.PermitLimit = 10;
-                    opt.Window = TimeSpan.FromMinutes(1);
+                    opt.Window = TimeSpan.FromSeconds(10);
                     opt.QueueLimit = 0;
                 });
 

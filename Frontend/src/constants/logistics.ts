@@ -3,7 +3,6 @@ export const ALLOWED_CURRENCIES = ["USD", "EUR", "GBP", "AED", "CNY"] as const;
 export const SESSION_KEY = "logistic-project-session";
 export const PENDING_VERIFICATION_KEY = "logistic-project-pending-verification";
 export const THEME_KEY = "logistic-project-theme";
-export const SHIPMENT_WORKFLOW_RESUME_KEY = "logistic-project-shipment-workflow-resume";
 
 export const payerTypes = [
   { label: "Shipper", value: 0 },

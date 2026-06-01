@@ -25,6 +25,15 @@ namespace Infrastructure.Services.Shipments.Core
             _userManager = userManager;
         }
 
+        private static bool HasLockedInvoiceForItemModification(Domain.Entities.Shipments.Shipment shipment)
+        {
+            return shipment.Invoices.Any(x =>
+                !x.IsDeleted &&
+                ((x.NetShipmentPrice > 0 && x.PaymentStatus == PaymentStatus.Pending) ||
+                 (x.NetShipmentPrice <= 0 &&
+                  x.PaymentStatus is PaymentStatus.Pending or PaymentStatus.PartiallyPaid or PaymentStatus.Paid)));
+        }
+
         public async Task<ShipmentItemResponse> CreateAsync(CreateShipmentItemRequest request, string userId, bool isPrivileged)
         {
             if (isPrivileged)
@@ -49,7 +58,7 @@ namespace Infrastructure.Services.Shipments.Core
             if (shipment.CustomerId != user.CustomerProfile.Id)
                 throw new BusinessRuleException("You do not have permission to modify this shipment.");
 
-            var hasLockedInvoice = shipment.Invoices.Any(x => !x.IsDeleted && x.PaymentStatus == PaymentStatus.Pending);
+            var hasLockedInvoice = HasLockedInvoiceForItemModification(shipment);
             
             if (hasLockedInvoice)
                 throw new BusinessRuleException("Cannot modify shipment items after invoice confirmation.");
@@ -123,11 +132,7 @@ namespace Infrastructure.Services.Shipments.Core
             if (!ShipmentStatusRules.CanModifyItems(shipment.Status))
                 throw new BusinessRuleException("Cannot delete items from a delivered/closed shipment.");
 
-            var hasLockedInvoice = shipment.Invoices.Any(x =>
-                !x.IsDeleted &&
-                (x.PaymentStatus == PaymentStatus.Pending ||
-                 x.PaymentStatus == PaymentStatus.PartiallyPaid ||
-                 x.PaymentStatus == PaymentStatus.Paid));
+            var hasLockedInvoice = HasLockedInvoiceForItemModification(shipment);
 
             if (hasLockedInvoice)
                 throw new BusinessRuleException("Cannot modify shipment items after invoice confirmation.");
@@ -217,11 +222,7 @@ namespace Infrastructure.Services.Shipments.Core
             if (request.ShipmentId.HasValue && request.ShipmentId.Value != shipmentItem.ShipmentId)
                 throw new BusinessRuleException("Moving cargo items between shipments is not supported.");
 
-            var hasLockedInvoice = currentShipment.Invoices.Any(x =>
-                !x.IsDeleted &&
-                (x.PaymentStatus == PaymentStatus.Pending ||
-                 x.PaymentStatus == PaymentStatus.PartiallyPaid ||
-                 x.PaymentStatus == PaymentStatus.Paid));
+            var hasLockedInvoice = HasLockedInvoiceForItemModification(currentShipment);
 
             if (hasLockedInvoice)
                 throw new BusinessRuleException("Cannot modify shipment items after invoice confirmation.");

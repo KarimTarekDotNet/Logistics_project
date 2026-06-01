@@ -9,6 +9,7 @@ import {
   emptyShipmentItemDraft,
   shipmentItemToDraft
 } from "./features/shipments/shipmentItems";
+import { getWorkflowCharges } from "./features/shipments/shipmentCharges";
 import { useShipmentWorkspace } from "./hooks/useShipmentWorkspace";
 import { useToasts } from "./hooks/useToasts";
 import { AccountPage } from "./pages/AccountPage";
@@ -53,6 +54,7 @@ import type {
   RegisterForm,
   Route,
   Shipment,
+  ShipmentCharge,
   ShipmentItem,
   ShipmentItemDraft,
   TrackingDraft,
@@ -65,13 +67,6 @@ import { getLocalDateTime, isoToLocalDateTime, toIso } from "./utils/format";
 import { isValidId } from "./utils/ids";
 import { getAppPath, getAppPathname, toBrowserPath } from "./utils/navigation";
 import { loadPendingVerification, loadStoredSession, persistSession, sessionFromAuth } from "./utils/session";
-import {
-  clearShipmentWorkflowResume,
-  loadShipmentWorkflowResume,
-  saveShipmentWorkflowResume,
-  type ShipmentWorkflowResume,
-  type ShipmentWorkflowStep
-} from "./utils/shipmentWorkflowResume";
 
 const initialData: AppData = {
   rates: [],
@@ -84,6 +79,8 @@ const initialData: AppData = {
   shipments: [],
   customers: []
 };
+
+type ShipmentWorkflowStep = "charges" | "invoice";
 
 const initialRegisterForm: RegisterForm = {
   firstName: "",
@@ -173,8 +170,7 @@ function normalizeStatusKey(status?: string) {
 }
 
 function canQueryInvoicesForShipment(shipment?: Shipment) {
-  const status = normalizeStatusKey(shipment?.status);
-  return Boolean(shipment) && status !== "created" && status !== "clientconfirmed";
+  return Boolean(shipment);
 }
 
 function readConfirmationLink(path: string) {
@@ -317,8 +313,6 @@ export default function App() {
   const [quoteRequestDetailError, setQuoteRequestDetailError] = useState<string | null>(null);
   const [authMetrics, setAuthMetrics] = useState({ publicRateCount: 0, workflowStateCount: 0 });
   const [itemUpdateReturnStep, setItemUpdateReturnStep] = useState<ShipmentWorkflowStep | null>(null);
-  const [workflowResumePrompt, setWorkflowResumePrompt] = useState<ShipmentWorkflowResume | null>(null);
-  const [workflowResumeDismissed, setWorkflowResumeDismissed] = useState(false);
 
   const [loginForm, setLoginForm] = useState({ identity: "", password: "" });
   const [registerForm, setRegisterForm] = useState<RegisterForm>(initialRegisterForm);
@@ -460,22 +454,6 @@ export default function App() {
     : data.quotes.length > 0
       ? data.quotes
       : currentCustomer?.quotes ?? [];
-  const workflowResumeStepLabel = workflowResumePrompt?.step === "invoice" ? "invoice review" : "charge generation";
-
-  function rememberShipmentWorkflow(step: ShipmentWorkflowStep, shipmentId = selectedShipmentId, invoice?: Invoice | null) {
-    if (!isUser || !isValidId(shipmentId)) return;
-
-    saveShipmentWorkflowResume({
-      userId: session?.id,
-      shipmentId,
-      step,
-      ...(invoice?.id ? { invoiceId: invoice.id } : {})
-    });
-  }
-
-  function forgetShipmentWorkflow(shipmentId = selectedShipmentId) {
-    clearShipmentWorkflowResume(session?.id, isValidId(shipmentId) ? shipmentId : undefined);
-  }
 
   const handleBackendUnavailable = useCallback(
     (showToast = true) => {
@@ -489,7 +467,6 @@ export default function App() {
       setWorkflowInvoice(null);
       setShipmentWorkflowStep(null);
       setItemUpdateReturnStep(null);
-      setWorkflowResumePrompt(null);
       closeQuoteRequestDetails();
       setProfilePreviewOpen(false);
       setActiveView("overview");
@@ -762,7 +739,6 @@ export default function App() {
       setWorkflowInvoice(null);
       setShipmentWorkflowStep(null);
       setItemUpdateReturnStep(null);
-      setWorkflowResumePrompt(null);
       closeQuoteRequestDetails();
       setProfilePreviewOpen(false);
       workspace.clearShipmentContext();
@@ -790,29 +766,6 @@ export default function App() {
     if (!session?.accessToken) return;
     void loadData();
   }, [loadData, session?.accessToken]);
-
-  useEffect(() => {
-    setWorkflowResumePrompt(null);
-    setWorkflowResumeDismissed(false);
-  }, [session?.id]);
-
-  useEffect(() => {
-    if (!session?.accessToken || !isUser || workflowResumeDismissed || workflowResumePrompt || shipmentWorkflowStep) return;
-
-    const storedResume = loadShipmentWorkflowResume(session.id);
-    if (storedResume) {
-      setWorkflowResumePrompt(storedResume);
-    } else {
-      setWorkflowResumeDismissed(true);
-    }
-  }, [
-    isUser,
-    session?.accessToken,
-    session?.id,
-    shipmentWorkflowStep,
-    workflowResumeDismissed,
-    workflowResumePrompt
-  ]);
 
   useEffect(() => {
     if (session) return;
@@ -993,8 +946,8 @@ export default function App() {
     const shouldLookupInvoices =
       Boolean(session?.accessToken && selectedShipmentId) &&
       canQueryInvoicesForShipment(selectedShipment) &&
-      hasInvoiceLookupSignal &&
-      (activeView === "finance" || shipmentWorkflowStep !== null || activeView === "shipments");
+      (activeView === "finance" ||
+        (hasInvoiceLookupSignal && (shipmentWorkflowStep !== null || activeView === "shipments")));
 
     if (!shouldLookupInvoices) {
       setInvoices([]);
@@ -1594,7 +1547,6 @@ export default function App() {
     setWorkflowInvoice(null);
     setShipmentWorkflowStep(null);
     setItemUpdateReturnStep(null);
-    setWorkflowResumePrompt(null);
     closeQuoteRequestDetails();
     setProfilePreviewOpen(false);
     setActiveView("overview");
@@ -2133,7 +2085,6 @@ export default function App() {
     setWorkflowInvoice(null);
     setShipmentWorkflowStep("charges");
     setActiveView("shipments");
-    rememberShipmentWorkflow("charges", selectedShipment.id);
     pushToast("success", "Cargo confirmed", "Move on to charge generation when you are ready.");
   }
 
@@ -2150,9 +2101,9 @@ export default function App() {
 
   async function loadInvoices() {
     if (!session?.accessToken || !selectedShipment) return;
-    if (!canQueryInvoicesForShipment(selectedShipment) || workspace.charges.length === 0) {
+    if (!canQueryInvoicesForShipment(selectedShipment)) {
       setInvoices([]);
-      pushToast("info", "No invoices yet", "This shipment is not ready for invoice payment yet.");
+      pushToast("info", "No invoices yet", "This shipment is not ready for invoice lookup yet.");
       return;
     }
 
@@ -2177,40 +2128,50 @@ export default function App() {
     }
   }
 
-  async function handleGenerateChargesAndInvoice() {
+  async function handleGenerateCharges() {
     if (!session?.accessToken || !selectedShipment) return;
 
     const existingCharges = workspace.charges.length > 0 ? workspace.charges : (selectedShipment.charges ?? []);
-    let billingCharges = existingCharges;
-
-    if (billingCharges.length === 0) {
-      const generatedCharges = await runMutation(
-        "Charges generated",
-        () => api.generateCharges(session.accessToken, selectedShipment.id),
-        {
-          refresh: false,
-          successToast: false,
-          confirm: {
-            title: "Confirm billing action",
-            message: "Charges will be generated from the selected shipment and linked to the invoice workflow.",
-            confirmLabel: "OK"
-          }
-        }
-      );
-
-      if (!generatedCharges) return;
-      billingCharges = generatedCharges;
-
-      if (generatedCharges.length > 0) {
-        workspace.setCharges((current) => [
-          ...generatedCharges,
-          ...current.filter((charge) => generatedCharges.every((generated) => generated.id !== charge.id))
-        ]);
-      }
+    const existingWorkflowCharges = getWorkflowCharges(existingCharges, selectedShipment);
+    if (existingWorkflowCharges.length > 0) {
+      workspace.setCharges(existingCharges);
+      pushToast("info", "Charges already generated", "Review the saved charges, then create the invoice.");
+      return;
     }
 
+    const generatedCharges = await runMutation(
+      "Charges generated",
+      () => api.generateCharges(session.accessToken, selectedShipment.id),
+      {
+        refresh: false,
+        successToast: false,
+        confirm: {
+          title: "Confirm billing action",
+          message: "Charges will be generated from the selected shipment and shown before invoice creation.",
+          confirmLabel: "Generate"
+        }
+      }
+    );
+
+    if (!generatedCharges) return;
+
+    workspace.setCharges((current) => [
+      ...generatedCharges,
+      ...current.filter((charge) => generatedCharges.every((generated) => generated.id !== charge.id))
+    ]);
     await workspace.loadShipmentRelated(selectedShipment.id);
-    rememberShipmentWorkflow("charges", selectedShipment.id);
+    pushToast("success", "Charges generated", "Review the charges, then create the invoice.");
+  }
+
+  async function handleCreateWorkflowInvoice() {
+    if (!session?.accessToken || !selectedShipment) return;
+
+    const currentCharges = workspace.charges.length > 0 ? workspace.charges : (selectedShipment.charges ?? []);
+    const billingCharges = getWorkflowCharges(currentCharges, selectedShipment);
+    if (billingCharges.length === 0) {
+      pushToast("error", "Charges needed", "Generate charges before creating the invoice.");
+      return;
+    }
 
     const draftInvoice = await runMutation(
       "Draft invoice created",
@@ -2223,13 +2184,10 @@ export default function App() {
     setWorkflowInvoice(draftInvoice);
     setInvoices((current) => [draftInvoice, ...current.filter((invoice) => invoice.id !== draftInvoice.id)]);
     setShipmentWorkflowStep("invoice");
-    rememberShipmentWorkflow("invoice", selectedShipment.id, draftInvoice);
     pushToast(
       "success",
       "Invoice ready",
-      billingCharges.length > existingCharges.length
-        ? "Charges were generated and a draft invoice is ready for review."
-        : "Existing charges were used to prepare the draft invoice."
+      "The draft invoice is ready for review."
     );
   }
 
@@ -2249,10 +2207,24 @@ export default function App() {
   ) {
     if (!session?.accessToken || !isValidId(shipmentId)) return false;
 
-    workspace.setSelectedShipmentId(shipmentId);
     setBusy(true);
     try {
       const token = session.accessToken;
+      let restoredShipment = data.shipments.find((shipment) => shipment.id === shipmentId);
+
+      if (!restoredShipment) {
+        try {
+          restoredShipment = await api.getShipment(token, shipmentId);
+        } catch (error) {
+          if (isNotFoundError(error)) {
+            pushToast("info", "Workflow expired", "That saved shipment no longer exists.");
+            return false;
+          }
+          throw error;
+        }
+      }
+
+      workspace.setSelectedShipmentId(shipmentId);
       const [nextItems, nextCharges] = await Promise.all([
         safe(() => api.getShipmentItems(token, shipmentId), [] as ShipmentItem[]),
         safe(() => api.getChargesByShipment(token, shipmentId), [])
@@ -2268,6 +2240,7 @@ export default function App() {
       setInvoices(nextInvoices);
       workspace.setCharges(nextCharges);
       await workspace.loadShipmentRelated(shipmentId);
+      const nextWorkflowCharges = getWorkflowCharges(nextCharges, restoredShipment);
 
       const requestedInvoice = invoiceId ? nextInvoices.find((invoice) => invoice.id === invoiceId) : undefined;
       const requestedInvoiceStatus = String(requestedInvoice?.paymentStatus ?? "").replace(/\s+/g, "").toLowerCase();
@@ -2282,7 +2255,6 @@ export default function App() {
         setWorkflowInvoice(reviewInvoice);
         setShipmentWorkflowStep("invoice");
         setActiveView("shipments");
-        rememberShipmentWorkflow("invoice", shipmentId, reviewInvoice);
         pushToast("info", "Invoice restored", "The latest invoice for this shipment is open for review.");
         return true;
       }
@@ -2291,17 +2263,14 @@ export default function App() {
         setWorkflowInvoice(null);
         setShipmentWorkflowStep(null);
         setActiveView("finance");
-        forgetShipmentWorkflow(shipmentId);
         pushToast("info", "Payment step restored", "The invoice is ready for payment in finance.");
         return true;
       }
 
-      const shipmentFromList = data.shipments.find((shipment) => shipment.id === shipmentId);
-      if (requestedStep === "charges" || nextCharges.length > 0 || nextItems.length > 0 || shipmentFromList?.items?.length) {
+      if (requestedStep === "charges" || nextWorkflowCharges.length > 0 || nextItems.length > 0 || restoredShipment.items?.length) {
         setWorkflowInvoice(null);
         setShipmentWorkflowStep("charges");
         setActiveView("shipments");
-        rememberShipmentWorkflow("charges", shipmentId);
         pushToast("info", "Charge step restored", "Continue by generating charges for the saved cargo items.");
         return true;
       }
@@ -2323,15 +2292,6 @@ export default function App() {
   async function handleContinueInvoiceFlow() {
     if (!selectedShipment) return;
     await restoreShipmentInvoiceWorkflow(selectedShipment.id, "invoice");
-  }
-
-  async function handleResumeStoredWorkflow() {
-    const resume = workflowResumePrompt;
-    if (!resume) return;
-
-    setWorkflowResumePrompt(null);
-    setWorkflowResumeDismissed(true);
-    await restoreShipmentInvoiceWorkflow(resume.shipmentId, resume.step, resume.invoiceId);
   }
 
   async function handleCreateInvoice(event: FormEvent) {
@@ -2394,7 +2354,6 @@ export default function App() {
         setInvoices((current) => [updated, ...current.filter((invoice) => invoice.id !== updated.id)]);
         setWorkflowInvoice(null);
         setShipmentWorkflowStep(null);
-        forgetShipmentWorkflow(selectedShipment?.id);
 
         if (selectedShipment) {
           try {
@@ -2425,6 +2384,78 @@ export default function App() {
     })();
   }
 
+  function handleCancelWorkflowInvoice(invoice: Invoice) {
+    if (!session?.accessToken || !selectedShipment) return;
+
+    const token = session.accessToken;
+    const shipmentId = selectedShipment.id;
+    const chargeIds = Array.from(
+      new Set(
+        getWorkflowCharges(
+          [...workspace.charges, ...(invoice.charges ?? []), ...(selectedShipment.charges ?? [])] as ShipmentCharge[],
+          selectedShipment
+        )
+          .map((charge) => charge.id)
+          .filter(isValidId)
+      )
+    );
+    const itemIds = Array.from(
+      new Set(
+        [...workspace.shipmentItems, ...(selectedShipment.items ?? [])]
+          .map((item) => item.id)
+          .filter(isValidId)
+      )
+    );
+
+    void (async () => {
+      const result = await runMutation(
+        "Invoice cycle cancelled",
+        async () => {
+          const cancelled = await api.cancelInvoice(token, invoice.id, "Cancelled from invoice review");
+          const cleanupResults = await Promise.allSettled([
+            ...chargeIds.map((id) => api.deleteCharge(token, id)),
+            ...itemIds.map((id) => api.deleteShipmentItem(token, id))
+          ]);
+
+          return {
+            invoice: cancelled,
+            cleanupFailed: cleanupResults.some((entry) => entry.status === "rejected")
+          };
+        },
+        {
+          refresh: false,
+          successToast: false,
+          confirm: {
+            title: "Cancel invoice cycle",
+            message: "The draft invoice will be cancelled, and generated charges and cargo items for this cycle will be removed.",
+            confirmLabel: "Cancel cycle",
+            tone: "danger"
+          }
+        }
+      );
+
+      if (!result) return;
+
+      setInvoices((current) => current.map((currentInvoice) => (currentInvoice.id === result.invoice.id ? result.invoice : currentInvoice)));
+      setWorkflowInvoice(null);
+      setShipmentWorkflowStep(null);
+      setItemUpdateReturnStep(null);
+      setEditingItemId(null);
+      setItemDraft(initialShipmentItemDraft);
+      setLastItemDraft(initialShipmentItemDraft);
+      workspace.setCharges([]);
+      await workspace.loadShipmentRelated(shipmentId);
+      setActiveView("shipments");
+      pushToast(
+        result.cleanupFailed ? "error" : "success",
+        result.cleanupFailed ? "Invoice cancelled" : "Invoice cycle cancelled",
+        result.cleanupFailed
+          ? "The invoice was cancelled, but some charges or cargo items could not be removed."
+          : "The invoice was cancelled and the generated charges and cargo items were removed."
+      );
+    })();
+  }
+
   function handleCancelInvoice(id: string, reason: string) {
     if (!session?.accessToken) return;
     void (async () => {
@@ -2434,7 +2465,6 @@ export default function App() {
       });
       if (updated) {
         setInvoices((current) => current.map((invoice) => (invoice.id === updated.id ? updated : invoice)));
-        if (selectedShipment) forgetShipmentWorkflow(selectedShipment.id);
       }
     })();
   }
@@ -2448,7 +2478,6 @@ export default function App() {
       });
       if (deleted) {
         setInvoices((current) => current.filter((invoice) => invoice.id !== id));
-        if (selectedShipment) forgetShipmentWorkflow(selectedShipment.id);
       }
     })();
   }
@@ -2845,7 +2874,8 @@ export default function App() {
             selectedShipment={selectedShipment}
             charges={workspace.charges}
             busy={busy}
-            onGenerate={handleGenerateChargesAndInvoice}
+            onGenerate={handleGenerateCharges}
+            onCreateInvoice={handleCreateWorkflowInvoice}
             onUpdateItems={handleUpdateItemsFromInvoice}
           />
         );
@@ -2859,6 +2889,7 @@ export default function App() {
             charges={workspace.charges}
             busy={busy}
             onConfirm={handleConfirmInvoice}
+            onCancel={handleCancelWorkflowInvoice}
             onUpdateItems={handleUpdateItemsFromInvoice}
           />
         );
@@ -3090,19 +3121,6 @@ export default function App() {
           setProfilePreviewOpen(false);
           selectWorkspaceView("account");
         }}
-      />
-      <ConfirmDialog
-        open={Boolean(workflowResumePrompt)}
-        title="Resume invoice workflow"
-        message={`You were in ${workflowResumeStepLabel} for a shipment. Continue from the last saved point?`}
-        confirmLabel="Continue"
-        cancelLabel="Not now"
-        busy={busy}
-        onClose={() => {
-          setWorkflowResumePrompt(null);
-          setWorkflowResumeDismissed(true);
-        }}
-        onConfirm={() => void handleResumeStoredWorkflow()}
       />
       {actionConfirmationDialog}
       <ToastHost toasts={toasts} onDismiss={dismissToast} />

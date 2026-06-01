@@ -69,10 +69,11 @@ namespace API.Controllers.Shipments
 
         [HttpDelete("{id}")]
         [EnableRateLimiting("HeavyPolicy")]
-        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var deleted = await shipmentChargeService.DeleteAsync(id);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
+            var deleted = await shipmentChargeService.DeleteAsync(id, userId, isPrivileged);
             if (!deleted)
                 return NotFound();
 

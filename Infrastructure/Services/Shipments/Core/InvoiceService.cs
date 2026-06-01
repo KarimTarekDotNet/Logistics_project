@@ -26,6 +26,25 @@ namespace Infrastructure.Services.Shipments.Core
             _userManager = userManager;
         }
 
+        private static bool IsBaseFreightCharge(Domain.Entities.Shipments.Shipment shipment, ShipmentCharge charge)
+        {
+            if (charge.ChargeType != ChargeType.OceanFreight)
+                return false;
+
+            var invoice = charge.InvoiceId.HasValue
+                ? shipment.Invoices.FirstOrDefault(x => x.Id == charge.InvoiceId.Value && !x.IsDeleted)
+                : null;
+
+            if (invoice?.NetShipmentPrice > 0)
+                return true;
+
+            var description = charge.Description ?? string.Empty;
+            var looksLikeQuoteCharge = description.Contains("quote", StringComparison.OrdinalIgnoreCase);
+            var matchesAgreedPrice = shipment.AgreedPrice > 0 && Math.Abs(charge.Amount - shipment.AgreedPrice) < 0.01m;
+
+            return looksLikeQuoteCharge || matchesAgreedPrice;
+        }
+
         public async Task<InvoiceResponse> CreateOrUpdateDraftInvoiceAsync(Guid shipmentId, string userId)
         {
             var user = await _userManager.Users.Include(x => x.CustomerProfile)
@@ -52,25 +71,29 @@ namespace Infrastructure.Services.Shipments.Core
             if (string.IsNullOrWhiteSpace(shipment.Customer.NationalId))
                 throw new BusinessRuleException("Customer national id is required.");
 
+            var draftInvoice = shipment.Invoices.FirstOrDefault(x => x.PaymentStatus == PaymentStatus.Draft && !x.IsDeleted);
+
             var charges = shipment.Charges
                 .Where(x => !x.IsDeleted)
+                .Where(x => x.InvoiceId == null || x.InvoiceId == draftInvoice?.Id)
+                .Where(x => !IsBaseFreightCharge(shipment, x))
                 .ToList();
 
             if (!charges.Any())
                 throw new BusinessRuleException("No charges found to create invoice.");
 
-            var draftInvoice = shipment.Invoices
-                .FirstOrDefault(x =>
-                    x.PaymentStatus == PaymentStatus.Draft &&
-                    !x.IsDeleted);
+            if (charges.Select(x => x.PayerType).Distinct().Count() > 1)
+                throw new BusinessRuleException("Cannot create one invoice for multiple payer types.");
 
             if (draftInvoice == null)
             {
                 draftInvoice = new Invoice
                 {
+                    Id = Guid.NewGuid(),
                     ShipmentId = shipment.Id,
                     InvoiceNumber = InvoiceHelper.GenerateInvoiceNumber(shipment.Customer.NationalId),
                     Currency = InvoiceHelper.NormalizeAndValidateCurrency(shipment.Currency),
+                    NetShipmentPrice = 0.0m,
                     PaymentStatus = PaymentStatus.Draft,
                     IssuedAt = DateTimeOffset.UtcNow,
                     DueDate = DateTimeOffset.UtcNow.AddDays(7),
@@ -83,11 +106,13 @@ namespace Infrastructure.Services.Shipments.Core
             else
             {
                 draftInvoice.UpdatedAt = DateTimeOffset.UtcNow;
-                draftInvoice.Charges.Clear();
             }
 
+            draftInvoice.Charges.Clear();
             foreach (var charge in charges)
             {
+                charge.InvoiceId = draftInvoice.Id;
+                charge.Invoice = draftInvoice;
                 draftInvoice.Charges.Add(charge);
             }
 
@@ -95,6 +120,7 @@ namespace Infrastructure.Services.Shipments.Core
             draftInvoice.TaxAmount = charges.Sum(x => x.TaxAmount);
             draftInvoice.TotalAmount = draftInvoice.SubTotal + draftInvoice.TaxAmount;
             draftInvoice.Currency = shipment.Currency;
+            draftInvoice.PayerType = charges.First().PayerType;
 
             await _unitOfWork.SaveChangesAsync();
 
@@ -143,8 +169,8 @@ namespace Infrastructure.Services.Shipments.Core
                 if (shipment.CustomerId != user.CustomerProfile.Id)
                     throw new UnauthorizedAccessException("You do not have access to this invoice.");
 
-                if (invoice.PaymentStatus != PaymentStatus.Pending)
-                    throw new BusinessRuleException("Only pending invoices can be cancelled by customer.");
+                if (invoice.PaymentStatus is not (PaymentStatus.Draft or PaymentStatus.Pending))
+                    throw new BusinessRuleException("Only draft or pending invoices can be cancelled by customer.");
             }
             else
             {

@@ -134,7 +134,6 @@ namespace Application.ApplicationRules.Shipments
         {
             return status is not (
                 ShipmentStatus.Created or
-                ShipmentStatus.ClientConfirmed or
                 ShipmentStatus.Cancelled or
                 ShipmentStatus.Closed
             );
@@ -144,8 +143,6 @@ namespace Application.ApplicationRules.Shipments
         {
             return status is not (
                 ShipmentStatus.Created or
-                ShipmentStatus.ClientConfirmed or
-                ShipmentStatus.BookingRequested or
                 ShipmentStatus.Cancelled or
                 ShipmentStatus.Closed
             );
@@ -163,6 +160,8 @@ namespace Application.ApplicationRules.Shipments
                 ShipmentStatus.ClientConfirmed or
                 ShipmentStatus.BookingRequested or
                 ShipmentStatus.Cancelled or
+                ShipmentStatus.TelexReleased or
+                ShipmentStatus.Delivered or
                 ShipmentStatus.Closed
             );
         }
