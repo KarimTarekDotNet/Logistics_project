@@ -4,9 +4,13 @@ Logistic Project is a modular ASP.NET Core backend for freight forwarding and sh
 
 ## Live Demo
 
-The GitHub live demo points to the backend Swagger UI:
+Backend page:
 
-https://unmultipliable-kelsey-unloyal.ngrok-free.dev/swagger
+https://karimtarekdotnet.github.io/Logistics_project/
+
+Frontend app:
+
+https://karimtarekdotnet.github.io/Logistics_Project_Frontend/
 
 ## Features
 
