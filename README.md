@@ -2,6 +2,12 @@
 
 Logistic Project is a modular ASP.NET Core backend for freight forwarding and shipment operations. It covers customer onboarding, carrier and route management, pricing, quotation workflows, shipment lifecycle automation, invoicing, document handling, and external rate-import integrations.
 
+## Live Demo
+
+The GitHub live demo points to the backend Swagger UI:
+
+https://unmultipliable-kelsey-unloyal.ngrok-free.dev/swagger
+
 ## Features
 
 - Shipment lifecycle management across logistics states such as created, client confirmed, booking requested, booking confirmed, shipping instructions submitted, draft bill of lading received/approved, payment pending/completed, telex released, delivered, closed, cancelled, and on hold.

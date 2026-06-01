@@ -1,0 +1,73 @@
+name: Deploy Backend Demo
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  BACKEND_DEMO_URL: "https://unmultipliable-kelsey-unloyal.ngrok-free.dev/swagger"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create backend redirect page
+        run: |
+          mkdir -p demo
+          cat > demo/index.html <<EOF
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <meta http-equiv="refresh" content="0; url=${BACKEND_DEMO_URL}">
+              <title>Backend Demo</title>
+              <style>
+                body {
+                  margin: 0;
+                  min-height: 100vh;
+                  display: grid;
+                  place-items: center;
+                  font-family: Arial, sans-serif;
+                  background: #0f172a;
+                  color: #f8fafc;
+                }
+                a { color: #38bdf8; }
+              </style>
+            </head>
+            <body>
+              <main>
+                <h1>Opening backend demo...</h1>
+                <p><a href="${BACKEND_DEMO_URL}">Open Swagger manually</a></p>
+              </main>
+              <script>window.location.replace("${BACKEND_DEMO_URL}");</script>
+            </body>
+          </html>
+          EOF
+          cp demo/index.html demo/404.html
+
+      - name: Publish backend demo redirect
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin gh-pages
+          git worktree add ../gh-pages gh-pages
+          find ../gh-pages -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -R demo/. ../gh-pages/
+          touch ../gh-pages/.nojekyll
+          cd ../gh-pages
+          git add -A
+          git commit -m "Deploy backend live demo redirect" || exit 0
+          git push origin gh-pages
