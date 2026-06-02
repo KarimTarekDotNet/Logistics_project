@@ -38,11 +38,7 @@ namespace Infrastructure.Services.Shipments.Core
             if (invoice?.NetShipmentPrice > 0)
                 return true;
 
-            var description = charge.Description ?? string.Empty;
-            var looksLikeQuoteCharge = description.Contains("quote", StringComparison.OrdinalIgnoreCase);
-            var matchesAgreedPrice = shipment.AgreedPrice > 0 && Math.Abs(charge.Amount - shipment.AgreedPrice) < 0.01m;
-
-            return looksLikeQuoteCharge || matchesAgreedPrice;
+            return false;
         }
 
         public async Task<InvoiceResponse> CreateOrUpdateDraftInvoiceAsync(Guid shipmentId, string userId)
@@ -89,7 +85,6 @@ namespace Infrastructure.Services.Shipments.Core
             {
                 draftInvoice = new Invoice
                 {
-                    Id = Guid.NewGuid(),
                     ShipmentId = shipment.Id,
                     InvoiceNumber = InvoiceHelper.GenerateInvoiceNumber(shipment.Customer.NationalId),
                     Currency = InvoiceHelper.NormalizeAndValidateCurrency(shipment.Currency),

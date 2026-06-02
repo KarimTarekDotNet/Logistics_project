@@ -178,7 +178,6 @@ namespace Infrastructure.Services.Pricing.Quotation
 
             var invoice = new Invoice
             {
-                Id = Guid.NewGuid(),
                 ShipmentId = shipment.Id,
                 Shipment = shipment,
                 InvoiceNumber = InvoiceHelper.GenerateInvoiceNumber(shipment.Customer.NationalId!),

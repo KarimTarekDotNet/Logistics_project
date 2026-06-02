@@ -208,7 +208,3 @@ dotnet build
 dotnet run --project API
 dotnet ef database update --project Infrastructure --startup-project API
 ```
-
-## License
-
-This project is licensed under the MIT License. See `LICENSE` for details.

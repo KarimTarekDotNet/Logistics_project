@@ -1,9 +1,6 @@
 name: Deploy Backend Demo
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -86,6 +83,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create backend page
+        env:
+          API_URL: ${{ steps.deploy-api.outputs.webapp-url }}
         run: |
           mkdir -p "${PAGES_DIR}"
           cat > "${PAGES_DIR}/index.html" <<EOF
