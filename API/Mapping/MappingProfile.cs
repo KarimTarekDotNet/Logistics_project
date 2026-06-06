@@ -1,5 +1,6 @@
 using Application.DTOs.Aliases;
 using Application.DTOs.Auth;
+using Application.DTOs.Payment;
 using Application.DTOs.Pricing.PricingEngine.Rates;
 using Application.DTOs.Pricing.Quotation;
 using Application.DTOs.Shipments.Core;
@@ -8,6 +9,7 @@ using Application.DTOs.ShippingCore;
 using Application.DTOs.User;
 using AutoMapper;
 using Domain.Entities.Aliases;
+using Domain.Entities.Payments;
 using Domain.Entities.Pricing.Imports;
 using Domain.Entities.Pricing.PricingEngine;
 using Domain.Entities.Pricing.Quotation;
@@ -110,8 +112,8 @@ namespace API.Mapping
 
             // ── Invoice ────────────────────────────────────────────────────
             CreateMap<Invoice, InvoiceResponse>()
-                .ForMember(d => d.PaidPart, o => o.MapFrom(s => s.TotalPaid))
-                .ForMember(d => d.RemainingAmount, o => o.MapFrom(s => s.RemainingAmount))
+                .ForMember(d => d.PaidPart, o => o.MapFrom(s => s.TotalPaidLocal))
+                .ForMember(d => d.RemainingAmount, o => o.MapFrom(s => s.RemainingAmountLocal))
                 .ForMember(d => d.PaymentStatus, o => o.MapFrom(s => s.PaymentStatus.ToString()))
                 .ForMember(d => d.PayerType, o => o.MapFrom(s => s.PayerType.ToString()));
             CreateMap<CreateInvoiceRequest, Invoice>();
@@ -122,6 +124,12 @@ namespace API.Mapping
                 .ForMember(d => d.PaymentProvider, o => o.MapFrom(s => s.PaymentProvider.ToString()))
                 .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
             CreateMap<CreateInvoicePaymentRequest, InvoicePayment>();
+
+            // ── Online Payment ────────────────────────────────────────────────────
+            CreateMap<PaymentTransaction, PaymentTransactionResponse>()
+                .ForMember(d => d.Method, o => o.MapFrom(s => s.Method.ToString()))
+                .ForMember(d => d.Provider, o => o.MapFrom(s => s.Provider.ToString()))
+                .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()));
 
             // ── Shipment Documents ─────────────────────────────────────
             CreateMap<ShipmentDocument, ShipmentDocumentResponse>()

@@ -1,6 +1,7 @@
 ﻿using API.Mapping;
 using Application.Interfaces.Repositories.Aliases;
 using Application.Interfaces.Repositories.Patterns;
+using Application.Interfaces.Repositories.Payments;
 using Application.Interfaces.Repositories.Pricing.Imports;
 using Application.Interfaces.Repositories.Pricing.PricingEngine;
 using Application.Interfaces.Repositories.Pricing.Quotation;
@@ -9,6 +10,7 @@ using Application.Interfaces.Repositories.Shipments.User;
 using Application.Interfaces.Repositories.ShippingCore;
 using Application.Interfaces.Services.Aliases;
 using Application.Interfaces.Services.Auth;
+using Application.Interfaces.Services.Payment;
 using Application.Interfaces.Services.Pricing.Imports;
 using Application.Interfaces.Services.Pricing.PricingEngine;
 using Application.Interfaces.Services.Pricing.Quotation;
@@ -16,6 +18,7 @@ using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Interfaces.Services.Shipments.ApisIntegrations;
 using Application.Interfaces.Services.Shipments.Core;
 using Application.Interfaces.Services.Shipments.User;
+using Application.Interfaces.Services.System;
 using Application.Interfaces.Services.User;
 using Application.Validations.PricingFeature.Pricing;
 using Domain.Entities.Users;
@@ -24,6 +27,7 @@ using FluentValidation.AspNetCore;
 using Infrastructure.Data.Database;
 using Infrastructure.Repositories.Aliases;
 using Infrastructure.Repositories.Patterns;
+using Infrastructure.Repositories.Payment;
 using Infrastructure.Repositories.Pricing.Imports;
 using Infrastructure.Repositories.Pricing.PricingEngine;
 using Infrastructure.Repositories.Pricing.Quotation;
@@ -32,6 +36,7 @@ using Infrastructure.Repositories.Shipments;
 using Infrastructure.Repositories.Shipments.Core;
 using Infrastructure.Services.Aliases;
 using Infrastructure.Services.Auth;
+using Infrastructure.Services.Payment;
 using Infrastructure.Services.Pricing.Imports;
 using Infrastructure.Services.Pricing.PricingEngine;
 using Infrastructure.Services.Pricing.Quotation;
@@ -40,9 +45,12 @@ using Infrastructure.Services.Shipments.Apis;
 using Infrastructure.Services.Shipments.Core;
 using Infrastructure.Services.Shipments.Core.Shipment;
 using Infrastructure.Services.Shipments.User;
+using Infrastructure.Services.System;
 using Infrastructure.Services.User;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
+using Twilio.TwiML.Voice;
 
 namespace API.Extensions
 {
@@ -57,6 +65,14 @@ namespace API.Extensions
                 .AddIdentity<ApplicationUser, IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
+
+            // cache
+            var redisConnectionString =configuration.GetConnectionString("Redis");
+
+            services.AddSingleton<IConnectionMultiplexer>(sp =>
+            ConnectionMultiplexer.Connect(redisConnectionString!)
+            ?? throw new InvalidOperationException("Failed to connect to Redis"));
+
 
             // Repositories
             services.AddScoped<ICarrierRepository, CarrierRepository>();
@@ -77,6 +93,7 @@ namespace API.Extensions
             services.AddScoped<IAliasRepository, AliasRepository>();
             services.AddScoped<IQuoteRequestRepository, QuoteRequestRepository>();
             services.AddScoped<IShipmentChargeRuleRepository, ShipmentChargeRuleRepository>();
+            services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
 
             // Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -110,9 +127,14 @@ namespace API.Extensions
             services.AddScoped<IShipmentDocumentService, ShipmentDocumentService>();
             services.AddScoped<IAliasService, AliasService>();
             services.AddScoped<IQuoteRequestService, QuoteRequestService>();
+            services.AddScoped<IPaymentTransactionService, PaymentTransactionService>();
+            services.AddScoped<IPaymobPaymentService, PaymobPaymentService>();
+            services.AddScoped<IRedisService, RedisService>();
 
             // APIs Integrations
-            services.AddHttpClient<ITaxVerificationService, LookuptaxService>(client => { client.Timeout = TimeSpan.FromSeconds(10); });
+            services.AddHttpClient<ITaxVerificationService, LookuptaxService>(client =>
+            { client.Timeout = TimeSpan.FromSeconds(configuration.GetValue<int>("TaxVerification:TimeoutInSeconds")); });
+
             services.AddScoped<IEmailSender, EmailSender>();
             services.AddScoped<IPhoneOtpService, TwilioPhoneOtpService>();
 

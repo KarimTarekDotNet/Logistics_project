@@ -2,21 +2,17 @@
 {
     public static class CorsExtensions
     {
-        const string FrontendCorsPolicy = "FrontendCors";
-        public static IServiceCollection AddCorsConfiguration(this IServiceCollection services)
+        public static IServiceCollection AddCorsConfiguration(this IServiceCollection services, IConfiguration configuration)
         {
+            var corsPolicy = configuration.GetValue<string>("CORS:CorsPolicy")!;
+            var allowedOrigins = configuration.GetSection("CORS:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+
             services.AddCors(options =>
             {
-                options.AddPolicy(FrontendCorsPolicy, policy =>
+                options.AddPolicy(corsPolicy, policy =>
                 {
                     policy
-                        .WithOrigins(
-                            "http://localhost:5173",
-                            "http://127.0.0.1:5173",
-                            "https://localhost:5173",
-                            "https://127.0.0.1:5173",
-                            "https://karimtarekdotnet.github.io"
-                        )
+                        .WithOrigins(allowedOrigins)
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials();

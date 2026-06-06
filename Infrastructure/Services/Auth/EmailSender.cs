@@ -17,9 +17,9 @@ namespace Infrastructure.Services.Auth
 
         public async Task SendEmailAsync(string to, string subject, string body)
         {
-            var apiKey = _configuration["SendGridSettings:ApiKey"];
-            var fromEmail = _configuration["SendGridSettings:FromEmail"];
-            var fromName = _configuration["SendGridSettings:FromName"];
+            var apiKey = _configuration.GetValue<string>("SendGridSettings:ApiKey");
+            var fromEmail = _configuration.GetValue<string>("SendGridSettings:FromEmail");
+            var fromName = _configuration.GetValue<string>("SendGridSettings:FromName");
 
             if (string.IsNullOrWhiteSpace(apiKey) ||
                 string.IsNullOrWhiteSpace(fromEmail))

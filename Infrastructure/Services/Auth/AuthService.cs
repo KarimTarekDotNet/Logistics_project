@@ -88,7 +88,7 @@ namespace Infrastructure.Services.Auth
             dto.IsAuthenticated = true;
             dto.Message = "Login successful.";
             dto.AccessToken = await GenerateJwtToken(user);
-            dto.Expiration = DateTime.UtcNow.AddMinutes(double.Parse(_configuration["Jwt:ExpiryMinutes"]!));
+            dto.Expiration = DateTime.UtcNow.AddMinutes(_configuration.GetValue<double>("Jwt:ExpiryMinutes"));
             dto.RefreshToken = refresh.RawToken;
             return dto;
         }
@@ -236,17 +236,17 @@ namespace Infrastructure.Services.Auth
             claims.AddRange(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
 
             var securityKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!)
+                Encoding.UTF8.GetBytes(_configuration.GetValue<string>("Jwt:Key")!)
             );
 
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
-                issuer: _configuration["Jwt:Issuer"],
-                audience: _configuration["Jwt:Audience"],
+                issuer: _configuration.GetValue<string>("Jwt:Issuer"),
+                audience: _configuration.GetValue<string>("Jwt:Audience"),
                 claims: claims,
                 expires: DateTime.UtcNow.AddMinutes(
-                    double.Parse(_configuration["Jwt:ExpiryMinutes"]!)
+                    _configuration.GetValue<double>("Jwt:ExpiryMinutes")
                 ),
                 signingCredentials: credentials
             );
@@ -280,7 +280,7 @@ namespace Infrastructure.Services.Auth
                 Email = oldToken.ApplicationUser.Email,
                 UserName = oldToken.ApplicationUser.UserName,
                 AccessToken = accessToken,
-                Expiration = DateTime.UtcNow.AddMinutes(double.Parse(_configuration["Jwt:ExpiryMinutes"]!)),
+                Expiration = DateTime.UtcNow.AddMinutes(_configuration.GetValue<double>("Jwt:ExpiryMinutes")),
                 RefreshToken = token.RawToken
             };
         }

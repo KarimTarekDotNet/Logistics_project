@@ -22,9 +22,9 @@ namespace API.Extensions
                     ValidateAudience = true,
                     ValidateIssuer = true,
                     ValidateIssuerSigningKey = true,
-                    ValidAudience = configuration["Jwt:Audience"],
-                    ValidIssuer = configuration["Jwt:Issuer"],
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!))
+                    ValidAudience = configuration.GetValue<string>("Jwt:Audience"),
+                    ValidIssuer = configuration.GetValue<string>("Jwt:Issuer"),
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration.GetValue<string>("Jwt:Key")!))
                 };
 
                 options.Events = new JwtBearerEvents

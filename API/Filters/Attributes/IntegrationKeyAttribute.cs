@@ -37,7 +37,7 @@ namespace API.Filters.Attributes
 
             headers.TryGetValue(CorrelationIdHeader, out var correlationId);
 
-            var expectedKey = configuration["Integrations:N8n:ApiKey"];
+            var expectedKey = configuration.GetValue<string>("Integrations:N8n:ApiKey");
 
             if (string.IsNullOrWhiteSpace(expectedKey) || providedKey != expectedKey)
             {

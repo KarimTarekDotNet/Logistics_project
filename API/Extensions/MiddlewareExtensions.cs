@@ -2,7 +2,7 @@
 {
     public static class MiddlewareExtensions
     {
-        public static WebApplication UseApplicationMiddlewares(this WebApplication app)
+        public static WebApplication UseApplicationMiddlewares(this WebApplication app, IConfiguration configuration)
         {
             if (app.Environment.IsDevelopment())
             {
@@ -13,7 +13,8 @@
 
             app.UseHttpsRedirection();
 
-            app.UseCors("FrontendCors");
+            var corsPolicy = configuration.GetValue<string>("CORS:CorsPolicy")!;
+            app.UseCors(corsPolicy);
 
             app.UseStaticFiles();
             app.UseAuthentication();

@@ -20,10 +20,10 @@ namespace Infrastructure.Services.Shipments.Apis
         {
             try
             {
-                var url = $"{_config["TaxVerification:Lookuptax:BaseUrl"]}?country_iso={countryCode}&tin={taxNumber}";
+                var url = $"{_config.GetValue<string>("TaxVerification:Lookuptax:BaseUrl")}?country_iso={countryCode}&tin={taxNumber}";
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
 
-                request.Headers.Add("X-API-Key", _config["TaxVerification:Lookuptax:ApiKey"]);
+                request.Headers.Add("X-API-Key", _config.GetValue<string>("TaxVerification:Lookuptax:ApiKey"));
                 var response = await _httpClient.SendAsync(request, cancellationToken);
 
                 if(!response.IsSuccessStatusCode)

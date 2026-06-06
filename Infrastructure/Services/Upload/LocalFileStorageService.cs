@@ -71,8 +71,8 @@ namespace Infrastructure.Services.Shipments.Core
         {
             _configuration = configuration;
 
-            var host = configuration["ClamAV:Host"]!;
-            var port = int.Parse(configuration["ClamAV:Port"]!);
+            var host = _configuration.GetValue<string>("ClamAV:Host")!;
+            var port = _configuration.GetValue<int>("ClamAV:Port");
 
             _client = new ClamClient(host, port);
         }

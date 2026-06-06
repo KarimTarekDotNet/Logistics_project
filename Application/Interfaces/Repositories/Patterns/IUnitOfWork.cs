@@ -1,4 +1,5 @@
 ﻿using Application.Interfaces.Repositories.Aliases;
+using Application.Interfaces.Repositories.Payments;
 using Application.Interfaces.Repositories.Pricing.Imports;
 using Application.Interfaces.Repositories.Pricing.PricingEngine;
 using Application.Interfaces.Repositories.Pricing.Quotation;
@@ -28,6 +29,7 @@ namespace Application.Interfaces.Repositories.Patterns
         IQuoteRequestRepository QuoteRequest { get; }
         IShipmentChargeRuleRepository ShipmentChargeRule { get; }
         IInvoicePaymentRepository InvoicePayments { get; }
+        IPaymentTransactionRepository PaymentTransactions { get; }
 
         Task<int> SaveChangesAsync();
         Task BeginTransactionAsync();

@@ -1,4 +1,5 @@
 ﻿using Domain.Entities.Aliases;
+using Domain.Entities.Payments;
 using Domain.Entities.Pricing.Imports;
 using Domain.Entities.Pricing.PricingEngine;
 using Domain.Entities.Pricing.Quotation;
@@ -34,9 +35,12 @@ namespace Infrastructure.Data.Database
         public DbSet<ShipmentCharge> ShipmentCharges { get; set; }
         public DbSet<ShipmentChargeRule> ShipmentChargeRules { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
-        public DbSet<InvoicePayment> InvoicePayments { get; set; }
         public DbSet<ShipmentDocument> ShipmentDocuments { get; set; }
         public DbSet<Customer> Customers { get; set; }
+
+        // Payments
+        public DbSet<InvoicePayment> InvoicePayments { get; set; }
+        public DbSet<PaymentTransaction> PaymentTransactions { get; set; }
 
         // Users
         public DbSet<ApplicationUser> ApplicationUsers { get; set; }

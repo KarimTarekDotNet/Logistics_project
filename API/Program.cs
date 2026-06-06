@@ -10,7 +10,7 @@ namespace API
 
             builder.Services.AddApplicationServices(builder.Configuration);
 
-            builder.Services.AddCorsConfiguration();
+            builder.Services.AddCorsConfiguration(builder.Configuration);
 
             builder.Services.AddRateLimitConfiguration();
 
@@ -20,7 +20,7 @@ namespace API
 
             await app.SeedDatabaseAsync();
 
-            app.UseApplicationMiddlewares();
+            app.UseApplicationMiddlewares(builder.Configuration);
             app.Run();
         }
     }

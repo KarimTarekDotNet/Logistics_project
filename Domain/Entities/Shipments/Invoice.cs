@@ -1,4 +1,5 @@
-﻿using Domain.Enums;
+﻿using Domain.Entities.Payments;
+using Domain.Enums;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Domain.Entities.Shipments
@@ -21,14 +22,24 @@ namespace Domain.Entities.Shipments
         public decimal TotalAmount { get; set; }
 
         public ICollection<InvoicePayment> Payments { get; set; } = new List<InvoicePayment>();
+        public ICollection<PaymentTransaction> PaymentTransactions { get; set; } = new List<PaymentTransaction>();
 
         [NotMapped]
-        public decimal TotalPaid => Payments
+        public decimal TotalPaidLocal => Payments
             .Where(x => x.Status == PaymentTransactionStatus.Succeeded)
             .Sum(x => x.Amount);
 
         [NotMapped]
-        public decimal RemainingAmount => Math.Max(0, TotalAmount - TotalPaid);
+        public decimal RemainingAmountLocal => Math.Max(0, TotalAmount - TotalPaidLocal);
+
+
+        [NotMapped]
+        public decimal TotalPaidOnline => PaymentTransactions
+            .Where(x => x.Status == PaymentTransactionStatus.Succeeded)
+            .Sum(x => x.Amount);
+
+        [NotMapped]
+        public decimal RemainingAmountOnline => Math.Max(0, TotalAmount - TotalPaidOnline);
 
         public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Draft;
 

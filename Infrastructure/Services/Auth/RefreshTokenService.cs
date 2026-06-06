@@ -3,6 +3,7 @@ using Domain.Entities.Users;
 using Infrastructure.Data.Database;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Infrastructure.Services.Auth
 {
@@ -54,7 +55,7 @@ namespace Infrastructure.Services.Auth
         public string HashToken(string rawToken)
         {
             using var sha256 = SHA256.Create();
-            var bytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(rawToken));
+            var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(rawToken));
             return Convert.ToBase64String(bytes);
         }
 

@@ -1,5 +1,6 @@
 ﻿using Application.Interfaces.Repositories.Aliases;
 using Application.Interfaces.Repositories.Patterns;
+using Application.Interfaces.Repositories.Payments;
 using Application.Interfaces.Repositories.Pricing.Imports;
 using Application.Interfaces.Repositories.Pricing.PricingEngine;
 using Application.Interfaces.Repositories.Pricing.Quotation;
@@ -34,6 +35,7 @@ namespace Infrastructure.Repositories.Patterns
         public IQuoteRequestRepository QuoteRequest { get; }
         public IShipmentChargeRuleRepository ShipmentChargeRule { get; }
         public IInvoicePaymentRepository InvoicePayments { get; }
+        public IPaymentTransactionRepository PaymentTransactions { get; }
 
         public UnitOfWork(
             ApplicationDbContext context,
@@ -54,7 +56,8 @@ namespace Infrastructure.Repositories.Patterns
             IAliasRepository alias,
             IQuoteRequestRepository quoteRequest,
             IShipmentChargeRuleRepository shipmentChargeRule,
-            IInvoicePaymentRepository invoicePayments)
+            IInvoicePaymentRepository invoicePayments,
+            IPaymentTransactionRepository paymentTransactions)
         {
             _context = context;
             Carriers = carrierRepository;
@@ -75,6 +78,7 @@ namespace Infrastructure.Repositories.Patterns
             QuoteRequest = quoteRequest;
             ShipmentChargeRule = shipmentChargeRule;
             InvoicePayments = invoicePayments;
+            PaymentTransactions = paymentTransactions;
         }
 
         public async Task<int> SaveChangesAsync()

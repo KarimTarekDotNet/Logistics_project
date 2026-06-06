@@ -3,20 +3,22 @@ using Application.Interfaces.Services.Auth;
 using Domain.Entities.Users;
 using Domain.Exceptions;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
 using System.Net;
 
 namespace Infrastructure.Services.Auth
 {
     public class EmailVerificationService : IEmailVerificationService
     {
-        private const string FrontendBaseUrl = "https://karimtarekdotnet.github.io/Logistics_Project_Frontend";
+        private readonly IConfiguration _config;
         private readonly IEmailSender _emailSender;
         private readonly UserManager<ApplicationUser> _userManager;
 
-        public EmailVerificationService(UserManager<ApplicationUser> userManager, IEmailSender emailSender)
+        public EmailVerificationService(UserManager<ApplicationUser> userManager, IEmailSender emailSender, IConfiguration config)
         {
             _userManager = userManager;
             _emailSender = emailSender;
+            _config = config;
         }
 
         public async Task<AuthResponse> SendEmailConfirmationAsync(string userId)
@@ -44,7 +46,8 @@ namespace Infrastructure.Services.Auth
 
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encoded = WebUtility.UrlEncode(token);
-            var confirmationLink = $"{FrontendBaseUrl}/confirm-email?userId={user.Id}&token={encoded}";
+            var frontendBaseUrl = _config.GetValue<string>("SendGridSettings:FrontendBaseUrl");
+            var confirmationLink = $"{frontendBaseUrl}/confirm-email?userId={user.Id}&token={encoded}";
 
 
             var subject = "Confirm Your Email Address";
@@ -217,8 +220,8 @@ namespace Infrastructure.Services.Auth
             var token = await _userManager.GenerateChangeEmailTokenAsync(user, newEmail);
             var encodedToken = WebUtility.UrlEncode(token);
 
-            var confirmationLink =
-                $"{FrontendBaseUrl}/confirm-email-change?userId={user.Id}&token={encodedToken}";
+            var frontendBaseUrl = _config.GetValue<string>("SendGridSettings:FrontendBaseUrl");
+            var confirmationLink = $"{frontendBaseUrl}/confirm-email-change?userId={user.Id}&token={encodedToken}";
 
             var subject = "Confirm Your New Email Address";
 
