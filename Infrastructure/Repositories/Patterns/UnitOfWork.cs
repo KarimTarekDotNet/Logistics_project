@@ -7,6 +7,7 @@ using Application.Interfaces.Repositories.Pricing.Quotation;
 using Application.Interfaces.Repositories.Shipments.Core;
 using Application.Interfaces.Repositories.Shipments.User;
 using Application.Interfaces.Repositories.ShippingCore;
+using Application.Interfaces.Repositories.Users;
 using Infrastructure.Data.Database;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -36,6 +37,8 @@ namespace Infrastructure.Repositories.Patterns
         public IShipmentChargeRuleRepository ShipmentChargeRule { get; }
         public IInvoicePaymentRepository InvoicePayments { get; }
         public IPaymentTransactionRepository PaymentTransactions { get; }
+        public IUserSubscriptionRepository UserSubscriptions { get; }
+        public ISubscriptionPlanRepository SubscriptionPlans { get; }
 
         public UnitOfWork(
             ApplicationDbContext context,
@@ -57,7 +60,9 @@ namespace Infrastructure.Repositories.Patterns
             IQuoteRequestRepository quoteRequest,
             IShipmentChargeRuleRepository shipmentChargeRule,
             IInvoicePaymentRepository invoicePayments,
-            IPaymentTransactionRepository paymentTransactions)
+            IPaymentTransactionRepository paymentTransactions,
+            IUserSubscriptionRepository userSubscriptionRepository,
+            ISubscriptionPlanRepository subscriptionPlanRepository)
         {
             _context = context;
             Carriers = carrierRepository;
@@ -79,6 +84,8 @@ namespace Infrastructure.Repositories.Patterns
             ShipmentChargeRule = shipmentChargeRule;
             InvoicePayments = invoicePayments;
             PaymentTransactions = paymentTransactions;
+            UserSubscriptions = userSubscriptionRepository;
+            SubscriptionPlans = subscriptionPlanRepository;
         }
 
         public async Task<int> SaveChangesAsync()

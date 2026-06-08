@@ -4,7 +4,8 @@ namespace Application.DTOs.Payment
 {
     public record StartPaymentRequest
     {
-        public Guid InvoiceId { get; set; }
+        public Guid? InvoiceId { get; set; }
+        public Guid? SubscriptionPlanId { get; set; }
     }
 
     public record StartPaymentResponse
@@ -18,6 +19,7 @@ namespace Application.DTOs.Payment
     {
         public Guid Id { get; set; }
         public Guid? InvoiceId { get; set; }
+        public Guid? SubscriptionPlanId { get; set; }
 
         public decimal Amount { get; set; }
         public string Currency { get; set; } = null!;

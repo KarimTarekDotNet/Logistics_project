@@ -2,7 +2,7 @@ namespace Application.ApplicationRules
 {
     public static class RateRules
     {
-        public static readonly string[] AllowedCurrencies = ["USD", "EUR", "GBP", "AED", "CNY"];
+        public static readonly string[] AllowedCurrencies = [ "EGP" ];
 
         public static bool IsValidCurrency(string currency)
             => AllowedCurrencies.Contains(currency);

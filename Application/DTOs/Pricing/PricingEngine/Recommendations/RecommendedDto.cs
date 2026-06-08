@@ -34,7 +34,7 @@ namespace Application.DTOs.Pricing.Recommendations
 
         [Required]
         [StringLength(3, MinimumLength = 3)]
-        public string Currency { get; set; } = "USD";
+        public string Currency { get; set; } = "EGP";
 
         [Range(0.01, double.MaxValue)]
         public decimal? MaxPrice { get; set; }

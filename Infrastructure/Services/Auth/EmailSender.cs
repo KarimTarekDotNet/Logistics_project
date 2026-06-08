@@ -1,8 +1,9 @@
 ﻿using Application.Interfaces.Services.Auth;
 using Domain.Exceptions;
 using Microsoft.Extensions.Configuration;
-using SendGrid;
-using SendGrid.Helpers.Mail;
+using Resend;
+using System.Net;
+using System.Net.Mail;
 
 namespace Infrastructure.Services.Auth
 {
@@ -17,36 +18,33 @@ namespace Infrastructure.Services.Auth
 
         public async Task SendEmailAsync(string to, string subject, string body)
         {
-            var apiKey = _configuration.GetValue<string>("SendGridSettings:ApiKey");
-            var fromEmail = _configuration.GetValue<string>("SendGridSettings:FromEmail");
-            var fromName = _configuration.GetValue<string>("SendGridSettings:FromName");
+            var fromPass = _configuration.GetValue<string>("EmailSettings:Password");
+            var fromEmail = _configuration.GetValue<string>("EmailSettings:FromEmail");
+            var fromName = _configuration.GetValue<string>("EmailSettings:FromName");
 
-            if (string.IsNullOrWhiteSpace(apiKey) ||
+            if (string.IsNullOrWhiteSpace(fromPass) ||
                 string.IsNullOrWhiteSpace(fromEmail))
             {
-                throw new BusinessRuleException("SendGrid settings are not configured correctly.");
+                throw new BusinessRuleException("Email settings are not configured correctly.");
             }
 
-            var client = new SendGridClient(apiKey);
-
-            var from = new EmailAddress(fromEmail, fromName);
-            var toEmail = new EmailAddress(to);
-
-            var msg = MailHelper.CreateSingleEmail(
-                from,
-                toEmail,
-                subject,
-                plainTextContent: body,
-                htmlContent: body
-            );
-
-            var response = await client.SendEmailAsync(msg);
-
-            if (!response.IsSuccessStatusCode)
+            MailMessage message = new MailMessage
             {
-                var errorBody = await response.Body.ReadAsStringAsync();
-                throw new Exception($"Failed to send email. Status: {response.StatusCode}, Body: {errorBody}");
-            }
+                From = new MailAddress(fromEmail, fromName),
+                To = { new MailAddress(to) },
+                Subject = subject,
+                Body = body,
+                IsBodyHtml = true
+            };
+
+            var smtpClient = new SmtpClient("smtp.gmail.com")
+            {
+                Port = 587,
+                Credentials = new NetworkCredential(fromEmail, fromPass),
+                EnableSsl = true
+            };
+
+            await smtpClient.SendMailAsync(message);
         }
     }
 }

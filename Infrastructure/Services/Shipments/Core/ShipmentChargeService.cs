@@ -65,13 +65,19 @@ namespace Infrastructure.Services.Shipments.Core
                 if (rule.ChargeType == ChargeType.OceanFreight && hasBaseFreightInvoice)
                     continue;
 
-                var alreadyExists = shipment.Charges.Any(x =>
-                    x.ChargeType == rule.ChargeType &&
-                    !x.IsDeleted &&
-                    !IsAttachedToCancelledInvoice(shipment, x));
+                var unchargedItems = shipment.Items
+                    .Where(item => !item.IsDeleted &&
+                        !item.ChargeItems.Any(ci =>
+                            ci.ShipmentCharge.ChargeType == rule.ChargeType &&
+                            !ci.ShipmentCharge.IsDeleted &&
+                            !IsAttachedToCancelledInvoice(shipment, ci.ShipmentCharge)))
+                    .ToList();
 
-                if (alreadyExists)
+                if (!unchargedItems.Any())
                     continue;
+
+                var totalChargeableWeight = unchargedItems.Sum(x => x.ChargeableWeight);
+                var totalVolume = unchargedItems.Sum(x => x.VolumeCbm);
 
                 var amount = rule.CalculationType switch
                 {
@@ -79,10 +85,10 @@ namespace Infrastructure.Services.Shipments.Core
                         rule.Value,
 
                     ChargeCalculationType.PerKg =>
-                        shipment.TotalChargeableWeightKg * rule.Value,
+                        totalChargeableWeight * rule.Value,
 
                     ChargeCalculationType.PerCbm =>
-                        shipment.TotalVolumeCbm * rule.Value,
+                        totalVolume * rule.Value,
 
                     ChargeCalculationType.PercentageOfAgreedPrice =>
                         shipment.AgreedPrice * rule.Value / 100m,
@@ -99,7 +105,11 @@ namespace Infrastructure.Services.Shipments.Core
                     TaxAmount = 0.14m * amount,
                     Currency = shipment.Currency,
                     Description = $"{rule.ChargeType} auto generated charge",
-                    CreatedAt = DateTimeOffset.UtcNow
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    ChargeItems = unchargedItems.Select(item => new ShipmentChargeItem
+                    {
+                        ShipmentItemId = item.Id
+                    }).ToList()
                 };
 
                 generatedCharges.Add(charge);
@@ -150,7 +160,7 @@ namespace Infrastructure.Services.Shipments.Core
                 if (charge.ChargeType == ChargeType.OceanFreight || invoice?.NetShipmentPrice > 0)
                     throw new BusinessRuleException("Base freight charges cannot be deleted by customer.");
 
-                if (invoice?.PaymentStatus is PaymentStatus.Pending or PaymentStatus.PartiallyPaid or PaymentStatus.Paid)
+                if (invoice?.PaymentStatus is PaymentStatus.PartiallyPaid or PaymentStatus.Paid)
                     throw new BusinessRuleException("Cannot delete charges from a confirmed invoice.");
             }
             else if (invoice?.PaymentStatus is PaymentStatus.PartiallyPaid or PaymentStatus.Paid)

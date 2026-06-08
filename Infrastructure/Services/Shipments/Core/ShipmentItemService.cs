@@ -29,9 +29,7 @@ namespace Infrastructure.Services.Shipments.Core
         {
             return shipment.Invoices.Any(x =>
                 !x.IsDeleted &&
-                ((x.NetShipmentPrice > 0 && x.PaymentStatus == PaymentStatus.Pending) ||
-                 (x.NetShipmentPrice <= 0 &&
-                  x.PaymentStatus is PaymentStatus.Pending or PaymentStatus.PartiallyPaid or PaymentStatus.Paid)));
+                ((x.NetShipmentPrice > 0 && x.PaymentStatus == PaymentStatus.Pending)));
         }
 
         public async Task<ShipmentItemResponse> CreateAsync(CreateShipmentItemRequest request, string userId, bool isPrivileged)

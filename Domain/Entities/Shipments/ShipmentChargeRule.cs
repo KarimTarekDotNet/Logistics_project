@@ -9,7 +9,7 @@ namespace Domain.Entities.Shipments
         public PayerType PayerType { get; set; }
         public ChargeCalculationType CalculationType { get; set; }
         public decimal Value { get; set; }
-        public string Currency { get; set; } = "USD";
+        public string Currency { get; set; } = "EGP";
         public bool IsActive { get; set; } = true;
     }
 }

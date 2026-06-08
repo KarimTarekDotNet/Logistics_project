@@ -1,4 +1,5 @@
 ﻿using Domain.Entities.Shipments;
+using Domain.Entities.Users;
 using Domain.Enums;
 
 namespace Domain.Entities.Payments
@@ -7,8 +8,16 @@ namespace Domain.Entities.Payments
     {
         public Guid Id { get; set; }
         public string UserId { get; set; } = null!;
+
         public Guid? InvoiceId { get; set; }
         public Invoice? Invoice { get; set; }
+
+        public Guid? UserSubscriptionId { get; set; }
+        public UserSubscription? UserSubscription { get; set; }
+
+        public Guid? SubscriptionPlanId { get; set; }
+        public SubscriptionPlan? SubscriptionPlan { get; set; }
+
 
         public decimal Amount { get; set; }
         public string Currency { get; set; } = "EGP";

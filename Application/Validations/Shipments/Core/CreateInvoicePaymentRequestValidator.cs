@@ -16,7 +16,7 @@ namespace Application.Validations.Shipments.Core
                 .Length(3)
                 .WithMessage("Currency must be a valid 3-letter ISO code.")
                 .Matches("^[A-Z]{3}$")
-                .WithMessage("Currency must be uppercase, e.g. USD, EGP.");
+                .WithMessage("Currency must be uppercase, e.g. EGP.");
 
             RuleFor(x => x.ReferenceNumber)
                 .MaximumLength(100)

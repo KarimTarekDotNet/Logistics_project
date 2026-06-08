@@ -97,9 +97,17 @@ namespace Infrastructure.Services.Auth
         {
             try
             {
+                var normalizedPhone = !string.IsNullOrWhiteSpace(request.PhoneNumber) &&
+                !string.IsNullOrWhiteSpace(request.CountryCode)
+                ? request.CountryCode.Trim() + request.PhoneNumber.Trim()
+                : null;
+
                 var userExists = await _userManager.FindByEmailAsync(request.Email) ??
-                    await _userManager.Users.FirstOrDefaultAsync(x => x.PhoneNumber == request.PhoneNumber) ??
-                    await _userManager.FindByNameAsync(request.UserName);
+                 (normalizedPhone is null
+                 ? null
+                 : await _userManager.Users.FirstOrDefaultAsync(x => x.PhoneNumber == normalizedPhone)) ??
+                 await _userManager.FindByNameAsync(request.UserName);
+
 
                 if (userExists != null)
                 {
@@ -114,8 +122,7 @@ namespace Infrastructure.Services.Auth
 
                 var user = mapper.Map<ApplicationUser>(request);
 
-
-                user.PhoneNumber = request.CountryCode + request.PhoneNumber;
+                user.PhoneNumber = normalizedPhone;
                 user.EmailConfirmed = false;
                 user.PhoneNumberConfirmed = false;
 
@@ -144,7 +151,10 @@ namespace Infrastructure.Services.Auth
                     };
                 }
                 await _emailVerificationService.SendEmailConfirmationAsync(user.Id);
-                await _phoneOtpService.SendOtpAsync(request.CountryCode + request.PhoneNumber);
+
+                if(user.PhoneNumber is not null)
+                    await _phoneOtpService.SendOtpAsync(user.PhoneNumber);
+
                 return new AuthResponse
                 {
                     IsAuthenticated = false,

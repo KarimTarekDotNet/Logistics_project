@@ -19,9 +19,7 @@ namespace Infrastructure.Helper
 
             var allowedCurrencies = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "USD",
-                "EGP",
-                "EUR"
+                "EGP"
             };
 
             if (!allowedCurrencies.Contains(normalizedCurrency))

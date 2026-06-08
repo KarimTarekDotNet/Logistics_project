@@ -14,8 +14,8 @@ namespace Application.DTOs.Auth
         public string LastName { get; set; } = string.Empty;
         public string UserName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
-        public string CountryCode { get; set; } = string.Empty; // +20
-        public string PhoneNumber { get; set; } = string.Empty;
+        public string? CountryCode { get; set; }
+        public string? PhoneNumber { get; set; }
         public string Password { get; set; } = string.Empty;
         public string ConfirmPassword { get; init; } = string.Empty;
     }

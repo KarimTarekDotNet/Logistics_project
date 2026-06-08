@@ -6,6 +6,7 @@ using Application.Interfaces.Repositories.Pricing.Quotation;
 using Application.Interfaces.Repositories.Shipments.Core;
 using Application.Interfaces.Repositories.Shipments.User;
 using Application.Interfaces.Repositories.ShippingCore;
+using Application.Interfaces.Repositories.Users;
 
 namespace Application.Interfaces.Repositories.Patterns
 {
@@ -30,6 +31,9 @@ namespace Application.Interfaces.Repositories.Patterns
         IShipmentChargeRuleRepository ShipmentChargeRule { get; }
         IInvoicePaymentRepository InvoicePayments { get; }
         IPaymentTransactionRepository PaymentTransactions { get; }
+
+        IUserSubscriptionRepository UserSubscriptions { get; }
+        ISubscriptionPlanRepository SubscriptionPlans { get; }
 
         Task<int> SaveChangesAsync();
         Task BeginTransactionAsync();

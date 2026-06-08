@@ -7,6 +7,8 @@
         public Guid ShipmentId { get; set; }
         public Shipment Shipment { get; set; } = null!;
 
+        public ICollection<ShipmentChargeItem> ChargeItems { get; set; } = new HashSet<ShipmentChargeItem>();
+
         public string Description { get; set; } = null!;
         public int Quantity { get; set; }
         public decimal ChargeableWeight { get; set; }

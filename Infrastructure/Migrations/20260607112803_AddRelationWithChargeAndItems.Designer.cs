@@ -4,6 +4,7 @@ using Infrastructure.Data.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260607112803_AddRelationWithChargeAndItems")]
+    partial class AddRelationWithChargeAndItems
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -121,9 +124,6 @@ namespace Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<Guid?>("UserSubscriptionId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
                     b.HasIndex("InvoiceId");
@@ -131,8 +131,6 @@ namespace Infrastructure.Migrations
                     b.HasIndex("ProviderTransactionId")
                         .IsUnique()
                         .HasFilter("[ProviderTransactionId] IS NOT NULL");
-
-                    b.HasIndex("UserSubscriptionId");
 
                     b.HasIndex("InvoiceId", "CreatedAt");
 
@@ -1356,70 +1354,6 @@ namespace Infrastructure.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
-            modelBuilder.Entity("Domain.Entities.Users.SubscriptionPlan", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("DurationInDays")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<decimal>("Price")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("SubscriptionPlans");
-                });
-
-            modelBuilder.Entity("Domain.Entities.Users.UserSubscription", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("EndDate")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTimeOffset>("StartDate")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid>("SubscriptionPlanId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SubscriptionPlanId");
-
-                    b.HasIndex("UserId", "IsActive");
-
-                    b.ToTable("UserSubscriptions");
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
                     b.Property<string>("Id")
@@ -1560,14 +1494,7 @@ namespace Infrastructure.Migrations
                         .HasForeignKey("InvoiceId")
                         .OnDelete(DeleteBehavior.Cascade);
 
-                    b.HasOne("Domain.Entities.Users.UserSubscription", "UserSubscription")
-                        .WithMany("Payments")
-                        .HasForeignKey("UserSubscriptionId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Invoice");
-
-                    b.Navigation("UserSubscription");
                 });
 
             modelBuilder.Entity("Domain.Entities.Pricing.PricingEngine.Rate", b =>
@@ -1833,17 +1760,6 @@ namespace Infrastructure.Migrations
                     b.Navigation("ApplicationUser");
                 });
 
-            modelBuilder.Entity("Domain.Entities.Users.UserSubscription", b =>
-                {
-                    b.HasOne("Domain.Entities.Users.SubscriptionPlan", "SubscriptionPlan")
-                        .WithMany("UserSubscriptions")
-                        .HasForeignKey("SubscriptionPlanId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("SubscriptionPlan");
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -1965,16 +1881,6 @@ namespace Infrastructure.Migrations
                     b.Navigation("Quotes");
 
                     b.Navigation("Shipments");
-                });
-
-            modelBuilder.Entity("Domain.Entities.Users.SubscriptionPlan", b =>
-                {
-                    b.Navigation("UserSubscriptions");
-                });
-
-            modelBuilder.Entity("Domain.Entities.Users.UserSubscription", b =>
-                {
-                    b.Navigation("Payments");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,5 +1,4 @@
 ﻿using Domain.Entities.Shipments;
-using Infrastructure.Data.Configuration.Seeding;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -41,6 +40,24 @@ namespace Infrastructure.Data.Configuration.Shipments
             builder.HasOne(x => x.Invoice)
                 .WithMany(x => x.Charges)
                 .HasForeignKey(x => x.InvoiceId)
+                .OnDelete(DeleteBehavior.NoAction);
+        }
+    }
+
+    public class ShipmentChargeItemConfiguration : IEntityTypeConfiguration<ShipmentChargeItem>
+    {
+        public void Configure(EntityTypeBuilder<ShipmentChargeItem> builder)
+        {
+            builder.HasKey(x => new { x.ShipmentChargeId, x.ShipmentItemId });
+
+            builder.HasOne(x => x.ShipmentCharge)
+                .WithMany(x => x.ChargeItems)
+                .HasForeignKey(x => x.ShipmentChargeId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            builder.HasOne(x => x.ShipmentItem)
+                .WithMany(x => x.ChargeItems)
+                .HasForeignKey(x => x.ShipmentItemId)
                 .OnDelete(DeleteBehavior.NoAction);
         }
     }

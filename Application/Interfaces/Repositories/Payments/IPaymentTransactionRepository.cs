@@ -11,6 +11,8 @@ namespace Application.Interfaces.Repositories.Payments
         Task<PaymentTransaction?> GetByIdToCurrentUserAsync(Guid id, string userId);
         Task AddAsync(PaymentTransaction transaction);
         void RemoveRange(IEnumerable<PaymentTransaction> transactions);
+        void Remove(PaymentTransaction transaction);
         Task<List<PaymentTransaction>> GetAllAsync(QueryParameters query);
+        Task<PaymentTransaction?> GetBySubscriptionPlanIdAsync(Guid subscriptionPlanId, string userId);
     }
 }

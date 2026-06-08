@@ -38,13 +38,19 @@ public class RegisterRequestValidator : AbstractValidator<RegisterRequest>
             .EmailAddress().WithMessage("Invalid email format.");
 
         RuleFor(x => x.CountryCode)
-            .NotEmpty().WithMessage("Country code is required.")
+            .NotEmpty()
+            .When(x => !string.IsNullOrWhiteSpace(x.PhoneNumber))
+            .WithMessage("Country code is required.")
             .Matches(@"^\+\d{1,4}$")
+            .When(x => !string.IsNullOrWhiteSpace(x.CountryCode))
             .WithMessage("Country code must be like +20 or +966.");
 
         RuleFor(x => x.PhoneNumber)
-            .NotEmpty().WithMessage("Phone number is required.")
+            .NotEmpty()
+            .When(x => !string.IsNullOrWhiteSpace(x.CountryCode))
+            .WithMessage("Phone number is required.")
             .Matches(@"^[0-9]{6,15}$")
+            .When(x => !string.IsNullOrWhiteSpace(x.PhoneNumber))
             .WithMessage("Phone number must contain only digits.");
 
         RuleFor(x => x.Password)

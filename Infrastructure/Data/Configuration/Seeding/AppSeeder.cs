@@ -246,7 +246,7 @@ namespace Infrastructure.Data.Configuration.Seeding
                     RouteId         = RouteShanghaiRotterdamId,
                     ContainerTypeId = Container20FtDryId,       // 20ft Dry
                     Price           = 1500.00m,
-                    Currency        = "USD",
+                    Currency        = "EGP",
                     ValidFrom       = validFrom,
                     ValidTo         = validTo,
                     MaxGrossWeightKg      = 20000m,
@@ -267,7 +267,7 @@ namespace Infrastructure.Data.Configuration.Seeding
                     RouteId         = RouteShanghaiRotterdamId,
                     ContainerTypeId = Container40FtDryId,       // 40ft Dry
                     Price           = 2800.00m,
-                    Currency        = "USD",
+                    Currency        = "EGP",
                     ValidFrom       = validFrom,
                     ValidTo         = validTo,
                     MaxGrossWeightKg      = 28000m,
@@ -288,7 +288,7 @@ namespace Infrastructure.Data.Configuration.Seeding
                     RouteId         = RouteShanghaiDubaiId,
                     ContainerTypeId = Container20FtReeferId,    // 20ft Reefer — supports -20°C
                     Price           = 900.00m,
-                    Currency        = "USD",
+                    Currency        = "EGP",
                     ValidFrom       = validFrom,
                     ValidTo         = validTo,
                     MaxGrossWeightKg      = 20000m,
@@ -340,7 +340,7 @@ namespace Infrastructure.Data.Configuration.Seeding
                     PayerType       = PayerType.Shipper,
                     CalculationType = ChargeCalculationType.PercentageOfAgreedPrice,
                     Value           = 100m,   // 100 % → equals the agreed price
-                    Currency        = "USD",
+                    Currency        = "EGP",
                     IsActive        = true
                 },
 
@@ -351,8 +351,8 @@ namespace Infrastructure.Data.Configuration.Seeding
                     ChargeType      = ChargeType.Documentation,
                     PayerType       = PayerType.Shipper,
                     CalculationType = ChargeCalculationType.Fixed,
-                    Value           = 75m,    // $75 flat
-                    Currency        = "USD",
+                    Value           = 3912m,    // $75 flat
+                    Currency        = "EGP",
                     IsActive        = true
                 },
 
@@ -363,8 +363,8 @@ namespace Infrastructure.Data.Configuration.Seeding
                     ChargeType      = ChargeType.Handling,
                     PayerType       = PayerType.Shipper,
                     CalculationType = ChargeCalculationType.PerCbm,
-                    Value           = 4m,     // $4 / CBM → 25 cbm = $100
-                    Currency        = "USD",
+                    Value           = 200m,     // $4 / CBM → 25 cbm = $100
+                    Currency        = "EGP",
                     IsActive        = true
                 },
 
@@ -375,8 +375,8 @@ namespace Infrastructure.Data.Configuration.Seeding
                     ChargeType      = ChargeType.Customs,
                     PayerType       = PayerType.Consignee,
                     CalculationType = ChargeCalculationType.Fixed,
-                    Value           = 150m,   // $150 flat
-                    Currency        = "USD",
+                    Value           = 7500m,   // $150 flat
+                    Currency        = "EGP",
                     IsActive        = true
                 },
 
@@ -388,7 +388,7 @@ namespace Infrastructure.Data.Configuration.Seeding
                     PayerType       = PayerType.Shipper,
                     CalculationType = ChargeCalculationType.PercentageOfAgreedPrice,
                     Value           = 0.5m,   // 0.5 % → $1 650 * 0.5 / 100 = $8.25
-                    Currency        = "USD",
+                    Currency        = "EGP",
                     IsActive        = true
                 },
 
@@ -399,8 +399,8 @@ namespace Infrastructure.Data.Configuration.Seeding
                     ChargeType      = ChargeType.Storage,
                     PayerType       = PayerType.Consignee,
                     CalculationType = ChargeCalculationType.PerCbm,
-                    Value           = 2m,     // $2 / CBM
-                    Currency        = "USD",
+                    Value           = 100m,     // $2 / CBM
+                    Currency        = "EGP",
                     IsActive        = true
                 },
 
@@ -411,8 +411,8 @@ namespace Infrastructure.Data.Configuration.Seeding
                     ChargeType      = ChargeType.Other,
                     PayerType       = PayerType.Shipper,
                     CalculationType = ChargeCalculationType.Fixed,
-                    Value           = 50m,    // $50 flat
-                    Currency        = "USD",
+                    Value           = 2500m,    // $50 flat
+                    Currency        = "EGP",
                     IsActive        = false   // inactive — applied only when explicitly needed
                 },
             };
@@ -469,8 +469,8 @@ namespace Infrastructure.Data.Configuration.Seeding
                     RateId          = Rate1Id,
                     RouteId         = RouteShanghaiRotterdamId,
                     ContainerTypeId = Container20FtDryId,
-                    FinalPrice      = 1650.00m,
-                    Currency        = "USD",
+                    FinalPrice      = 86066.00m,
+                    Currency        = "EGP",
                     RequestedGrossWeightKg      = 18000m,
                     RequestedNetWeightKg        = 16000m,
                     RequestedVolumeCbm          = 25m,
@@ -478,7 +478,7 @@ namespace Infrastructure.Data.Configuration.Seeding
                     IsHazardous     = false,
                     Status          = QuoteStatus.Accepted,
                     IsDeleted       = false,
-                    CreatedAt       = new DateTimeOffset(2025, 2, 1, 0, 0, 0, TimeSpan.Zero)
+                    CreatedAt       = new DateTimeOffset(2026, 4, 15, 0, 0, 0, TimeSpan.Zero)
                 });
             }
 
@@ -492,8 +492,8 @@ namespace Infrastructure.Data.Configuration.Seeding
                     RateId          = Rate2Id,
                     RouteId         = RouteShanghaiRotterdamId,
                     ContainerTypeId = Container40FtDryId,
-                    FinalPrice      = 3100.00m,
-                    Currency        = "USD",
+                    FinalPrice      = 31000.00m,
+                    Currency        = "EGP",
                     RequestedGrossWeightKg      = 26000m,
                     RequestedNetWeightKg        = 24000m,
                     RequestedVolumeCbm          = 55m,
@@ -501,7 +501,7 @@ namespace Infrastructure.Data.Configuration.Seeding
                     IsHazardous     = false,
                     Status          = QuoteStatus.Pending,
                     IsDeleted       = false,
-                    CreatedAt       = new DateTimeOffset(2025, 2, 1, 0, 0, 0, TimeSpan.Zero)
+                    CreatedAt       = new DateTimeOffset(2026, 5, 15, 0, 0, 0, TimeSpan.Zero)
                 });
             }
 
@@ -542,8 +542,8 @@ namespace Infrastructure.Data.Configuration.Seeding
                 TotalVolumeCbm          = 25m,
                 TotalChargeableWeightKg = 18000m,
 
-                AgreedPrice = 1650.00m,
-                Currency    = "USD",
+                AgreedPrice = 86066.00m,
+                Currency    = "EGP",
                 Status      = ShipmentStatus.ClientConfirmed,
                 CreatedAt   = SeedDate,
                 ClientConfirmedAt = SeedDate,
@@ -568,9 +568,9 @@ namespace Infrastructure.Data.Configuration.Seeding
             {
                 Id          = new Guid("00000000-0000-0000-0000-000000000081"),
                 Description = "Ocean Freight",
-                Amount      = 1500m,
-                TaxAmount   = 0.14m * 1500m,
-                Currency    = "USD",
+                Amount      = 75000m,
+                TaxAmount   = 0.14m * 75000m,
+                Currency    = "EGP",
                 ChargeType  = ChargeType.OceanFreight,
                 PayerType   = PayerType.Shipper,
                 CreatedAt   = SeedDate,
@@ -581,9 +581,9 @@ namespace Infrastructure.Data.Configuration.Seeding
             {
                 Id          = new Guid("00000000-0000-0000-0000-000000000082"),
                 Description = "Bunker Adjustment Factor",
-                Amount      = 150m,
-                TaxAmount   = 0.14m * 150m,
-                Currency    = "USD",
+                Amount      = 7500m,
+                TaxAmount   = 0.14m * 7500m,
+                Currency    = "EGP",
                 ChargeType  = ChargeType.Other,
                 PayerType   = PayerType.Shipper,
                 CreatedAt   = SeedDate,
@@ -624,11 +624,11 @@ namespace Infrastructure.Data.Configuration.Seeding
                 Id            = InvoiceId,
                 ShipmentId    = ShipmentId,
                 InvoiceNumber = "INV-2025-0001",
-                Currency      = "USD",
-                SubTotal      = 1650.00m,
-                NetShipmentPrice = 1650.00m,
-                TaxAmount     = 0.14m * 1650.00m,
-                TotalAmount   = 1650.00m + (0.14m * 1650.00m),
+                Currency      = "EGP",
+                SubTotal      = 86066.00m,
+                NetShipmentPrice = 86066.00m,
+                TaxAmount     = 0.14m * 86066.00m,
+                TotalAmount   = 86066.00m + (0.14m * 86066.00m),
                 PaymentStatus = PaymentStatus.Paid,
                 IssuedAt      = SeedDate,
                 DueDate       = SeedDate.AddDays(14),

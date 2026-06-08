@@ -60,6 +60,11 @@ namespace Infrastructure.Repositories.Payment
             _context.PaymentTransactions.RemoveRange(transactions);
         }
 
+        public void Remove(PaymentTransaction transaction)
+        {
+            _context.PaymentTransactions.Remove(transaction);
+        }
+
         public async Task<PaymentTransaction?> GetByIdAsync(Guid id)
         {
             return await _context.PaymentTransactions
@@ -73,6 +78,11 @@ namespace Infrastructure.Repositories.Payment
                 .Include(x => x.Invoice)
                 .Where(x => x.InvoiceId == invoiceId)
                 .ToListAsync();
+        }
+
+        public async Task<PaymentTransaction?> GetBySubscriptionPlanIdAsync(Guid subscriptionPlanId, string userId)
+        {
+            return await _context.PaymentTransactions.FirstOrDefaultAsync(x => x.SubscriptionPlanId == subscriptionPlanId && x.UserId == userId);
         }
 
         public async Task<PaymentTransaction?> GetByProviderOrderIdAsync(string providerOrderId)

@@ -12,7 +12,7 @@ namespace Domain.Entities.Shipments
         public Shipment Shipment { get; set; } = null!;
 
         public string InvoiceNumber { get; set; } = null!;
-        public string Currency { get; set; } = "USD";
+        public string Currency { get; set; } = "EGP";
 
         public ICollection<ShipmentCharge> Charges { get; set; } = new List<ShipmentCharge>();
 

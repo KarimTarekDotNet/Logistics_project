@@ -44,5 +44,8 @@
         public bool IsHazardous { get; set; }
         public decimal? RequiredTemperatureCelsius { get; set; }
         public string? MarksAndNumbers { get; set; }
+
+        public DateTimeOffset CreatedAt { get; set; }
+        public DateTimeOffset? UpdatedAt { get; set; }
     }
 }

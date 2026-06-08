@@ -10,10 +10,12 @@ namespace Domain.Entities.Shipments
         public Guid ShipmentId { get; set; }
         public Shipment Shipment { get; set; } = null!;
 
+        public ICollection<ShipmentChargeItem> ChargeItems { get; set; } = new HashSet<ShipmentChargeItem>();
+
         public string Description { get; set; } = null!;
         public decimal Amount { get; set; }
         public decimal TaxAmount { get; set; }
-        public string Currency { get; set; } = "USD";
+        public string Currency { get; set; } = "EGP";
 
         [NotMapped]
         public decimal TotalAmount => Amount + TaxAmount;
@@ -30,4 +32,13 @@ namespace Domain.Entities.Shipments
         public bool IsDeleted { get; set; } = false;
         public DateTimeOffset? DeletedAt { get; set; }
     }
+    public class ShipmentChargeItem
+    {
+        public Guid ShipmentChargeId { get; set; }
+        public ShipmentCharge ShipmentCharge { get; set; } = null!;
+
+        public Guid ShipmentItemId { get; set; }
+        public ShipmentItem ShipmentItem { get; set; } = null!;
+    }
+
 }

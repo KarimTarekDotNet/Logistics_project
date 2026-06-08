@@ -23,6 +23,7 @@ namespace Domain.Entities.Users
         public bool IsDeleted { get; set; }
         public DateTimeOffset? DeletedAt { get; set; }
 
+
         public ICollection<Shipment> Shipments { get; set; } = new List<Shipment>();
         public ICollection<Quote> Quotes { get; set; } = new List<Quote>();
         public ICollection<QuoteRequest> QuoteRequests { get; set; } = new List<QuoteRequest>();

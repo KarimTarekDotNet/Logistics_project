@@ -118,6 +118,16 @@ namespace API.Mapping
                 .ForMember(d => d.PayerType, o => o.MapFrom(s => s.PayerType.ToString()));
             CreateMap<CreateInvoiceRequest, Invoice>();
 
+            // ── Subscription ────────────────────────────────────────────────────
+            CreateMap<SubscriptionPlan, SubscriptionPlanResponse>();
+            CreateMap<CreateSubscriptionPlanRequest, SubscriptionPlan>();
+            CreateMap<UpdateSubscriptionPlanRequest, SubscriptionPlan>();
+
+            // ── User Subscription ────────────────────────────────────────────────────
+            CreateMap<UserSubscription, UserSubscriptionResponse>();
+
+
+
             // ── Invoice Payment ────────────────────────────────────────────────────
             CreateMap<InvoicePayment, InvoicePaymentResponse>()
                 .ForMember(d => d.PaymentMethod, o => o.MapFrom(s => s.PaymentMethod.ToString()))

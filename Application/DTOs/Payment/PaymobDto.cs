@@ -8,7 +8,7 @@ namespace Application.DTOs.Payment
         public int Amount { get; set; }
 
         [JsonPropertyName("currency")]
-        public string Currency { get; set; } = "USD";
+        public string Currency { get; set; } = "EGP";
 
         [JsonPropertyName("payment_methods")]
         public List<int> PaymentMethods { get; set; } = new();
@@ -187,4 +187,4 @@ namespace Application.DTOs.Payment
     {
         public string CheckoutUrl { get; set; } = null!;
     }
-}   
+}

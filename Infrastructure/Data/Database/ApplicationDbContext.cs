@@ -33,6 +33,7 @@ namespace Infrastructure.Data.Database
         public DbSet<ShipmentItem> ShipmentItems { get; set; }
         public DbSet<ShipmentStatusHistory> ShipmentStatusHistories { get; set; }
         public DbSet<ShipmentCharge> ShipmentCharges { get; set; }
+        public DbSet<ShipmentChargeItem> ShipmentChargesItems { get; set; }
         public DbSet<ShipmentChargeRule> ShipmentChargeRules { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
         public DbSet<ShipmentDocument> ShipmentDocuments { get; set; }
@@ -41,6 +42,10 @@ namespace Infrastructure.Data.Database
         // Payments
         public DbSet<InvoicePayment> InvoicePayments { get; set; }
         public DbSet<PaymentTransaction> PaymentTransactions { get; set; }
+
+        // Subscriptions
+        public DbSet<SubscriptionPlan> SubscriptionPlans { get; set; }
+        public DbSet<UserSubscription> UserSubscriptions { get; set; }
 
         // Users
         public DbSet<ApplicationUser> ApplicationUsers { get; set; }
@@ -74,6 +79,9 @@ namespace Infrastructure.Data.Database
             modelBuilder.Entity<ShipmentCharge>().HasQueryFilter(r => !r.IsDeleted);
             modelBuilder.Entity<ShipmentStatusHistory>().HasQueryFilter(r => !r.Shipment.IsDeleted);
             modelBuilder.Entity<ShipmentDocument>().HasQueryFilter(r => !r.IsDeleted);
+
+            modelBuilder.Entity<SubscriptionPlan>().HasQueryFilter(r => !r.IsDeleted);
+            modelBuilder.Entity<UserSubscription>().HasQueryFilter(r => !r.IsDeleted);
 
             modelBuilder.Entity<Invoice>().HasQueryFilter(r => !r.IsDeleted);
 

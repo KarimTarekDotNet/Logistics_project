@@ -8,7 +8,7 @@ namespace Application.DTOs.Shipments.Core
         public Guid ShipmentId { get; set; }
         public List<Guid> ShipmentChargeIds { get; set; } = [];
 
-        public string Currency { get; set; } = "USD";
+        public string Currency { get; set; } = "EGP";
         public PayerType PayerType { get; set; }
         public DateTimeOffset DueDate { get; set; }
     }

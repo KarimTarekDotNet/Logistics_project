@@ -1,6 +1,7 @@
 ﻿using Application.ApplicationRules.Shipments;
 using Application.DTOs.Payment;
 using Application.Interfaces.Repositories.Patterns;
+using Application.Interfaces.Repositories.Users;
 using Application.Interfaces.Services.Payment;
 using Application.Interfaces.Services.System;
 using AutoMapper;
@@ -22,13 +23,15 @@ namespace Infrastructure.Services.Payment
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IUserSubscriptionService _userSubscriptionService;
         private readonly IPaymobPaymentService _paymobPaymentService;
         private readonly IMapper _mapper;
         private readonly IConfiguration _configuration;
         private readonly IRedisService _redisService;
 
         public PaymentTransactionService(IUnitOfWork unitOfWork, UserManager<ApplicationUser> userManager,
-        IPaymobPaymentService paymobPaymentService, IMapper mapper, IConfiguration configuration, IRedisService redisService)
+        IPaymobPaymentService paymobPaymentService, IMapper mapper, IConfiguration configuration,
+        IRedisService redisService, IUserSubscriptionService userSubscriptionService)
         {
             _unitOfWork = unitOfWork;
             _userManager = userManager;
@@ -36,6 +39,7 @@ namespace Infrastructure.Services.Payment
             _mapper = mapper;
             _configuration = configuration;
             _redisService = redisService;
+            _userSubscriptionService = userSubscriptionService;
         }
 
         public async Task<StartPaymentResponse> StartPaymentAsync(StartPaymentRequest request, string userId)
@@ -48,133 +52,53 @@ namespace Infrastructure.Services.Payment
                 if (user == null || user.CustomerProfile == null)
                     throw new InvalidOperationException("User not found.");
 
-                var (invoice, shipment) = await InvoiceHelper
-                .GetInvoiceContextAsync(request.InvoiceId, _unitOfWork);
-
-                if (invoice == null)
-                    throw new BusinessRuleException("Associated invoice not found.");
-
-                if (!ShipmentStatusRules.CanPayInvoice(shipment.Status))
-                    throw new BusinessRuleException("Cannot pay invoice for the current shipment status.");
-
-                InvoiceHelper.EnsureInvoiceCanBePaid(invoice);
-
-                if (invoice.PaymentStatus == PaymentStatus.Paid)
-                    throw new BusinessRuleException("Invoice is already paid.");
-
-                if (invoice.PaymentStatus == PaymentStatus.Cancelled)
-                    throw new BusinessRuleException("Invoice is cancelled.");
-
-                if (invoice.PaymentStatus == PaymentStatus.Draft)
-                    throw new BusinessRuleException("Invoice is in draft status.");
-
-
-                var redisKey = $"idempotency:payment:invoice:{invoice.Id}:user:{user.Id}";
-                var paymentTransactionId = Guid.NewGuid();
-
-                var acquired = await _redisService.TryAcquireIdempotencyKeyAsync(redisKey, paymentTransactionId.ToString(),
-                TimeSpan.FromMinutes(15));
-
-                if (!acquired)
+                if(request.InvoiceId.HasValue)
                 {
-                    var existingTransactionId = await _redisService.GetAsync<string>(redisKey);
-                    var existingTransaction = 
-                    await _unitOfWork.PaymentTransactions.GetByIdToCurrentUserAsync(Guid.Parse(existingTransactionId!), userId);
-
-                    if (existingTransaction == null)
-                        throw new BusinessRuleException("Payment transaction not found.");
-
-                    if (string.IsNullOrWhiteSpace(existingTransaction.ClientSecret))
-                        throw new BusinessRuleException("Payment is still being initialized. Please retry shortly.");
-
-                    return new StartPaymentResponse
-                    {
-                        PaymentTransactionId = Guid.Parse(existingTransactionId!),
-                        ClientSecret = existingTransaction.ClientSecret,
-                        Status = existingTransaction.Status
-                    };
+                    return await ifInvoiceIdHasValue(request.InvoiceId.Value, user);
                 }
 
-                var paymentTransaction = new PaymentTransaction
+                else if(request.SubscriptionPlanId.HasValue)
                 {
-                    Id = paymentTransactionId,
-                    UserId = user.Id,
-                    InvoiceId = invoice.Id,
-                    FailureReason = null,
-                    GatewayResponse = null,
-                    Amount = invoice.TotalAmount,
-                    Currency = invoice.Currency,
-                    Method = PaymentMethod.CreditCard,
-                    Provider = PaymentProvider.Paymob,
-                    Status = PaymentTransactionStatus.Pending,
-                    CreatedAt = DateTimeOffset.UtcNow
-                };
-                await _unitOfWork.PaymentTransactions.AddAsync(paymentTransaction);
-                await _unitOfWork.SaveChangesAsync();
+                    return await ifSubscriptionPlanIdHasValue(request.SubscriptionPlanId.Value, user);
+                }
 
-                var amountCents = PaymentHelper.ConvertToCentsFromUSDToEGY(invoice.TotalAmount);
-                var intentionRequest = new CreatePaymobIntentionRequest
-                {
-                    Amount = amountCents, // Convert to the smallest currency unit
-                    Currency = "EGP",
-                    BillingData = new PaymobBillingDataRequest
-                    {
-                        FirstName = user.FirstName,
-                        LastName = user.LastName,
-                        Email = user.Email!,
-                        PhoneNumber = user.PhoneNumber ?? "01000000000",
-                        Apartment = "NA",
-                        Floor = "NA",
-                        Street = "NA",
-                        Building = "NA",
-                        City = "NA",
-                        State = "NA",
-                        Country = "EG"
-                    },
-                    Items = new List<PaymobItemRequest>
-                {
-                    new PaymobItemRequest
-                    {
-                        Name = $"Invoice #{invoice.Id}",
-                        Quantity = 1,
-                        Amount = amountCents,
-                        Description = $"Payment for Invoice #{invoice.Id}"
-                    }
-                },
-                    PaymentMethods = new List<int> { int.Parse(_configuration.GetValue<string>("Paymob:PaymentMethod")!) },
-                    SpecialReference = $"payment_{paymentTransaction.Id}",
-                    NotificationUrl = _configuration.GetValue<string>("Paymob:CallbackUrl")!,
-                    RedirectionUrl = _configuration.GetValue<string>("Paymob:RedirectUrl")!
-                };
+                else
+                    throw new BusinessRuleException("There is no invoice or subscription to pay.");
 
-                var paymobResult = await _paymobPaymentService.CreateIntentionAsync(intentionRequest);
-
-                paymentTransaction.ProviderIntentionId = paymobResult.IntentionId;
-                paymentTransaction.ProviderOrderId = paymobResult.OrderId.ToString();
-                paymentTransaction.ClientSecret = paymobResult.ClientSecret;
-
-                await _unitOfWork.SaveChangesAsync();
-
-                return new StartPaymentResponse
-                {
-                    PaymentTransactionId = paymentTransaction.Id,
-                    ClientSecret = paymobResult.ClientSecret,
-                    Status = paymentTransaction.Status
-                };
             }
-            catch (Exception)
+            catch
             {
-                // Log the exception (not implemented here)
-                var redisKey = $"idempotency:payment:invoice:{request.InvoiceId}:user:{userId}";
-                var existingTransactionId = await _redisService.GetAsync<string>(redisKey);
-                if (existingTransactionId != null)
-                    await _redisService.RemoveAsync(redisKey);
-
-                var transactions = await _unitOfWork.PaymentTransactions.GetByInvoiceIdAsync(request.InvoiceId);
-                if (transactions != null)
+                if (request.InvoiceId.HasValue)
                 {
-                    _unitOfWork.PaymentTransactions.RemoveRange(transactions);
+                    var redisKey = $"idempotency:payment:invoice:{request.InvoiceId.Value}:user:{userId}";
+                    var existingTransactionId = await _redisService.GetAsync<string>(redisKey);
+
+                    if (existingTransactionId != null)
+                        await _redisService.RemoveAsync(redisKey);
+
+                    var transactions = await _unitOfWork.PaymentTransactions
+                        .GetByInvoiceIdAsync(request.InvoiceId.Value);
+
+                    if (transactions != null)
+                        _unitOfWork.PaymentTransactions.RemoveRange(transactions);
                 }
+
+                if (request.SubscriptionPlanId.HasValue)
+                {
+                    var redisKey = $"idempotency:payment:plan:{request.SubscriptionPlanId.Value}:user:{userId}";
+                    var existingTransactionId = await _redisService.GetAsync<string>(redisKey);
+
+                    if (existingTransactionId != null)
+                        await _redisService.RemoveAsync(redisKey);
+
+                    var transaction = await _unitOfWork.PaymentTransactions
+                        .GetBySubscriptionPlanIdAsync(request.SubscriptionPlanId.Value, userId);
+
+                    if (transaction != null)
+                        _unitOfWork.PaymentTransactions.Remove(transaction);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
                 throw;
             }
         }
@@ -223,10 +147,10 @@ namespace Infrastructure.Services.Payment
                 if (paymentTransaction.Status != PaymentTransactionStatus.Pending)
                     return;
 
-                if (request.Obj.Currency != "EGP")
+                if (request.Obj.Currency != paymentTransaction.Currency)
                     throw new BusinessRuleException("Currency mismatch between webhook and payment transaction.");
 
-                if (request.Obj.AmountCents != PaymentHelper.ConvertToCentsFromUSDToEGY(paymentTransaction.Amount))
+                if (request.Obj.AmountCents != PaymentHelper.ConvertToCents(paymentTransaction.Amount))
                     throw new BusinessRuleException("Amount mismatch between webhook and payment transaction.");
 
                 if (request.Obj.Success)
@@ -238,39 +162,17 @@ namespace Infrastructure.Services.Payment
                     paymentTransaction.GatewayResponse = $"Payment succeeded with Paymob. Transaction ID: {request.Obj.TransactionId}";
                     paymentTransaction.PaidAt = paidAt;
 
-                    var invoicePayment = await _unitOfWork.InvoicePayments
-                    .GetByTransactionIdAsync(paymentTransaction.ProviderTransactionId);
-                    if (invoicePayment != null)
+                    if (paymentTransaction.InvoiceId.HasValue)
                     {
-                        invoicePayment.Status = PaymentTransactionStatus.Succeeded;
-                        invoicePayment.TransactionId = paymentTransaction.ProviderTransactionId;
-                        invoicePayment.PaidAt = paidAt;
-                        invoicePayment.ReferenceNumber = paymentTransaction.Id.ToString();
+                        await HandleSuccessfulInvoicePaymentAsync(paymentTransaction, paidAt);
+                    }
+                    else if (paymentTransaction.SubscriptionPlanId.HasValue)
+                    {
+                        await HandleSuccessfulSubscriptionPaymentAsync(paymentTransaction, paidAt);
                     }
                     else
                     {
-                        var newInvoicePayment = new InvoicePayment
-                        {
-                            InvoiceId = paymentTransaction.InvoiceId!.Value,
-                            Amount = paymentTransaction.Amount,
-                            Currency = paymentTransaction.Currency,
-                            CreatedAt = paymentTransaction.CreatedAt,
-                            Status = PaymentTransactionStatus.Succeeded,
-                            PaymentMethod = paymentTransaction.Method,
-                            PaymentProvider = paymentTransaction.Provider,
-                            ReferenceNumber = paymentTransaction.Id.ToString(),
-                            TransactionId = paymentTransaction.ProviderTransactionId,
-                            PaidAt = DateTimeOffset.UtcNow
-                        };
-                        await _unitOfWork.InvoicePayments.AddAsync(newInvoicePayment);
-                    }
-
-                    var invoice = await _unitOfWork.Invoices.GetByIdAsync(paymentTransaction.InvoiceId!.Value);
-                    if (invoice != null)
-                    {
-                        invoice.PaymentStatus = PaymentStatus.Paid;
-                        invoice.PaidAt = paidAt;
-                        invoice.UpdatedAt = paidAt;
+                        throw new BusinessRuleException("Payment transaction has no target.");
                     }
                 }
                 else
@@ -397,6 +299,266 @@ namespace Infrastructure.Services.Payment
             var calculatedHmac = BitConverter.ToString(hash).Replace("-", "").ToLower();
 
             return string.Equals(calculatedHmac, receivedHmac, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task<StartPaymentResponse> ifInvoiceIdHasValue(Guid invoiceId, ApplicationUser user)
+        {
+            var (invoice, shipment) = await InvoiceHelper
+                .GetInvoiceContextAsync(invoiceId, _unitOfWork);
+
+            if (invoice == null)
+                throw new BusinessRuleException("Associated invoice not found.");
+
+            if (!ShipmentStatusRules.CanPayInvoice(shipment.Status))
+                throw new BusinessRuleException("Cannot pay invoice for the current shipment status.");
+
+            InvoiceHelper.EnsureInvoiceCanBePaid(invoice);
+
+            if (invoice.PaymentStatus == PaymentStatus.Paid)
+                throw new BusinessRuleException("Invoice is already paid.");
+
+            if (invoice.PaymentStatus == PaymentStatus.Cancelled)
+                throw new BusinessRuleException("Invoice is cancelled.");
+
+            if (invoice.PaymentStatus == PaymentStatus.Draft)
+                throw new BusinessRuleException("Invoice is in draft status.");
+
+
+            var redisKey = $"idempotency:payment:invoice:{invoice.Id}:user:{user.Id}";
+            var paymentTransactionId = Guid.NewGuid();
+
+            var acquired = await _redisService.TryAcquireIdempotencyKeyAsync(redisKey, paymentTransactionId.ToString(),
+            TimeSpan.FromMinutes(15));
+
+            if (!acquired)
+            {
+                var existingTransactionId = await _redisService.GetAsync<string>(redisKey);
+                var existingTransaction =
+                await _unitOfWork.PaymentTransactions.GetByIdToCurrentUserAsync(Guid.Parse(existingTransactionId!), user.Id);
+
+                if (existingTransaction == null)
+                    throw new BusinessRuleException("Payment transaction not found.");
+
+                if (string.IsNullOrWhiteSpace(existingTransaction.ClientSecret))
+                    throw new BusinessRuleException("Payment is still being initialized. Please retry shortly.");
+
+                return new StartPaymentResponse
+                {
+                    PaymentTransactionId = Guid.Parse(existingTransactionId!),
+                    ClientSecret = existingTransaction.ClientSecret,
+                    Status = existingTransaction.Status
+                };
+            }
+
+            var paymentTransaction = new PaymentTransaction
+            {
+                Id = paymentTransactionId,
+                UserId = user.Id,
+                InvoiceId = invoice.Id,
+                FailureReason = null,
+                GatewayResponse = null,
+                Amount = invoice.TotalAmount,
+                Currency = invoice.Currency,
+                Method = PaymentMethod.CreditCard,
+                Provider = PaymentProvider.Paymob,
+                Status = PaymentTransactionStatus.Pending,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            await _unitOfWork.PaymentTransactions.AddAsync(paymentTransaction);
+            await _unitOfWork.SaveChangesAsync();
+
+            var amountCents = PaymentHelper.ConvertToCents(invoice.TotalAmount);
+            var intentionRequest = new CreatePaymobIntentionRequest
+            {
+                Amount = amountCents, // Convert to the smallest currency unit
+                Currency = "EGP",
+                BillingData = new PaymobBillingDataRequest
+                {
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    Email = user.Email!,
+                    PhoneNumber = user.PhoneNumber ?? "01000000000",
+                    Apartment = "NA",
+                    Floor = "NA",
+                    Street = "NA",
+                    Building = "NA",
+                    City = "NA",
+                    State = "NA",
+                    Country = "EG"
+                },
+                Items = new List<PaymobItemRequest>
+                {
+                    new PaymobItemRequest
+                    {
+                        Name = $"Invoice #{invoice.Id}",
+                        Quantity = 1,
+                        Amount = amountCents,
+                        Description = $"Payment for Invoice #{invoice.Id}"
+                    }
+                },
+                PaymentMethods = new List<int> { int.Parse(_configuration.GetValue<string>("Paymob:PaymentMethod")!) },
+                SpecialReference = $"payment_{paymentTransaction.Id}",
+                NotificationUrl = _configuration.GetValue<string>("Paymob:CallbackUrl")!,
+                RedirectionUrl = _configuration.GetValue<string>("Paymob:RedirectUrl")!
+            };
+
+            var paymobResult = await _paymobPaymentService.CreateIntentionAsync(intentionRequest);
+
+            paymentTransaction.ProviderIntentionId = paymobResult.IntentionId;
+            paymentTransaction.ProviderOrderId = paymobResult.OrderId.ToString();
+            paymentTransaction.ClientSecret = paymobResult.ClientSecret;
+
+            await _unitOfWork.SaveChangesAsync();
+
+            return new StartPaymentResponse
+            {
+                PaymentTransactionId = paymentTransaction.Id,
+                ClientSecret = paymobResult.ClientSecret,
+                Status = paymentTransaction.Status
+            };
+        }
+
+        private async Task<StartPaymentResponse> ifSubscriptionPlanIdHasValue(Guid subscriptionPlanId, ApplicationUser user)
+        {
+            var plan = await _unitOfWork.SubscriptionPlans.GetByIdAsync(subscriptionPlanId);
+            if (plan == null || plan.IsDeleted || !plan.IsActive)
+                throw new KeyNotFoundException("Subscription plan not found.");
+
+            var redisKey = $"idempotency:payment:plan:{plan.Id}:user:{user.Id}";
+            var paymentTransactionId = Guid.NewGuid();
+
+            var acquired = await _redisService.TryAcquireIdempotencyKeyAsync(redisKey, paymentTransactionId.ToString(),
+            TimeSpan.FromMinutes(15));
+
+            if (!acquired)
+            {
+                var existingTransactionId = await _redisService.GetAsync<string>(redisKey);
+                var existingTransaction =
+                await _unitOfWork.PaymentTransactions.GetByIdToCurrentUserAsync(Guid.Parse(existingTransactionId!), user.Id);
+
+                if (existingTransaction == null)
+                    throw new BusinessRuleException("Payment transaction not found.");
+
+                if (string.IsNullOrWhiteSpace(existingTransaction.ClientSecret))
+                    throw new BusinessRuleException("Payment is still being initialized. Please retry shortly.");
+
+                return new StartPaymentResponse
+                {
+                    PaymentTransactionId = Guid.Parse(existingTransactionId!),
+                    ClientSecret = existingTransaction.ClientSecret,
+                    Status = existingTransaction.Status
+                };
+            }
+
+            var paymentTransaction = new PaymentTransaction
+            {
+                Id = paymentTransactionId,
+                UserId = user.Id,
+                SubscriptionPlanId = plan.Id,
+                FailureReason = null,
+                GatewayResponse = null,
+                Amount = plan.Price,
+                Currency = "EGP",
+                Method = PaymentMethod.CreditCard,
+                Provider = PaymentProvider.Paymob,
+                Status = PaymentTransactionStatus.Pending,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+
+            await _unitOfWork.PaymentTransactions.AddAsync(paymentTransaction);
+            await _unitOfWork.SaveChangesAsync();
+
+            var amountCents = PaymentHelper.ConvertToCents(plan.Price);
+            var intentionRequest = new CreatePaymobIntentionRequest
+            {
+                Amount = amountCents, // Convert to the smallest currency unit
+                Currency = "EGP",
+                BillingData = new PaymobBillingDataRequest
+                {
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    Email = user.Email!,
+                    PhoneNumber = user.PhoneNumber ?? "01000000000",
+                    Apartment = "NA",
+                    Floor = "NA",
+                    Street = "NA",
+                    Building = "NA",
+                    City = "NA",
+                    State = "NA",
+                    Country = "EG"
+                },
+                Items = new List<PaymobItemRequest>
+                {
+                    new PaymobItemRequest
+                    {
+                        Name = $"plan #{plan.Id}",
+                        Quantity = 1,
+                        Amount = amountCents,
+                        Description = $"Payment for plan #{plan.Id}"
+                    }
+                },
+                PaymentMethods = new List<int> { int.Parse(_configuration.GetValue<string>("Paymob:PaymentMethod")!) },
+                SpecialReference = $"payment_{paymentTransaction.Id}",
+                NotificationUrl = _configuration.GetValue<string>("Paymob:CallbackUrl")!,
+                RedirectionUrl = _configuration.GetValue<string>("Paymob:RedirectUrl")!
+            };
+
+            var paymobResult = await _paymobPaymentService.CreateIntentionAsync(intentionRequest);
+
+            paymentTransaction.ProviderIntentionId = paymobResult.IntentionId;
+            paymentTransaction.ProviderOrderId = paymobResult.OrderId.ToString();
+            paymentTransaction.ClientSecret = paymobResult.ClientSecret;
+
+            await _unitOfWork.SaveChangesAsync();
+
+            return new StartPaymentResponse
+            {
+                PaymentTransactionId = paymentTransaction.Id,
+                ClientSecret = paymobResult.ClientSecret,
+                Status = paymentTransaction.Status
+            };
+        }
+
+        private async Task HandleSuccessfulSubscriptionPaymentAsync(PaymentTransaction paymentTransaction, DateTimeOffset paidAt)
+        {
+            var newSubscription = await _userSubscriptionService
+            .SubscribeUserToPlanAsync(paymentTransaction.UserId, paymentTransaction.SubscriptionPlanId!.Value);
+
+            paymentTransaction.UserSubscriptionId = newSubscription.Id;
+        }
+
+        private async Task HandleSuccessfulInvoicePaymentAsync(PaymentTransaction paymentTransaction, DateTimeOffset paidAt)
+        {
+            var invoicePayment = await _unitOfWork.InvoicePayments
+                .GetByTransactionIdAsync(paymentTransaction.ProviderTransactionId!);
+
+            if (invoicePayment == null)
+            {
+                var newInvoicePayment = new InvoicePayment
+                {
+                    InvoiceId = paymentTransaction.InvoiceId!.Value,
+                    Amount = paymentTransaction.Amount,
+                    Currency = paymentTransaction.Currency,
+                    CreatedAt = paymentTransaction.CreatedAt,
+                    Status = PaymentTransactionStatus.Succeeded,
+                    PaymentMethod = paymentTransaction.Method,
+                    PaymentProvider = paymentTransaction.Provider,
+                    ReferenceNumber = paymentTransaction.Id.ToString(),
+                    TransactionId = paymentTransaction.ProviderTransactionId,
+                    PaidAt = paidAt
+                };
+
+                await _unitOfWork.InvoicePayments.AddAsync(newInvoicePayment);
+            }
+
+            var invoice = await _unitOfWork.Invoices.GetByIdAsync(paymentTransaction.InvoiceId!.Value);
+
+            if (invoice != null)
+            {
+                invoice.PaymentStatus = PaymentStatus.Paid;
+                invoice.PaidAt = paidAt;
+                invoice.UpdatedAt = paidAt;
+            }
         }
     }
 }

@@ -6,7 +6,7 @@ namespace Application.DTOs.Shipments.Core
     {
         public decimal Amount { get; set; }
 
-        public string Currency { get; set; } = "USD";
+        public string Currency { get; set; } = "EGP";
         public string? ReferenceNumber { get; set; }
     }
 

@@ -104,7 +104,8 @@ namespace Infrastructure.Repositories.Shipments.Core
                 .Include(s => s.Route)
                 .Include(s => s.ContainerType)
                 .Include(s => s.Carrier)
-                .Include(s => s.Items.Where(i => !i.IsDeleted))
+                .Include(s => s.Items.Where(i => !i.IsDeleted)).ThenInclude(x => x.ChargeItems)
+                .ThenInclude(x => x.ShipmentCharge)
                 .Include(s => s.Charges.Where(c => !c.IsDeleted))
                 .Include(s => s.StatusHistory)
                 .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
