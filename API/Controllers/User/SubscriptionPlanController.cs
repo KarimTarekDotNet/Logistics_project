@@ -42,7 +42,7 @@ namespace API.Controllers.User
         {
             var isInRole = User.IsInRole("Admin") || User.IsInRole("Staff");
             var newPlan = await _subscriptionPlanService.AddFromEmployeesAsync(request, isInRole);
-            return CreatedAtAction(nameof(GetByIdAsync), new { }, newPlan);
+            return Ok(newPlan);
         }
 
         [HttpDelete("{id}")]

@@ -33,9 +33,6 @@ namespace API.Controllers.Pricing.PricingEngine
         {
             var rates = await _rateService.SearchAsync(query);
 
-            if (rates == null || !rates.Any())
-                return NotFound(new { message = "No rates found for the given criteria." });
-
             return Ok(rates);
         }
 
@@ -44,9 +41,6 @@ namespace API.Controllers.Pricing.PricingEngine
         {
             var rates = await _rateService.GetMarketAnalyticsAsync
             (request.RouteId, request.ContainerId, request.Currency);
-
-            if (rates == null)
-                return NotFound(new { message = "No rates found." });
 
             return Ok(rates);
         }
@@ -66,9 +60,6 @@ namespace API.Controllers.Pricing.PricingEngine
         public async Task<IActionResult> GetRateById(Guid id)
         {
             var rate = await _rateService.GetByIdAsync(id);
-
-            if (rate == null)
-                return NotFound(new { message = "Rate not found" });
 
             return Ok(rate);
         }

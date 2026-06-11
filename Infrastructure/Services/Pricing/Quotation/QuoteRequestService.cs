@@ -41,6 +41,12 @@ namespace Infrastructure.Services.Pricing.Quotation
             if (request.Status != QuoteRequestStatus.PendingReview)
                 throw new BusinessRuleException("Only pending quote requests can be approved.");
 
+            var ownerQuote = await _userManager.Users.Include(x => x.CustomerProfile)
+            .FirstOrDefaultAsync(x => x.CustomerProfile!.Id == request.CustomerId);
+
+            if (ownerQuote == null)
+                throw new BusinessRuleException("Owner quote not found");
+
             var quote = new Quote
             {
                 CustomerId = request.CustomerId,
@@ -122,7 +128,7 @@ namespace Infrastructure.Services.Pricing.Quotation
 
             await _unitOfWork.Invoices.AddAsync(invoice);
 
-            await SendApprovalEmailAsync(user, request);
+            await SendApprovalEmailAsync(ownerQuote, request);
 
             return await UpdateRequestStatusAsync(request, user, QuoteRequestStatus.Approved);
         }
@@ -156,7 +162,13 @@ namespace Infrastructure.Services.Pricing.Quotation
             if (request == null)
                 throw new BusinessRuleException("Quote request not found.");
 
-            await SendRejectionEmailAsync(user, request);
+            var ownerQuote = await _userManager.Users.Include(x => x.CustomerProfile)
+                .FirstOrDefaultAsync(x => x.CustomerProfile!.Id == request.CustomerId);
+
+            if (ownerQuote == null)
+                throw new BusinessRuleException("Owner quote not found");
+
+            await SendRejectionEmailAsync(ownerQuote, request);
 
             return await UpdateRequestStatusAsync(request, user, QuoteRequestStatus.Rejected, reason);
         }

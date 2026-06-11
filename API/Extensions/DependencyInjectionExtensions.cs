@@ -8,6 +8,7 @@ using Application.Interfaces.Repositories.Pricing.Quotation;
 using Application.Interfaces.Repositories.Shipments.Core;
 using Application.Interfaces.Repositories.Shipments.User;
 using Application.Interfaces.Repositories.ShippingCore;
+using Application.Interfaces.Repositories.Users;
 using Application.Interfaces.Services.Aliases;
 using Application.Interfaces.Services.Auth;
 using Application.Interfaces.Services.Payment;
@@ -34,6 +35,7 @@ using Infrastructure.Repositories.Pricing.Quotation;
 using Infrastructure.Repositories.Pricing.ShippingCore;
 using Infrastructure.Repositories.Shipments;
 using Infrastructure.Repositories.Shipments.Core;
+using Infrastructure.Repositories.Users;
 using Infrastructure.Services.Aliases;
 using Infrastructure.Services.Auth;
 using Infrastructure.Services.Payment;
@@ -50,7 +52,6 @@ using Infrastructure.Services.User;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
-using Twilio.TwiML.Voice;
 
 namespace API.Extensions
 {
@@ -94,6 +95,8 @@ namespace API.Extensions
             services.AddScoped<IQuoteRequestRepository, QuoteRequestRepository>();
             services.AddScoped<IShipmentChargeRuleRepository, ShipmentChargeRuleRepository>();
             services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
+            services.AddScoped<ISubscriptionPlanRepository, SubscriptionPlanRepository>();
+            services.AddScoped<IUserSubscriptionRepository, UserSubscriptionRepository>();
 
             // Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -129,6 +132,8 @@ namespace API.Extensions
             services.AddScoped<IQuoteRequestService, QuoteRequestService>();
             services.AddScoped<IPaymentTransactionService, PaymentTransactionService>();
             services.AddScoped<IPaymobPaymentService, PaymobPaymentService>();
+            services.AddScoped<IUserSubscriptionService, UserSubscriptionService>();
+            services.AddScoped<ISubscriptionPlanService, SubscriptionPlanService>();
             services.AddScoped<IRedisService, RedisService>();
 
             // APIs Integrations

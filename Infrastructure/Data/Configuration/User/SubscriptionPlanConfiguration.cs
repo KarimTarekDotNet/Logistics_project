@@ -22,7 +22,7 @@ namespace Infrastructure.Data.Configuration.User
 
             builder.Property(sp => sp.CreatedAt).IsRequired();
 
-            builder.Property(sp => sp.IsDeleted).IsRequired(false);
+            builder.Property(sp => sp.IsDeleted).IsRequired();
             builder.Property(sp => sp.DeletedAt).IsRequired(false);
 
             builder.Property(sp => sp.UpdatedAt).IsRequired(false);
@@ -47,7 +47,7 @@ namespace Infrastructure.Data.Configuration.User
 
             builder.Property(sp => sp.CreatedAt).IsRequired();
 
-            builder.Property(sp => sp.IsDeleted).IsRequired(false);
+            builder.Property(sp => sp.IsDeleted).IsRequired();
             builder.Property(sp => sp.DeletedAt).IsRequired(false);
 
             builder.Property(sp => sp.UpdatedAt).IsRequired(false);

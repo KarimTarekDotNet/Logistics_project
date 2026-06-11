@@ -17,9 +17,9 @@
 
         public ICollection<UserSubscription> UserSubscriptions = new HashSet<UserSubscription>();
 
-        public DateTimeOffset UpdatedAt { get; set; }
+        public DateTimeOffset? UpdatedAt { get; set; }
 
         public bool IsDeleted { get; set; }
-        public DateTimeOffset DeletedAt { get; set; }
+        public DateTimeOffset? DeletedAt { get; set; }
     }
 }

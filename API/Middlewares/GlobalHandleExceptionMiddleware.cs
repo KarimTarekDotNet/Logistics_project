@@ -1,9 +1,7 @@
 ﻿using Domain.Exceptions;
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
-using Twilio.Types;
 
 namespace API.Middlewares
 {
@@ -26,60 +24,30 @@ namespace API.Middlewares
             }
             catch (Exception ex)
             {
-                int statusCode;
-                string message;
+                //Console.WriteLine("GLOBAL MIDDLEWARE CAUGHT: " + ex.GetType().Name);
+                HandleException(ex);
 
-                if (ex is NotFoundException)
+                if (context.Response.HasStarted)
                 {
-                    statusCode = StatusCodes.Status404NotFound;
-                    message = ex.Message;
-                }
-                else if (ex is UnauthorizedAccessException)
-                {
-                    statusCode = StatusCodes.Status403Forbidden;
-                    message = ex.Message;
-                }
-                else if (ex is ArgumentException)
-                {
-                    statusCode = StatusCodes.Status400BadRequest;
-                    message = "Invalid input provided.";
-                }
-                else if (ex is InvalidOperationException)
-                {
-                    statusCode = StatusCodes.Status409Conflict;
-                    message = "Operation cannot be completed due to current state.";
-                }
-                else if (ex is SqlException)
-                {
-                    statusCode = StatusCodes.Status500InternalServerError;
-                    message = "A database error occurred.";
-                }
-                else if (ex is NullReferenceException)
-                {
-                    statusCode = StatusCodes.Status500InternalServerError;
-                    message = "An unexpected error occurred.";
-                }
-                else if (ex is DbUpdateConcurrencyException)
-                {
-                    statusCode = StatusCodes.Status409Conflict;
-                    message = "The item was modified by someone else. Please reload and try again.";
-                }
-                else if (ex is BusinessRuleException)
-                {
-                    statusCode = StatusCodes.Status409Conflict;
-                    message = ex.Message;
-                }
-                else if (ex is DbUpdateException)
-                {
-                    statusCode = StatusCodes.Status500InternalServerError;
-                    message = "A database update error occurred.";
-                }
-                else
-                {
-                    statusCode = StatusCodes.Status500InternalServerError;
-                    message = "An unexpected error occurred.";
+                    _logger.LogError(ex, "Response already started.");
+                    throw;
                 }
 
+                var (statusCode, message) = ex switch
+                {
+                    NotFoundException => (StatusCodes.Status404NotFound, ex.Message),
+                    UnauthorizedAccessException => (StatusCodes.Status403Forbidden, ex.Message),
+                    ArgumentException => (StatusCodes.Status400BadRequest, "Invalid input provided."),
+                    BusinessRuleException => (StatusCodes.Status409Conflict, ex.Message),
+                    DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "The item was modified by someone else. Please reload and try again."),
+                    DbUpdateException => (StatusCodes.Status500InternalServerError, "A database update error occurred."),
+                    SqlException => (StatusCodes.Status500InternalServerError, "A database error occurred."),
+                    InvalidOperationException => (StatusCodes.Status409Conflict, "Operation cannot be completed due to current state."),
+                    NullReferenceException => (StatusCodes.Status500InternalServerError, "An unexpected error occurred."),
+                    _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.")
+                };
+
+                context.Response.Clear();
                 context.Response.ContentType = "application/json";
                 context.Response.StatusCode = statusCode;
 
@@ -88,8 +56,6 @@ namespace API.Middlewares
                     StatusCode = statusCode,
                     Message = message
                 }));
-
-                HandleException(ex);
             }
         }
 
@@ -110,6 +76,9 @@ namespace API.Middlewares
                    + " This is usually caused by a database call that expects "
                    + "one result, but receives none or more than one.");
             }
+
+            else if (ex is BusinessRuleException businessEx)
+                _logger.LogWarning(new EventId(1008), businessEx, businessEx.Message);
 
             else if (ex is SqlException sqlEx)
                 _logger.LogError(new EventId(1004), sqlEx, $"A SQL database exception occurred. Error Number {sqlEx.Number}");

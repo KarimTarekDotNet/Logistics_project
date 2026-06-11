@@ -10,6 +10,7 @@
                 app.MapOpenApi();
                 app.UseSwaggerUI();
             }
+            app.UseCustomGlobalHandleException();
 
             app.UseHttpsRedirection();
 
@@ -19,7 +20,6 @@
             app.UseStaticFiles();
             app.UseAuthentication();
 
-            app.UseCustomGlobalHandleException();
             app.UseCustomAntiforgery();
 
             app.UseRateLimiter();
