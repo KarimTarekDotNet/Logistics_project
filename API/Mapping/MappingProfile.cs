@@ -16,6 +16,7 @@ using Domain.Entities.Pricing.Quotation;
 using Domain.Entities.Shipments;
 using Domain.Entities.ShippingCore;
 using Domain.Entities.Users;
+using Domain.Entities.Users.Subscriptions;
 using DomainRoute = Domain.Entities.ShippingCore.Route;
 
 namespace API.Mapping
@@ -119,12 +120,19 @@ namespace API.Mapping
             CreateMap<CreateInvoiceRequest, Invoice>();
 
             // ── Subscription ────────────────────────────────────────────────────
-            CreateMap<SubscriptionPlan, SubscriptionPlanResponse>();
+            CreateMap<SubscriptionPlan, SubscriptionPlanResponse>()
+                .ForMember(d => d.SubscriptionFeatureResponses,
+                    o => o.MapFrom(s => s.PlanFeatures.Select(x => x.SubscriptionFeature)))
+                .ForMember(d => d.SubscriptionPlanLimitResponses,
+                    o => o.MapFrom(s => s.PlanLimits));
+            CreateMap<SubscriptionFeature, SubscriptionFeatureResponse>();
+            CreateMap<SubscriptionPlanLimit, SubscriptionPlanLimitResponse>();
+
             CreateMap<CreateSubscriptionPlanRequest, SubscriptionPlan>();
-            CreateMap<UpdateSubscriptionPlanRequest, SubscriptionPlan>();
 
             // ── User Subscription ────────────────────────────────────────────────────
             CreateMap<UserSubscription, UserSubscriptionResponse>();
+            CreateMap<UserSubscriptionUsage, UserSubscriptionUsageResponse>();
 
 
 

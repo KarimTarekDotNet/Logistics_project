@@ -1,4 +1,4 @@
-﻿using Domain.Entities.Users;
+﻿using Domain.Entities.Users.Subscriptions;
 
 namespace Application.Interfaces.Repositories.Users
 {
@@ -6,6 +6,7 @@ namespace Application.Interfaces.Repositories.Users
     {
         Task<SubscriptionPlan?> GetByIdAsync(Guid subscriptionPlanId);
         Task<IReadOnlyCollection<SubscriptionPlan?>> GetAllAsync();
+        Task<SubscriptionFeature?> GetByCodeAsync(string code);
 
         Task AddAsync(SubscriptionPlan subscriptionPlan);
         void Delete(SubscriptionPlan subscriptionPlan);

@@ -2,7 +2,8 @@
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Repositories.Users;
 using AutoMapper;
-using Domain.Entities.Users;
+using Domain.Entities.Users.Subscriptions;
+using Domain.Exceptions;
 
 namespace Infrastructure.Services.User
 {
@@ -24,14 +25,66 @@ namespace Infrastructure.Services.User
 
             var newPlan = _mapper.Map<SubscriptionPlan>(request);
 
-            newPlan.DurationInDays = 30;
+            newPlan.DurationInDays = request.DurationInDays;
             newPlan.CreatedAt = DateTimeOffset.UtcNow;
             newPlan.IsActive = true;
+            newPlan.Currency = request.Currency.ToUpperInvariant();
+
+            foreach (var createSubscriptionFeature in request.CreateSubscriptionFeatures)
+            {
+                var normalizedCode = createSubscriptionFeature.Code.Trim().ToUpperInvariant();
+                var normalizedName = createSubscriptionFeature.Name.Trim();
+
+                if (newPlan.PlanFeatures.Any(x =>
+                    x.SubscriptionFeature.FeatureCode == normalizedCode))
+                    throw new BusinessRuleException("Duplicate feature code in the same plan.");
+
+                var feature = await _unitOfWork.SubscriptionPlans
+                    .GetByCodeAsync(normalizedCode);
+
+                if (feature == null)
+                {
+                    feature = new SubscriptionFeature
+                    {
+                        Id = Guid.NewGuid(),
+                        FeatureCode = normalizedCode,
+                        FeatureName = normalizedName
+                    };
+                }
+
+                newPlan.PlanFeatures.Add(new SubscriptionPlanFeature
+                {
+                    Id = Guid.NewGuid(),
+                    SubscriptionFeature = feature
+                });
+            }
+
+            foreach (var createSubscriptionPlanLimit in request.CreateSubscriptionPlanLimits)
+            {
+                var code = createSubscriptionPlanLimit.Code.Trim().ToUpperInvariant();
+
+                if (newPlan.PlanLimits.Any(x => x.LimitCodeSubscription.Equals(code, StringComparison.OrdinalIgnoreCase)))
+                    throw new BusinessRuleException($"Duplicate limit code: {code}");
+
+                newPlan.PlanLimits.Add(new SubscriptionPlanLimit
+                {
+                    Id = Guid.NewGuid(),
+                    LimitCodeSubscription = code.ToUpperInvariant(),
+                    LimitMaxValue = createSubscriptionPlanLimit.MaxValue
+                });
+            }
+
 
             await _unitOfWork.SubscriptionPlans.AddAsync(newPlan);
             await _unitOfWork.SaveChangesAsync();
 
-            return _mapper.Map<SubscriptionPlanResponse>(newPlan);
+            var dto = _mapper.Map<SubscriptionPlanResponse>(newPlan);
+
+            dto.SubscriptionFeatureResponses = _mapper.Map<ICollection<SubscriptionFeatureResponse>>(
+                newPlan.PlanFeatures.Select(x => x.SubscriptionFeature));
+            dto.SubscriptionPlanLimitResponses = _mapper.Map<ICollection<SubscriptionPlanLimitResponse>>(newPlan.PlanLimits);
+
+            return dto;
         }
 
         public async Task DeleteFromEmployeesAsync(Guid subscriptionPlanId, bool isEmployee)
@@ -68,8 +121,8 @@ namespace Infrastructure.Services.User
             return _mapper.Map<SubscriptionPlanResponse>(plan);
         }
 
-        public async Task<SubscriptionPlanResponse> UpdateFromEmployeesAsync(Guid subscriptionPlanId,
-        UpdateSubscriptionPlanRequest request, bool isEmployee)
+        public async Task<SubscriptionPlanResponse> UpdateFromEmployeesAsync(Guid subscriptionPlanId, bool isEmployee,
+        CreateSubscriptionPlanRequest? request = null)
         {
             if(!isEmployee)
                 throw new UnauthorizedAccessException("Only employees can update subscription plans.");
@@ -78,21 +131,14 @@ namespace Infrastructure.Services.User
             if (plan == null || plan.IsDeleted || !plan.IsActive)
                 throw new KeyNotFoundException("Subscription plan not found.");
 
-            if (!string.IsNullOrWhiteSpace(request.Title))
-                plan.Title = request.Title;
-
-            if(!string.IsNullOrWhiteSpace(request.Description))
-                plan.Description = request.Description;
-
-            if(request.DurationInDays.HasValue)
-                plan.DurationInDays = request.DurationInDays.Value;
-
-            if(request.Price.HasValue)
-                plan.Price = request.Price.Value;
+            if(request == null)
+                return _mapper.Map<SubscriptionPlanResponse>(plan);
 
             plan.UpdatedAt = DateTime.UtcNow;
-            await _unitOfWork.SaveChangesAsync();
-            return _mapper.Map<SubscriptionPlanResponse>(plan);
+            plan.IsActive = false;
+
+            var newPlan = await AddFromEmployeesAsync(request, isEmployee);
+            return newPlan;
         }
     }
 }

@@ -1,5 +1,5 @@
 ﻿using Domain.Entities.Shipments;
-using Domain.Entities.Users;
+using Domain.Entities.Users.Subscriptions;
 using Domain.Enums;
 
 namespace Domain.Entities.Payments

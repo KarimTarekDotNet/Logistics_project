@@ -1,5 +1,5 @@
 ﻿using Application.Interfaces.Repositories.Users;
-using Domain.Entities.Users;
+using Domain.Entities.Users.Subscriptions;
 using Infrastructure.Data.Database;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +29,9 @@ namespace Infrastructure.Repositories.Users
         {
             return await _context.UserSubscriptions.AsNoTracking()
                 .Include(x => x.SubscriptionPlan)
+                .Include(x => x.Usages)
                 .Where(us => us.UserId == userId && !us.IsDeleted)
+                .OrderByDescending(us => us.CreatedAt)
                 .ToListAsync();
         }
 
@@ -37,7 +39,9 @@ namespace Infrastructure.Repositories.Users
         {
             return await _context.UserSubscriptions.AsNoTracking()
                 .Include(x => x.SubscriptionPlan)
-                .Where(us => us.UserId == userId && !us.IsDeleted && us.EndDate > DateTimeOffset.UtcNow)
+                .Include(x => x.Usages)
+                .Where(us => us.UserId == userId && !us.IsDeleted && us.IsActive && us.EndDate > DateTimeOffset.UtcNow)
+                .OrderByDescending(us => us.CreatedAt)
                 .FirstOrDefaultAsync();
         }
 

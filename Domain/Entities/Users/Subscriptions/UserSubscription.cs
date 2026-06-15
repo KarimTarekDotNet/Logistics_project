@@ -1,6 +1,6 @@
 ﻿using Domain.Entities.Payments;
 
-namespace Domain.Entities.Users
+namespace Domain.Entities.Users.Subscriptions
 {
     public class UserSubscription
     {
@@ -18,6 +18,7 @@ namespace Domain.Entities.Users
         public bool IsActive { get; set; }
 
         public ICollection<PaymentTransaction> Payments { get; set; } = new HashSet<PaymentTransaction>();
+        public ICollection<UserSubscriptionUsage> Usages { get; set; } = new HashSet<UserSubscriptionUsage>();
 
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset? UpdatedAt { get; set; }

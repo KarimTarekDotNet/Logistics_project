@@ -3,6 +3,7 @@ using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Repositories.Users;
 using AutoMapper;
 using Domain.Entities.Users;
+using Domain.Entities.Users.Subscriptions;
 using Domain.Exceptions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +23,7 @@ namespace Infrastructure.Services.User
             _userManager = userManager;
         }
 
-        public async Task<UserSubscriptionResponse> GetCurrentUserSubscriptionsAsync(string userId)
+        public async Task<UserSubscriptionResponse?> GetCurrentUserSubscriptionsAsync(string userId)
         {
             var user = await _userManager.Users.Include(x => x.CustomerProfile)
             .FirstOrDefaultAsync(x => x.Id == userId);
@@ -33,7 +34,7 @@ namespace Infrastructure.Services.User
             var currentPlanForUser = await _unitOfWork.UserSubscriptions.GetCurrentSubscriptionByUserIdAsync(userId);
 
             if(currentPlanForUser == null)
-                return new UserSubscriptionResponse();
+                return null;
 
             var dto = _mapper.Map<UserSubscriptionResponse>(currentPlanForUser);
 
@@ -57,7 +58,16 @@ namespace Infrastructure.Services.User
             if (!userSubscriptions.Any())
                 return new List<UserSubscriptionResponse>();
 
-            return _mapper.Map<IReadOnlyCollection<UserSubscriptionResponse>>(userSubscriptions);
+            var subscriptions = _mapper.Map<List<UserSubscriptionResponse>>(userSubscriptions);
+
+            foreach (var subscription in subscriptions)
+            {
+                var source = userSubscriptions.First(x => x!.Id == subscription.Id)!;
+                subscription.Username = user.FirstName + " " + user.LastName;
+                subscription.SubscriptionPlanTitle = source.SubscriptionPlan.Title;
+            }
+
+            return subscriptions;
         }
 
         public async Task<UserSubscriptionResponse> SubscribeUserToPlanAsync(string userId, Guid supId)
@@ -78,13 +88,26 @@ namespace Infrastructure.Services.User
 
             var newSub = new UserSubscription
             {
+                Id = Guid.NewGuid(),
                 StartDate = DateTimeOffset.UtcNow,
                 EndDate = DateTimeOffset.UtcNow.AddDays(plan.DurationInDays),
                 IsActive = true,
                 SubscriptionPlanId = supId,
                 CreatedAt = DateTimeOffset.UtcNow,
-                UserId = user.Id
+                UserId = user.Id,
             };
+
+            foreach (var limit in plan.PlanLimits)
+            {
+                newSub.Usages.Add(new UserSubscriptionUsage
+                {
+                    Id = Guid.NewGuid(),
+                    LimitCode = limit.LimitCodeSubscription,
+                    PeriodStart = newSub.StartDate,
+                    PeriodEnd = newSub.EndDate,
+                    UsedValue = 0
+                });
+            }
 
             await _unitOfWork.UserSubscriptions.AddAsync(newSub);
 
@@ -93,6 +116,8 @@ namespace Infrastructure.Services.User
             dto.Username = user.FirstName + " " + user.LastName;
 
             dto.SubscriptionPlanTitle = plan.Title;
+
+            dto.Usages = _mapper.Map<ICollection<UserSubscriptionUsageResponse>>(newSub.Usages);
 
             return dto;
         }

@@ -3,26 +3,29 @@ using FluentValidation;
 
 namespace Application.Validations.User
 {
-    public class CreateSubscriptionPlanRequestValidator
-        : AbstractValidator<CreateSubscriptionPlanRequest>
+    public class CreateSubscriptionPlanRequestValidator : AbstractValidator<CreateSubscriptionPlanRequest>
     {
         public CreateSubscriptionPlanRequestValidator()
         {
             RuleFor(x => x.Title)
                 .NotEmpty()
-                .WithMessage("Title is required.")
                 .MaximumLength(100)
-                .WithMessage("Title cannot exceed 100 characters.")
                 .MinimumLength(3)
-                .WithMessage("Title must be at least 3 characters.");
+                .Matches(@"^[A-Za-z\s_-]+$")
+                .WithMessage("Only letters, spaces, underscore (_) and hyphen (-) are allowed.");
+
+            RuleFor(x => x.Currency)
+                .NotEmpty()
+                .MaximumLength(10)
+                .Matches(@"^[A-Z]{3}$")
+                .WithMessage("Currency must be a valid 3-letter uppercase code, like USD or EGP.");
 
             RuleFor(x => x.Description)
-                .NotEmpty()
-                .WithMessage("Description is required.")
-                .MaximumLength(500)
-                .WithMessage("Description cannot exceed 500 characters.")
-                .MinimumLength(10)
-                .WithMessage("Description must be at least 10 characters.");
+               .NotEmpty()
+               .MaximumLength(500)
+               .MinimumLength(10)
+               .Matches(@"^[A-Za-z0-9\s.,_-]+$")
+               .WithMessage("Only letters, numbers, spaces, dot, comma, underscore (_) and hyphen (-) are allowed.");
 
             RuleFor(x => x.Price)
                 .GreaterThan(0)
@@ -30,40 +33,63 @@ namespace Application.Validations.User
 
             RuleFor(x => x.DurationInDays)
                 .GreaterThan(0)
-                .WithMessage("Duration must be greater than 0 days.");
+                .WithMessage("Duration must be greater than 0 days.")
+                .LessThanOrEqualTo(365)
+                .WithMessage("Duration must be less than or equal 365 days.");
+
+            RuleFor(x => x.CreateSubscriptionFeatures)
+                .NotNull()
+                .WithMessage("Features are required.")
+                .NotEmpty()
+                .WithMessage("At least one feature is required.");
+
+            RuleForEach(x => x.CreateSubscriptionFeatures)
+                .SetValidator(new CreateSubscriptionFeatureValidator());
+
+            RuleFor(x => x.CreateSubscriptionPlanLimits)
+                .NotNull()
+                .WithMessage("Limits are required.")
+                .NotEmpty()
+                .WithMessage("At least one limit is required.");
+
+            RuleForEach(x => x.CreateSubscriptionPlanLimits)
+                .SetValidator(new CreateSubscriptionPlanLimitValidator());
         }
     }
 
-    public class UpdateSubscriptionPlanRequestValidator
-    : AbstractValidator<UpdateSubscriptionPlanRequest>
+    public class CreateSubscriptionFeatureValidator : AbstractValidator<CreateSubscriptionFeature>
     {
-        public UpdateSubscriptionPlanRequestValidator()
+        public CreateSubscriptionFeatureValidator()
         {
-            RuleFor(x => x.Title)
-                .MinimumLength(3)
-                .When(x => !string.IsNullOrWhiteSpace(x.Title))
-                .WithMessage("Title must be at least 3 characters.")
+            RuleFor(x => x.Code)
+                .NotEmpty()
                 .MaximumLength(100)
-                .When(x => !string.IsNullOrWhiteSpace(x.Title))
-                .WithMessage("Title cannot exceed 100 characters.");
+                .Matches(@"^[A-Z][A-Z_-]*$")
+                .WithMessage("Only letters, spaces, underscore (_) and hyphen (-) are allowed.");
 
-            RuleFor(x => x.Description)
-                .MinimumLength(10)
-                .When(x => !string.IsNullOrWhiteSpace(x.Description))
-                .WithMessage("Description must be at least 10 characters.")
-                .MaximumLength(500)
-                .When(x => !string.IsNullOrWhiteSpace(x.Description))
-                .WithMessage("Description cannot exceed 500 characters.");
+            RuleFor(x => x.Name)
+                .NotEmpty()
+                .WithMessage("Feature name is required.")
+                .MaximumLength(150)
+                .WithMessage("Feature name cannot exceed 150 characters.")
+                .Matches(@"^[A-Za-z\s_-]+$")
+                .WithMessage("Only letters");
+        }
+    }
 
-            RuleFor(x => x.Price)
+    public class CreateSubscriptionPlanLimitValidator : AbstractValidator<CreateSubscriptionPlanLimit>
+    {
+        public CreateSubscriptionPlanLimitValidator()
+        {
+            RuleFor(x => x.Code)
+                .NotEmpty()
+                .MaximumLength(100)
+                .Matches(@"^[A-Za-z][A-Za-z0-9_-]*$")
+                .WithMessage("Code must contain uppercase letters, numbers, underscore (_) or hyphen (-) only.");
+
+            RuleFor(x => x.MaxValue)
                 .GreaterThan(0)
-                .When(x => x.Price.HasValue)
-                .WithMessage("Price must be greater than 0.");
-
-            RuleFor(x => x.DurationInDays)
-                .GreaterThan(0)
-                .When(x => x.DurationInDays.HasValue)
-                .WithMessage("Duration must be greater than 0 days.");
+                .WithMessage("Max value must be greater than 0.");
         }
     }
 }

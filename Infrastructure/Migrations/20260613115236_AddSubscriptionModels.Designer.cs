@@ -4,6 +4,7 @@ using Infrastructure.Data.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260613115236_AddSubscriptionModels")]
+    partial class AddSubscriptionModels
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1361,25 +1364,50 @@ namespace Infrastructure.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
+            modelBuilder.Entity("Domain.Entities.Users.SubscriptionPlanLimit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("MaxValue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("SubscriptionPlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubscriptionPlanId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("SubscriptionPlanLimit");
+                });
+
             modelBuilder.Entity("Domain.Entities.Users.Subscriptions.SubscriptionFeature", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("FeatureCode")
+                    b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("FeatureName")
+                    b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("FeatureCode")
+                    b.HasIndex("Code")
                         .IsUnique();
 
                     b.ToTable("SubscriptionFeatures");
@@ -1448,35 +1476,9 @@ namespace Infrastructure.Migrations
 
                     b.HasIndex("SubscriptionFeatureId");
 
-                    b.HasIndex("SubscriptionPlanId", "SubscriptionFeatureId")
-                        .IsUnique();
+                    b.HasIndex("SubscriptionPlanId");
 
                     b.ToTable("SubscriptionPlanFeatures");
-                });
-
-            modelBuilder.Entity("Domain.Entities.Users.Subscriptions.SubscriptionPlanLimit", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("LimitCodeSubscription")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<decimal>("LimitMaxValue")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<Guid>("SubscriptionPlanId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SubscriptionPlanId", "LimitCodeSubscription")
-                        .IsUnique();
-
-                    b.ToTable("SubscriptionPlanLimit");
                 });
 
             modelBuilder.Entity("Domain.Entities.Users.Subscriptions.UserSubscription", b =>
@@ -1973,6 +1975,17 @@ namespace Infrastructure.Migrations
                     b.Navigation("ApplicationUser");
                 });
 
+            modelBuilder.Entity("Domain.Entities.Users.SubscriptionPlanLimit", b =>
+                {
+                    b.HasOne("Domain.Entities.Users.Subscriptions.SubscriptionPlan", "SubscriptionPlan")
+                        .WithMany("PlanLimits")
+                        .HasForeignKey("SubscriptionPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SubscriptionPlan");
+                });
+
             modelBuilder.Entity("Domain.Entities.Users.Subscriptions.SubscriptionPlanFeature", b =>
                 {
                     b.HasOne("Domain.Entities.Users.Subscriptions.SubscriptionFeature", "SubscriptionFeature")
@@ -1988,17 +2001,6 @@ namespace Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("SubscriptionFeature");
-
-                    b.Navigation("SubscriptionPlan");
-                });
-
-            modelBuilder.Entity("Domain.Entities.Users.Subscriptions.SubscriptionPlanLimit", b =>
-                {
-                    b.HasOne("Domain.Entities.Users.Subscriptions.SubscriptionPlan", "SubscriptionPlan")
-                        .WithMany("PlanLimits")
-                        .HasForeignKey("SubscriptionPlanId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
 
                     b.Navigation("SubscriptionPlan");
                 });

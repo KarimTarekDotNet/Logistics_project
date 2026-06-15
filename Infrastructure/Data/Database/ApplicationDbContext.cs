@@ -6,6 +6,7 @@ using Domain.Entities.Pricing.Quotation;
 using Domain.Entities.Shipments;
 using Domain.Entities.ShippingCore;
 using Domain.Entities.Users;
+using Domain.Entities.Users.Subscriptions;
 using Infrastructure.Data.Configuration.Pricing;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -45,7 +46,11 @@ namespace Infrastructure.Data.Database
 
         // Subscriptions
         public DbSet<SubscriptionPlan> SubscriptionPlans { get; set; }
+        public DbSet<SubscriptionFeature> SubscriptionFeatures { get; set; }
+        public DbSet<SubscriptionPlanFeature> SubscriptionPlanFeatures { get; set; }
+        public DbSet<SubscriptionPlanLimit> SubscriptionPlanLimit { get; set; }
         public DbSet<UserSubscription> UserSubscriptions { get; set; }
+        public DbSet<UserSubscriptionUsage> UserSubscriptionUsages { get; set; }
 
         // Users
         public DbSet<ApplicationUser> ApplicationUsers { get; set; }

@@ -142,9 +142,26 @@ namespace Infrastructure.Data.Configuration.Seeding
         // =========================
         // 4. Ports
         // =========================
-        private static readonly Guid PortShanghaiId   = new("00000000-0000-0000-0000-000000000001");
-        private static readonly Guid PortRotterdamId  = new("00000000-0000-0000-0000-000000000002");
-        private static readonly Guid PortDubaiId      = new("00000000-0000-0000-0000-000000000003");
+        private static readonly Guid PortShanghaiId = new("00000000-0000-0000-0000-000000000001");
+        private static readonly Guid PortRotterdamId = new("00000000-0000-0000-0000-000000000002");
+        private static readonly Guid PortJebelAliId = new("00000000-0000-0000-0000-000000000003");
+        private static readonly Guid PortSingaporeId = new("00000000-0000-0000-0000-000000000004");
+        private static readonly Guid PortNingboId = new("00000000-0000-0000-0000-000000000005");
+        private static readonly Guid PortShenzhenId = new("00000000-0000-0000-0000-000000000006");
+        private static readonly Guid PortQingdaoId = new("00000000-0000-0000-0000-000000000007");
+        private static readonly Guid PortTianjinId = new("00000000-0000-0000-0000-000000000008");
+        private static readonly Guid PortHongKongId = new("00000000-0000-0000-0000-000000000009");
+        private static readonly Guid PortBusanId = new("00000000-0000-0000-0000-000000000010");
+        private static readonly Guid PortHamburgId = new("00000000-0000-0000-0000-000000000011");
+        private static readonly Guid PortAntwerpId = new("00000000-0000-0000-0000-000000000012");
+        private static readonly Guid PortBremerhavenId = new("00000000-0000-0000-0000-000000000013");
+        private static readonly Guid PortLosAngelesId = new("00000000-0000-0000-0000-000000000014");
+        private static readonly Guid PortLongBeachId = new("00000000-0000-0000-0000-000000000015");
+        private static readonly Guid PortNewYorkId = new("00000000-0000-0000-0000-000000000016");
+        private static readonly Guid PortAlexandriaId = new("00000000-0000-0000-0000-000000000017");
+        private static readonly Guid PortPortSaidId = new("00000000-0000-0000-0000-000000000018");
+        private static readonly Guid PortDamiettaId = new("00000000-0000-0000-0000-000000000019");
+        private static readonly Guid PortSokhnaId = new("00000000-0000-0000-0000-000000000020");
 
         private static async Task SeedPortsAsync(ApplicationDbContext db)
         {
@@ -152,9 +169,30 @@ namespace Infrastructure.Data.Configuration.Seeding
 
             var ports = new List<Port>
             {
-                new() { Id = PortShanghaiId,  Name = "Shanghai",   Code = "CNSHA", Country = "China",       IsDeleted = false, CreatedAt = seedDate },
-                new() { Id = PortRotterdamId, Name = "Rotterdam",  Code = "NLRTM", Country = "Netherlands", IsDeleted = false, CreatedAt = seedDate },
-                new() { Id = PortDubaiId,     Name = "Dubai",      Code = "AEJEA", Country = "UAE",         IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortShanghaiId,    Name = "Shanghai",          Code = "CNSHA", Country = "China",       IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortRotterdamId,   Name = "Rotterdam",         Code = "NLRTM", Country = "Netherlands", IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortJebelAliId,    Name = "Jebel Ali",         Code = "AEJEA", Country = "UAE",         IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortSingaporeId,   Name = "Singapore",         Code = "SGSIN", Country = "Singapore",   IsDeleted = false, CreatedAt = seedDate },
+
+                new() { Id = PortNingboId,      Name = "Ningbo",            Code = "CNNGB", Country = "China",       IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortShenzhenId,    Name = "Shenzhen",          Code = "CNSZX", Country = "China",       IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortQingdaoId,     Name = "Qingdao",           Code = "CNTAO", Country = "China",       IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortTianjinId,     Name = "Tianjin",           Code = "CNTSN", Country = "China",       IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortHongKongId,    Name = "Hong Kong",         Code = "HKHKG", Country = "Hong Kong",   IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortBusanId,       Name = "Busan",             Code = "KRPUS", Country = "South Korea", IsDeleted = false, CreatedAt = seedDate },
+
+                new() { Id = PortHamburgId,     Name = "Hamburg",           Code = "DEHAM", Country = "Germany",     IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortAntwerpId,     Name = "Antwerp",           Code = "BEANR", Country = "Belgium",     IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortBremerhavenId, Name = "Bremerhaven",       Code = "DEBRV", Country = "Germany",     IsDeleted = false, CreatedAt = seedDate },
+
+                new() { Id = PortLosAngelesId,  Name = "Los Angeles",       Code = "USLAX", Country = "USA",         IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortLongBeachId,   Name = "Long Beach",        Code = "USLGB", Country = "USA",         IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortNewYorkId,     Name = "New York",          Code = "USNYC", Country = "USA",         IsDeleted = false, CreatedAt = seedDate },
+
+                new() { Id = PortAlexandriaId,  Name = "Alexandria",        Code = "EGALY", Country = "Egypt",       IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortPortSaidId,    Name = "Port Said",         Code = "EGPSD", Country = "Egypt",       IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortDamiettaId,    Name = "Damietta",          Code = "EGDAM", Country = "Egypt",       IsDeleted = false, CreatedAt = seedDate },
+                new() { Id = PortSokhnaId,      Name = "Ain Sokhna",        Code = "EGSOK", Country = "Egypt",       IsDeleted = false, CreatedAt = seedDate },
             };
 
             var existingIds = await db.Ports.Select(p => p.Id).ToListAsync();
@@ -192,22 +230,37 @@ namespace Infrastructure.Data.Configuration.Seeding
                 await db.SaveChangesAsync();
             }
         }
-
         // =========================
         // 6. Routes
         // =========================
         private static readonly Guid RouteShanghaiRotterdamId = new("00000000-0000-0000-0000-000000000030");
-        private static readonly Guid RouteShanghaiDubaiId     = new("00000000-0000-0000-0000-000000000031");
+        private static readonly Guid RouteShanghaiJebelAliId = new("00000000-0000-0000-0000-000000000031");
+        private static readonly Guid RouteShanghaiAlexandriaId = new("00000000-0000-0000-0000-000000000032");
+        private static readonly Guid RouteNingboRotterdamId = new("00000000-0000-0000-0000-000000000033");
+        private static readonly Guid RouteShenzhenJebelAliId = new("00000000-0000-0000-0000-000000000034");
+        private static readonly Guid RouteQingdaoHamburgId = new("00000000-0000-0000-0000-000000000035");
+        private static readonly Guid RouteSingaporeRotterdamId = new("00000000-0000-0000-0000-000000000036");
+        private static readonly Guid RouteSingaporeSokhnaId = new("00000000-0000-0000-0000-000000000037");
+        private static readonly Guid RouteHamburgAlexandriaId = new("00000000-0000-0000-0000-000000000038");
+        private static readonly Guid RouteAntwerpPortSaidId = new("00000000-0000-0000-0000-000000000039");
 
         private static async Task SeedRoutesAsync(ApplicationDbContext db)
         {
             var seedDate = SeedDate;
 
             var routes = new List<Route>
-            {
-                new() { Id = RouteShanghaiRotterdamId, FromPortId = PortShanghaiId, ToPortId = PortRotterdamId, IsDeleted = false, CreatedAt = seedDate },
-                new() { Id = RouteShanghaiDubaiId,     FromPortId = PortShanghaiId, ToPortId = PortDubaiId,     IsDeleted = false, CreatedAt = seedDate },
-            };
+        {
+            new() { Id = RouteShanghaiRotterdamId,  FromPortId = PortShanghaiId,   ToPortId = PortRotterdamId,  IsDeleted = false, CreatedAt = seedDate },
+            new() { Id = RouteShanghaiJebelAliId,   FromPortId = PortShanghaiId,   ToPortId = PortJebelAliId,   IsDeleted = false, CreatedAt = seedDate },
+            new() { Id = RouteShanghaiAlexandriaId, FromPortId = PortShanghaiId,   ToPortId = PortAlexandriaId, IsDeleted = false, CreatedAt = seedDate },
+            new() { Id = RouteNingboRotterdamId,    FromPortId = PortNingboId,     ToPortId = PortRotterdamId,  IsDeleted = false, CreatedAt = seedDate },
+            new() { Id = RouteShenzhenJebelAliId,   FromPortId = PortShenzhenId,   ToPortId = PortJebelAliId,   IsDeleted = false, CreatedAt = seedDate },
+            new() { Id = RouteQingdaoHamburgId,     FromPortId = PortQingdaoId,    ToPortId = PortHamburgId,    IsDeleted = false, CreatedAt = seedDate },
+            new() { Id = RouteSingaporeRotterdamId, FromPortId = PortSingaporeId,  ToPortId = PortRotterdamId,  IsDeleted = false, CreatedAt = seedDate },
+            new() { Id = RouteSingaporeSokhnaId,    FromPortId = PortSingaporeId,  ToPortId = PortSokhnaId,     IsDeleted = false, CreatedAt = seedDate },
+            new() { Id = RouteHamburgAlexandriaId,  FromPortId = PortHamburgId,    ToPortId = PortAlexandriaId, IsDeleted = false, CreatedAt = seedDate },
+            new() { Id = RouteAntwerpPortSaidId,    FromPortId = PortAntwerpId,    ToPortId = PortPortSaidId,   IsDeleted = false, CreatedAt = seedDate },
+        };
 
             var existingIds = await db.Routes.Select(r => r.Id).ToListAsync();
             var toInsert = routes.Where(r => !existingIds.Contains(r.Id)).ToList();
@@ -229,77 +282,276 @@ namespace Infrastructure.Data.Configuration.Seeding
         private static readonly Guid Rate1Id = new("00000000-0000-0000-0000-000000000040");
         private static readonly Guid Rate2Id = new("00000000-0000-0000-0000-000000000041");
         private static readonly Guid Rate3Id = new("00000000-0000-0000-0000-000000000042");
+        private static readonly Guid Rate4Id = new("00000000-0000-0000-0000-000000000043");
+        private static readonly Guid Rate5Id = new("00000000-0000-0000-0000-000000000044");
+        private static readonly Guid Rate6Id = new("00000000-0000-0000-0000-000000000045");
+        private static readonly Guid Rate7Id = new("00000000-0000-0000-0000-000000000046");
+        private static readonly Guid Rate8Id = new("00000000-0000-0000-0000-000000000047");
+        private static readonly Guid Rate9Id = new("00000000-0000-0000-0000-000000000048");
+        private static readonly Guid Rate10Id = new("00000000-0000-0000-0000-000000000049");
+        private static readonly Guid Rate11Id = new("00000000-0000-0000-0000-000000000050");
+        private static readonly Guid Rate12Id = new("00000000-0000-0000-0000-000000000051");
 
         private static async Task SeedRatesAsync(ApplicationDbContext db)
         {
             var seedDate    = SeedDate;
-            var rateUpdated = new DateTimeOffset(2025, 1, 5, 0, 0, 0, TimeSpan.Zero);
-            var validFrom   = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
-            var validTo     = new DateTimeOffset(2025, 12, 31, 0, 0, 0, TimeSpan.Zero);
+            var rateUpdated = new DateTimeOffset(2026, 1, 5, 0, 0, 0, TimeSpan.Zero);
+            var validFrom   = new DateTimeOffset(2026, 4, 1, 0, 0, 0, TimeSpan.Zero);
+            var validTo     = new DateTimeOffset(2030, 12, 31, 0, 0, 0, TimeSpan.Zero);
 
             var rates = new List<Rate>
             {
                 new()
                 {
-                    Id              = Rate1Id,
-                    CarrierId       = CarrierMaerskId,
-                    RouteId         = RouteShanghaiRotterdamId,
-                    ContainerTypeId = Container20FtDryId,       // 20ft Dry
-                    Price           = 1500.00m,
-                    Currency        = "EGP",
-                    ValidFrom       = validFrom,
-                    ValidTo         = validTo,
-                    MaxGrossWeightKg      = 20000m,
-                    MaxNetWeightKg        = 18000m,
-                    MaxVolumeCbm          = 28m,
-                    AllowsHazardous       = false,
+                    Id = Rate1Id,
+                    CarrierId = CarrierMaerskId,
+                    RouteId = RouteShanghaiRotterdamId,
+                    ContainerTypeId = Container20FtDryId,
+                    Price = 75000.00m,
+                    Currency = "EGP",
+                    ValidFrom = validFrom,
+                    ValidTo = validTo,
+                    MaxGrossWeightKg = 20000m,
+                    MaxNetWeightKg = 18000m,
+                    MaxVolumeCbm = 28m,
+                    AllowsHazardous = false,
                     MinTemperatureCelsius = null,
                     MaxTemperatureCelsius = null,
-                    IsActive    = true,
-                    IsDeleted   = false,
-                    CreatedAt   = seedDate,
-                    UpdatedAt   = rateUpdated
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = seedDate,
+                    UpdatedAt = rateUpdated
                 },
                 new()
                 {
-                    Id              = Rate2Id,
-                    CarrierId       = CarrierMaerskId,
-                    RouteId         = RouteShanghaiRotterdamId,
-                    ContainerTypeId = Container40FtDryId,       // 40ft Dry
-                    Price           = 2800.00m,
-                    Currency        = "EGP",
-                    ValidFrom       = validFrom,
-                    ValidTo         = validTo,
-                    MaxGrossWeightKg      = 28000m,
-                    MaxNetWeightKg        = 26000m,
-                    MaxVolumeCbm          = 58m,
-                    AllowsHazardous       = false,
+                    Id = Rate2Id,
+                    CarrierId = CarrierMaerskId,
+                    RouteId = RouteShanghaiRotterdamId,
+                    ContainerTypeId = Container40FtDryId,
+                    Price = 100000.00m,
+                    Currency = "EGP",
+                    ValidFrom = validFrom,
+                    ValidTo = validTo,
+                    MaxGrossWeightKg = 28000m,
+                    MaxNetWeightKg = 26000m,
+                    MaxVolumeCbm = 58m,
+                    AllowsHazardous = false,
                     MinTemperatureCelsius = null,
                     MaxTemperatureCelsius = null,
-                    IsActive    = false,
-                    IsDeleted   = false,
-                    CreatedAt   = seedDate,
-                    UpdatedAt   = rateUpdated
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = seedDate,
+                    UpdatedAt = rateUpdated
                 },
                 new()
                 {
-                    Id              = Rate3Id,
-                    CarrierId       = CarrierMscId,
-                    RouteId         = RouteShanghaiDubaiId,
-                    ContainerTypeId = Container20FtReeferId,    // 20ft Reefer — supports -20°C
-                    Price           = 900.00m,
-                    Currency        = "EGP",
-                    ValidFrom       = validFrom,
-                    ValidTo         = validTo,
-                    MaxGrossWeightKg      = 20000m,
-                    MaxNetWeightKg        = 18000m,
-                    MaxVolumeCbm          = 28m,
-                    AllowsHazardous       = true,
+                    Id = Rate3Id,
+                    CarrierId = CarrierMscId,
+                    RouteId = RouteShanghaiJebelAliId,
+                    ContainerTypeId = Container20FtReeferId,
+                    Price = 45000.00m,
+                    Currency = "EGP",
+                    ValidFrom = validFrom,
+                    ValidTo = validTo,
+                    MaxGrossWeightKg = 20000m,
+                    MaxNetWeightKg = 18000m,
+                    MaxVolumeCbm = 28m,
+                    AllowsHazardous = true,
                     MinTemperatureCelsius = -20m,
                     MaxTemperatureCelsius = 25m,
-                    IsActive    = true,
-                    IsDeleted   = false,
-                    CreatedAt   = seedDate
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = seedDate,
+                    UpdatedAt = rateUpdated
+                },
+                new()
+                {
+                    Id = Rate4Id,
+                    CarrierId = CarrierMscId,
+                    RouteId = RouteShanghaiAlexandriaId,
+                    ContainerTypeId = Container40HqId,
+                    Price = 120000.00m,
+                    Currency = "EGP",
+                    ValidFrom = validFrom,
+                    ValidTo = validTo,
+                    MaxGrossWeightKg = 28000m,
+                    MaxNetWeightKg = 26000m,
+                    MaxVolumeCbm = 68m,
+                    AllowsHazardous = false,
+                    MinTemperatureCelsius = null,
+                    MaxTemperatureCelsius = null,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = seedDate,
+                    UpdatedAt = rateUpdated
+                },
+                new()
+                {
+                    Id = Rate5Id,
+                    CarrierId = CarrierMaerskId,
+                    RouteId = RouteNingboRotterdamId,
+                    ContainerTypeId = Container20FtDryId,
+                    Price = 72000.00m,
+                    Currency = "EGP",
+                    ValidFrom = validFrom,
+                    ValidTo = validTo,
+                    MaxGrossWeightKg = 20000m,
+                    MaxNetWeightKg = 18000m,
+                    MaxVolumeCbm = 28m,
+                    AllowsHazardous = false,
+                    MinTemperatureCelsius = null,
+                    MaxTemperatureCelsius = null,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = seedDate,
+                    UpdatedAt = rateUpdated
+                },
+                new()
+                {
+                    Id = Rate6Id,
+                    CarrierId = CarrierMscId,
+                    RouteId = RouteShenzhenJebelAliId,
+                    ContainerTypeId = Container40FtDryId,
+                    Price = 88000.00m,
+                    Currency = "EGP",
+                    ValidFrom = validFrom,
+                    ValidTo = validTo,
+                    MaxGrossWeightKg = 28000m,
+                    MaxNetWeightKg = 26000m,
+                    MaxVolumeCbm = 58m,
+                    AllowsHazardous = false,
+                    MinTemperatureCelsius = null,
+                    MaxTemperatureCelsius = null,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = seedDate,
+                    UpdatedAt = rateUpdated
+                },
+                new()
+                {
+                    Id = Rate7Id,
+                    CarrierId = CarrierMaerskId,
+                    RouteId = RouteQingdaoHamburgId,
+                    ContainerTypeId = Container40FtReeferId,
+                    Price = 135000.00m,
+                    Currency = "EGP",
+                    ValidFrom = validFrom,
+                    ValidTo = validTo,
+                    MaxGrossWeightKg = 28000m,
+                    MaxNetWeightKg = 26000m,
+                    MaxVolumeCbm = 58m,
+                    AllowsHazardous = true,
+                    MinTemperatureCelsius = -20m,
+                    MaxTemperatureCelsius = 25m,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = seedDate,
+                    UpdatedAt = rateUpdated
+                },
+                new()
+                {
+                    Id = Rate8Id,
+                    CarrierId = CarrierMscId,
+                    RouteId = RouteSingaporeRotterdamId,
+                    ContainerTypeId = Container45HqId,
+                    Price = 150000.00m,
+                    Currency = "EGP",
+                    ValidFrom = validFrom,
+                    ValidTo = validTo,
+                    MaxGrossWeightKg = 29000m,
+                    MaxNetWeightKg = 27000m,
+                    MaxVolumeCbm = 76m,
+                    AllowsHazardous = false,
+                    MinTemperatureCelsius = null,
+                    MaxTemperatureCelsius = null,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = seedDate,
+                    UpdatedAt = rateUpdated
+                },
+                new()
+                {
+                    Id = Rate9Id,
+                    CarrierId = CarrierMaerskId,
+                    RouteId = RouteSingaporeSokhnaId,
+                    ContainerTypeId = Container20FtOpenTopId,
+                    Price = 95000.00m,
+                    Currency = "EGP",
+                    ValidFrom = validFrom,
+                    ValidTo = validTo,
+                    MaxGrossWeightKg = 21000m,
+                    MaxNetWeightKg = 19000m,
+                    MaxVolumeCbm = 28m,
+                    AllowsHazardous = false,
+                    MinTemperatureCelsius = null,
+                    MaxTemperatureCelsius = null,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = seedDate,
+                    UpdatedAt = rateUpdated
+                },
+                new()
+                {
+                    Id = Rate10Id,
+                    CarrierId = CarrierMscId,
+                    RouteId = RouteHamburgAlexandriaId,
+                    ContainerTypeId = Container40FtOpenTopId,
+                    Price = 110000.00m,
+                    Currency = "EGP",
+                    ValidFrom = validFrom,
+                    ValidTo = validTo,
+                    MaxGrossWeightKg = 28000m,
+                    MaxNetWeightKg = 26000m,
+                    MaxVolumeCbm = 58m,
+                    AllowsHazardous = false,
+                    MinTemperatureCelsius = null,
+                    MaxTemperatureCelsius = null,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = seedDate,
+                    UpdatedAt = rateUpdated
+                },
+                new()
+                {
+                    Id = Rate11Id,
+                    CarrierId = CarrierMaerskId,
+                    RouteId = RouteAntwerpPortSaidId,
+                    ContainerTypeId = Container20FtFlatRackId,
+                    Price = 125000.00m,
+                    Currency = "EGP",
+                    ValidFrom = validFrom,
+                    ValidTo = validTo,
+                    MaxGrossWeightKg = 25000m,
+                    MaxNetWeightKg = 23000m,
+                    MaxVolumeCbm = 25m,
+                    AllowsHazardous = true,
+                    MinTemperatureCelsius = null,
+                    MaxTemperatureCelsius = null,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = seedDate,
+                    UpdatedAt = rateUpdated
+                },
+                new()
+                {
+                    Id = Rate12Id,
+                    CarrierId = CarrierMscId,
+                    RouteId = RouteShanghaiJebelAliId,
+                    ContainerTypeId = Container20FtTankId,
+                    Price = 140000.00m,
+                    Currency = "EGP",
+                    ValidFrom = validFrom,
+                    ValidTo = validTo,
+                    MaxGrossWeightKg = 24000m,
+                    MaxNetWeightKg = 22000m,
+                    MaxVolumeCbm = 26m,
+                    AllowsHazardous = true,
+                    MinTemperatureCelsius = null,
+                    MaxTemperatureCelsius = null,
+                    IsActive = true,
+                    IsDeleted = false,
+                    CreatedAt = seedDate,
+                    UpdatedAt = rateUpdated
                 },
             };
 
@@ -646,6 +898,19 @@ namespace Infrastructure.Data.Configuration.Seeding
 
             db.Invoices.Add(invoice);
             await db.SaveChangesAsync();
+        }
+
+        private static async Task SeedSubscriptionPlan(ApplicationDbContext db)
+        {
+            //var plan = new SubscriptionPlan
+            //{
+            //    Id = Guid.NewGuid(),
+            //    DurationInDays = 30,
+            //    Price = 999,
+            //    Currency = "EGP",
+            //    Description = ""
+            //    CreatedAt = DateTimeOffset.UtcNow,
+            //};
         }
 
         // =========================

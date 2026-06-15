@@ -1,4 +1,4 @@
-﻿namespace Domain.Entities.Users
+﻿namespace Domain.Entities.Users.Subscriptions
 {
     public class SubscriptionPlan
     {
@@ -8,6 +8,7 @@
         public string Description { get; set; } = null!;
 
         public decimal Price { get; set; }
+        public string Currency { get; set; } = "EGP";
 
         public int DurationInDays { get; set; }
 
@@ -15,7 +16,9 @@
 
         public DateTimeOffset CreatedAt { get; set; }
 
-        public ICollection<UserSubscription> UserSubscriptions = new HashSet<UserSubscription>();
+        public ICollection<UserSubscription> UserSubscriptions { get; set; } = new HashSet<UserSubscription>();
+        public ICollection<SubscriptionPlanFeature> PlanFeatures { get; set; } = new HashSet<SubscriptionPlanFeature>();
+        public ICollection<SubscriptionPlanLimit> PlanLimits { get; set; } = new HashSet<SubscriptionPlanLimit>();
 
         public DateTimeOffset? UpdatedAt { get; set; }
 

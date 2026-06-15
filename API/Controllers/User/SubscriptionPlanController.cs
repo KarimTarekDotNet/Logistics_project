@@ -57,10 +57,10 @@ namespace API.Controllers.User
 
         [HttpPut("{id}")]
         [Authorize(Roles = "Admin,Staff")]
-        public async Task<IActionResult> UpdateFromEmployee(Guid id, [FromBody] UpdateSubscriptionPlanRequest request)
+        public async Task<IActionResult> UpdateFromEmployee(Guid id, [FromBody] CreateSubscriptionPlanRequest? request = null)
         {
             var isInRole = User.IsInRole("Admin") || User.IsInRole("Staff");
-            var newPlan = await _subscriptionPlanService.UpdateFromEmployeesAsync(id, request, isInRole);
+            var newPlan = await _subscriptionPlanService.UpdateFromEmployeesAsync(id, isInRole, request);
 
             return Ok(newPlan);
         }
