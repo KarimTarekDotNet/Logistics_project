@@ -1,5 +1,4 @@
-﻿using Domain.Entities.Users;
-using Domain.Entities.Users.Subscriptions;
+﻿using Domain.Entities.Users.Subscriptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -31,33 +30,12 @@ namespace Infrastructure.Data.Configuration.User
             builder.Property(sp => sp.Currency)
             .IsRequired()
             .HasMaxLength(10);
+
+            builder.HasMany(x => x.Features)
+                .WithMany(x => x.SubscriptionPlans);
         }
     }
 
-    public class SubscriptionPlanFeatureConfiguration : IEntityTypeConfiguration<SubscriptionPlanFeature>
-    {
-        public void Configure(EntityTypeBuilder<SubscriptionPlanFeature> builder)
-        {
-            builder.HasKey(x => x.Id);
-
-            builder.HasOne(x => x.SubscriptionPlan)
-                .WithMany(x => x.PlanFeatures)
-                .HasForeignKey(x => x.SubscriptionPlanId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            builder.HasOne(x => x.SubscriptionFeature)
-                .WithMany(x => x.PlanFeatures)
-                .HasForeignKey(x => x.SubscriptionFeatureId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            builder.HasIndex(x => new
-            {
-                x.SubscriptionPlanId,
-                x.SubscriptionFeatureId
-            })
-            .IsUnique();
-        }
-    }
     public class SubscriptionFeatureConfiguration : IEntityTypeConfiguration<SubscriptionFeature>
     {
         public void Configure(EntityTypeBuilder<SubscriptionFeature> builder)
@@ -92,14 +70,14 @@ namespace Infrastructure.Data.Configuration.User
 
             builder.HasIndex(x => new
             {
-                x.SubscriptionPlanId,
+                x.SubscriptionFeatureId,
                 x.LimitCodeSubscription
             })
             .IsUnique();
 
-            builder.HasOne(x => x.SubscriptionPlan)
+            builder.HasOne(x => x.SubscriptionFeature)
                 .WithMany(x => x.PlanLimits)
-                .HasForeignKey(x => x.SubscriptionPlanId)
+                .HasForeignKey(x => x.SubscriptionFeatureId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }

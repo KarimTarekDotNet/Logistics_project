@@ -17,8 +17,7 @@
         public DateTimeOffset CreatedAt { get; set; }
 
         public ICollection<UserSubscription> UserSubscriptions { get; set; } = new HashSet<UserSubscription>();
-        public ICollection<SubscriptionPlanFeature> PlanFeatures { get; set; } = new HashSet<SubscriptionPlanFeature>();
-        public ICollection<SubscriptionPlanLimit> PlanLimits { get; set; } = new HashSet<SubscriptionPlanLimit>();
+        public ICollection<SubscriptionFeature> Features { get; set; } = new HashSet<SubscriptionFeature>();
 
         public DateTimeOffset? UpdatedAt { get; set; }
 

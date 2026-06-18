@@ -4,6 +4,7 @@ using Application.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace API.Controllers.Pricing.ShippingCore
 {
@@ -57,7 +58,7 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreatePort([FromBody] CreatePortRequest request)
         {
-            var result = await _portService.CreateAsync(request);
+            var result = await _portService.CreateAsync(request, getCurrentUser());
 
             return CreatedAtAction(nameof(GetPortById), new { id = result.Id }, result);
         }
@@ -67,7 +68,7 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdatePort(Guid id, [FromBody] UpdatePortRequest request)
         {
-            var updated = await _portService.UpdateAsync(id, request);
+            var updated = await _portService.UpdateAsync(id, request, getCurrentUser());
 
             if (updated == null)
                 return NotFound(new { message = "Port not found" });
@@ -80,9 +81,11 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeletePort(Guid id)
         {
-            await _portService.DeleteAsync(id);
+            await _portService.DeleteAsync(id, getCurrentUser());
 
             return Ok(new { message = "Port deleted successfully" });
         }
+
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new Exception("user not found");
     }
 }

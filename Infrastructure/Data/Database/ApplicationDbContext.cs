@@ -1,4 +1,5 @@
 ﻿using Domain.Entities.Aliases;
+using Domain.Entities.Audits;
 using Domain.Entities.Payments;
 using Domain.Entities.Pricing.Imports;
 using Domain.Entities.Pricing.PricingEngine;
@@ -47,7 +48,6 @@ namespace Infrastructure.Data.Database
         // Subscriptions
         public DbSet<SubscriptionPlan> SubscriptionPlans { get; set; }
         public DbSet<SubscriptionFeature> SubscriptionFeatures { get; set; }
-        public DbSet<SubscriptionPlanFeature> SubscriptionPlanFeatures { get; set; }
         public DbSet<SubscriptionPlanLimit> SubscriptionPlanLimit { get; set; }
         public DbSet<UserSubscription> UserSubscriptions { get; set; }
         public DbSet<UserSubscriptionUsage> UserSubscriptionUsages { get; set; }
@@ -55,6 +55,9 @@ namespace Infrastructure.Data.Database
         // Users
         public DbSet<ApplicationUser> ApplicationUsers { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
+
+        // logs
+        public DbSet<AuditLog> AuditLog { get; set; }
 
 
         // Aliases

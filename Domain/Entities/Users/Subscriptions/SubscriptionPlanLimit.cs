@@ -4,8 +4,8 @@
     {
         public Guid Id { get; set; }
 
-        public Guid SubscriptionPlanId { get; set; }
-        public SubscriptionPlan SubscriptionPlan { get; set; } = null!;
+        public Guid SubscriptionFeatureId { get; set; }
+        public SubscriptionFeature SubscriptionFeature { get; set; } = null!;
 
         public string LimitCodeSubscription { get; set; } = null!;
         public decimal LimitMaxValue { get; set; }

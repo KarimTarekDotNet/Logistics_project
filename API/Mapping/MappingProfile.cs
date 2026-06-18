@@ -122,9 +122,9 @@ namespace API.Mapping
             // ── Subscription ────────────────────────────────────────────────────
             CreateMap<SubscriptionPlan, SubscriptionPlanResponse>()
                 .ForMember(d => d.SubscriptionFeatureResponses,
-                    o => o.MapFrom(s => s.PlanFeatures.Select(x => x.SubscriptionFeature)))
+                    o => o.MapFrom(s => s.Features))
                 .ForMember(d => d.SubscriptionPlanLimitResponses,
-                    o => o.MapFrom(s => s.PlanLimits));
+                    o => o.MapFrom(s => s.Features.Any(x => x.PlanLimits != null)));
             CreateMap<SubscriptionFeature, SubscriptionFeatureResponse>();
             CreateMap<SubscriptionPlanLimit, SubscriptionPlanLimitResponse>();
 

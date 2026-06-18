@@ -5,6 +5,7 @@ using Application.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace API.Controllers.Pricing.PricingEngine
 {
@@ -70,7 +71,7 @@ namespace API.Controllers.Pricing.PricingEngine
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreateRate([FromBody] CreateRateRequest request)
         {
-            var result = await _rateService.CreateAsync(request);
+            var result = await _rateService.CreateAsync(request, getCurrentUser());
 
             return CreatedAtAction(nameof(GetRateById),
                 new { id = result.Id },
@@ -83,7 +84,7 @@ namespace API.Controllers.Pricing.PricingEngine
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdateRate(Guid id, [FromBody] UpdateRateRequest request)
         {
-            var updated = await _rateService.UpdateAsync(id, request);
+            var updated = await _rateService.UpdateAsync(id, request ,getCurrentUser());
 
             return Ok(updated);
         }
@@ -94,7 +95,7 @@ namespace API.Controllers.Pricing.PricingEngine
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteRate(Guid id)
         {
-            await _rateService.DeleteAsync(id);
+            await _rateService.DeleteAsync(id, getCurrentUser());
 
             return Ok(new { message = "Rate deleted successfully" });
         }
@@ -105,12 +106,14 @@ namespace API.Controllers.Pricing.PricingEngine
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> ChangeRateActive(Guid id)
         {
-            var result = await _rateService.ChangeRateActive(id);
+            var result = await _rateService.ChangeRateActive(id, getCurrentUser());
 
             return Ok(new
             {
                 message = result ? "Rate activated" : "Rate deactivated"
             });
         }
+
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new Exception("user not found");
     }
 }

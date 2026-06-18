@@ -7,8 +7,8 @@ namespace Application.Interfaces.Services.Pricing.ShippingCore
     {
         Task<ContainerTypeResponse?> GetByIdAsync(Guid id);
         Task<IEnumerable<ContainerTypeResponse>> GetAllAsync(QueryParameters query);
-        Task<ContainerTypeResponse> CreateAsync(CreateContainerTypeRequest dto);
-        Task<ContainerTypeResponse> UpdateAsync(Guid id, UpdateContainerTypeRequest dto);
-        Task DeleteAsync(Guid id);
+        Task<ContainerTypeResponse> CreateAsync(CreateContainerTypeRequest dto, string userId);
+        Task<ContainerTypeResponse> UpdateAsync(Guid id, UpdateContainerTypeRequest dto, string userId);
+        Task DeleteAsync(Guid id, string userId);
     }
 }

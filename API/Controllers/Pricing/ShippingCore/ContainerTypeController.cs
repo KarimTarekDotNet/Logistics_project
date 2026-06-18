@@ -4,6 +4,7 @@ using Application.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace API.Controllers.Pricing.ShippingCore
 {
@@ -46,7 +47,7 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreateContainerType([FromBody] CreateContainerTypeRequest request)
         {
-            var result = await _containerTypeService.CreateAsync(request);
+            var result = await _containerTypeService.CreateAsync(request, getCurrentUser());
 
             return CreatedAtAction(nameof(GetContainerTypeById), new { id = result.Id }, result);
         }
@@ -56,7 +57,7 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdateContainerType(Guid id, [FromBody] UpdateContainerTypeRequest request)
         {
-            var updated = await _containerTypeService.UpdateAsync(id, request);
+            var updated = await _containerTypeService.UpdateAsync(id, request, getCurrentUser());
 
             if (updated == null)
                 return NotFound(new { message = "Container type not found" });
@@ -69,9 +70,11 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteContainerType(Guid id)
         {
-            await _containerTypeService.DeleteAsync(id);
+            await _containerTypeService.DeleteAsync(id, getCurrentUser());
 
             return Ok(new { message = "Container type deleted successfully" });
         }
+
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new Exception("user not found");
     }
 }

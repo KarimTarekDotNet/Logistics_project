@@ -34,16 +34,23 @@ namespace Infrastructure.Repositories.Users
                 .OrderByDescending(us => us.CreatedAt)
                 .ToListAsync();
         }
+        public async Task<UserSubscriptionUsage?> GetUserSubscriptionUsageByUserSubIdAsync(Guid userSubId)
+        {
+            return await _context.UserSubscriptionUsages.FirstOrDefaultAsync(x => x.UserSubscriptionId == userSubId);
+        }
 
         public async Task<UserSubscription?> GetCurrentSubscriptionByUserIdAsync(string userId)
         {
             return await _context.UserSubscriptions.AsNoTracking()
                 .Include(x => x.SubscriptionPlan)
+                .ThenInclude(x => x.Features)
                 .Include(x => x.Usages)
                 .Where(us => us.UserId == userId && !us.IsDeleted && us.IsActive && us.EndDate > DateTimeOffset.UtcNow)
                 .OrderByDescending(us => us.CreatedAt)
                 .FirstOrDefaultAsync();
         }
+
+
 
         public async Task<bool> ExistsAsyncForUser(string userId, Guid subId)
         {

@@ -1,4 +1,5 @@
 ﻿using Application.Interfaces.Repositories.Aliases;
+using Application.Interfaces.Repositories.Audit;
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Repositories.Payments;
 using Application.Interfaces.Repositories.Pricing.Imports;
@@ -39,6 +40,7 @@ namespace Infrastructure.Repositories.Patterns
         public IPaymentTransactionRepository PaymentTransactions { get; }
         public IUserSubscriptionRepository UserSubscriptions { get; }
         public ISubscriptionPlanRepository SubscriptionPlans { get; }
+        public IAuditLogRepository AuditLog { get; }
 
         public UnitOfWork(
             ApplicationDbContext context,
@@ -62,7 +64,8 @@ namespace Infrastructure.Repositories.Patterns
             IInvoicePaymentRepository invoicePayments,
             IPaymentTransactionRepository paymentTransactions,
             IUserSubscriptionRepository userSubscriptionRepository,
-            ISubscriptionPlanRepository subscriptionPlanRepository)
+            ISubscriptionPlanRepository subscriptionPlanRepository,
+            IAuditLogRepository auditLogRepository)
         {
             _context = context;
             Carriers = carrierRepository;
@@ -86,6 +89,7 @@ namespace Infrastructure.Repositories.Patterns
             PaymentTransactions = paymentTransactions;
             UserSubscriptions = userSubscriptionRepository;
             SubscriptionPlans = subscriptionPlanRepository;
+            AuditLog = auditLogRepository;
         }
 
         public async Task<int> SaveChangesAsync()

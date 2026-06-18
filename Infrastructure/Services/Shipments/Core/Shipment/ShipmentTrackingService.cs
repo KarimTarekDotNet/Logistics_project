@@ -3,11 +3,14 @@ using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Services.Shipments.Core;
 using AutoMapper;
+using Domain.Entities.Audits;
 using Domain.Entities.Users;
 using Domain.Enums;
 using Domain.Exceptions;
+using Infrastructure.Helper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Infrastructure.Services.Shipments.Core.Shipment
 {
@@ -26,26 +29,53 @@ namespace Infrastructure.Services.Shipments.Core.Shipment
 
         public async Task<ShipmentResponse?> UpdateTrackingAsync(Guid id, string userId, bool isPrivileged, UpdateShipmentTrackingRequest request)
         {
-            var user = await _userManager.Users.Include(x => x.CustomerProfile)
-            .FirstOrDefaultAsync(x => x.Id == userId);
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var user = await _userManager.Users.Include(x => x.CustomerProfile)
+                .FirstOrDefaultAsync(x => x.Id == userId);
 
-            if (user == null)
-                throw new BusinessRuleException("User not found.");
+                if (user == null)
+                    throw new BusinessRuleException("User not found.");
 
-            if (!isPrivileged)
-                throw new BusinessRuleException("User does not have permission to update shipment tracking.");
+                if (!isPrivileged)
+                    throw new BusinessRuleException("User does not have permission to update shipment tracking.");
 
-            var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(id);
-            if (shipment == null)
-                return null;
+                var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(id);
+                if (shipment == null)
+                {
+                    await _unitOfWork.RollbackTransactionAsync();
+                    return null;
+                }
 
-            ShipmentTrackingRules.ApplyTrackingUpdate(shipment, request);
+                var oldShipment = shipment;
 
-            shipment.UpdatedAt = DateTimeOffset.UtcNow;
+                ShipmentTrackingRules.ApplyTrackingUpdate(shipment, request);
+                shipment.UpdatedAt = DateTimeOffset.UtcNow;
 
-            await _unitOfWork.SaveChangesAsync();
+                var audit = new AuditLog
+                {
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    EntityId = shipment.Id,
+                    EntityName = nameof(Domain.Entities.Shipments.Shipment).ToUpper(),
+                    Action = nameof(UpdateTrackingAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = JsonSerializer.Serialize(oldShipment),
+                    NewValues = JsonSerializer.Serialize(shipment),
+                    UserId = userId
+                };
 
-            return _mapper.Map<ShipmentResponse>(shipment);
+                await _unitOfWork.AuditLog.Add(audit);
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitTransactionAsync();
+
+                return _mapper.Map<ShipmentResponse>(shipment);
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
         }
     }
 }

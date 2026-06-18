@@ -4,8 +4,11 @@ using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
 using AutoMapper;
+using Domain.Entities.Audits;
 using Domain.Entities.ShippingCore;
 using Domain.Exceptions;
+using Infrastructure.Helper;
+using System.Text.Json;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
 {
@@ -55,80 +58,148 @@ namespace Infrastructure.Services.Pricing.ShippingCore
             return _mapper.Map<IEnumerable<RouteResponse>>(routes.Where(r => !r.IsDeleted));
         }
 
-        public async Task<RouteResponse> CreateAsync(CreateRouteRequest dto)
+        public async Task<RouteResponse> CreateAsync(CreateRouteRequest dto, string userId)
         {
-            if (!PortRules.AreDistinct(dto.FromPortId, dto.ToPortId))
-                throw new ArgumentException("Origin and destination ports must be different.");
+            return await ExecuteInTransactionAsync(async () =>
+            {
+                if (!PortRules.AreDistinct(dto.FromPortId, dto.ToPortId))
+                    throw new ArgumentException("Origin and destination ports must be different.");
 
-            var fromPort = await _unitOfWork.Ports.GetByIdAsync(dto.FromPortId);
-            if (fromPort == null || fromPort.IsDeleted)
-                throw new KeyNotFoundException("Origin port not found.");
+                var fromPort = await _unitOfWork.Ports.GetByIdAsync(dto.FromPortId);
+                if (fromPort == null || fromPort.IsDeleted)
+                    throw new KeyNotFoundException("Origin port not found.");
 
-            var toPort = await _unitOfWork.Ports.GetByIdAsync(dto.ToPortId);
-            if (toPort == null || toPort.IsDeleted)
-                throw new KeyNotFoundException("Destination port not found.");
+                var toPort = await _unitOfWork.Ports.GetByIdAsync(dto.ToPortId);
+                if (toPort == null || toPort.IsDeleted)
+                    throw new KeyNotFoundException("Destination port not found.");
 
-            var existing = await _unitOfWork.Routes.GetByPortsAsync(dto.FromPortId, dto.ToPortId);
-            if (existing != null && !existing.IsDeleted)
-                throw new BusinessRuleException("A route between these two ports already exists.");
+                var existing = await _unitOfWork.Routes.GetByPortsAsync(dto.FromPortId, dto.ToPortId);
+                if (existing != null && !existing.IsDeleted)
+                    throw new BusinessRuleException("A route between these two ports already exists.");
 
-            var route = _mapper.Map<Route>(dto);
-            route.CreatedAt = DateTimeOffset.UtcNow;
-            route.UpdatedAt = null;
-            route.IsDeleted = false;
-            route.DeletedAt = null;
+                var route = _mapper.Map<Route>(dto);
+                route.CreatedAt = DateTimeOffset.UtcNow;
+                route.UpdatedAt = null;
+                route.IsDeleted = false;
+                route.DeletedAt = null;
 
-            await _unitOfWork.Routes.AddAsync(route);
-            await _unitOfWork.SaveChangesAsync();
+                var audit = new AuditLog
+                {
+                    CreatedAt = route.CreatedAt,
+                    EntityId = route.Id,
+                    EntityName = nameof(Route).ToUpper(),
+                    Action = nameof(CreateAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = null,
+                    NewValues = JsonSerializer.Serialize(route),
+                    UserId = userId
+                };
 
-            var created = await _unitOfWork.Routes.GetWithPortsAsync(route.Id);
-            return _mapper.Map<RouteResponse>(created);
+                await _unitOfWork.Routes.AddAsync(route);
+                await _unitOfWork.AuditLog.Add(audit);
+                await _unitOfWork.SaveChangesAsync();
+
+                var created = await _unitOfWork.Routes.GetWithPortsAsync(route.Id);
+                return _mapper.Map<RouteResponse>(created);
+            });
         }
 
-        public async Task<RouteResponse> UpdateAsync(Guid id, UpdateRouteRequest dto)
+        public async Task<RouteResponse> UpdateAsync(Guid id, UpdateRouteRequest dto, string userId)
         {
-            var route = await _unitOfWork.Routes.GetByIdAsync(id);
-            if (route == null || route.IsDeleted)
-                throw new KeyNotFoundException("Route not found.");
+            return await ExecuteInTransactionAsync(async () =>
+            {
+                var route = await _unitOfWork.Routes.GetByIdAsync(id);
+                if (route == null || route.IsDeleted)
+                    throw new KeyNotFoundException("Route not found.");
 
-            if (!PortRules.AreDistinct(dto.FromPortId, dto.ToPortId))
-                throw new BusinessRuleException("Origin and destination ports must be different.");
+                var oldRoute = route;
 
-            var fromPort = await _unitOfWork.Ports.GetByIdAsync(dto.FromPortId);
-            if (fromPort == null || fromPort.IsDeleted)
-                throw new KeyNotFoundException("Origin port not found.");
+                if (!PortRules.AreDistinct(dto.FromPortId, dto.ToPortId))
+                    throw new BusinessRuleException("Origin and destination ports must be different.");
 
-            var toPort = await _unitOfWork.Ports.GetByIdAsync(dto.ToPortId);
-            if (toPort == null || toPort.IsDeleted)
-                throw new KeyNotFoundException("Destination port not found.");
+                var fromPort = await _unitOfWork.Ports.GetByIdAsync(dto.FromPortId);
+                if (fromPort == null || fromPort.IsDeleted)
+                    throw new KeyNotFoundException("Origin port not found.");
 
-            var existing = await _unitOfWork.Routes.GetByPortsAsync(dto.FromPortId, dto.ToPortId);
-            if (existing != null && !existing.IsDeleted && existing.Id != id)
-                throw new BusinessRuleException("A route between these two ports already exists.");
+                var toPort = await _unitOfWork.Ports.GetByIdAsync(dto.ToPortId);
+                if (toPort == null || toPort.IsDeleted)
+                    throw new KeyNotFoundException("Destination port not found.");
 
-            route.FromPortId = dto.FromPortId;
-            route.ToPortId = dto.ToPortId;
-            route.UpdatedAt = DateTimeOffset.UtcNow;
+                var existing = await _unitOfWork.Routes.GetByPortsAsync(dto.FromPortId, dto.ToPortId);
+                if (existing != null && !existing.IsDeleted && existing.Id != id)
+                    throw new BusinessRuleException("A route between these two ports already exists.");
 
-            _unitOfWork.Routes.Update(route);
-            await _unitOfWork.SaveChangesAsync();
+                route.FromPortId = dto.FromPortId;
+                route.ToPortId = dto.ToPortId;
+                route.UpdatedAt = DateTimeOffset.UtcNow;
 
-            var updated = await _unitOfWork.Routes.GetWithPortsAsync(route.Id);
-            return _mapper.Map<RouteResponse>(updated);
+                var audit = new AuditLog
+                {
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    EntityId = route.Id,
+                    EntityName = nameof(Route).ToUpper(),
+                    Action = nameof(UpdateAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = JsonSerializer.Serialize(oldRoute),
+                    NewValues = JsonSerializer.Serialize(route),
+                    UserId = userId
+                };
+
+                _unitOfWork.Routes.Update(route);
+                await _unitOfWork.AuditLog.Add(audit);
+                await _unitOfWork.SaveChangesAsync();
+
+                var updated = await _unitOfWork.Routes.GetWithPortsAsync(route.Id);
+                return _mapper.Map<RouteResponse>(updated);
+            });
         }
 
-        public async Task DeleteAsync(Guid id)
+        public async Task DeleteAsync(Guid id, string userId)
         {
-            var route = await _unitOfWork.Routes.GetByIdAsync(id);
-            if (route == null || route.IsDeleted)
-                throw new KeyNotFoundException("Route not found.");
+            await ExecuteInTransactionAsync(async () =>
+            {
+                var route = await _unitOfWork.Routes.GetByIdAsync(id);
+                if (route == null || route.IsDeleted)
+                    throw new KeyNotFoundException("Route not found.");
 
-            route.IsDeleted = true;
-            route.DeletedAt = DateTimeOffset.UtcNow;
-            route.UpdatedAt = DateTimeOffset.UtcNow;
+                var audit = new AuditLog
+                {
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    EntityId = route.Id,
+                    EntityName = nameof(Route).ToUpper(),
+                    Action = nameof(DeleteAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = JsonSerializer.Serialize(route),
+                    NewValues = "Deleted",
+                    UserId = userId
+                };
 
-            _unitOfWork.Routes.Update(route);
-            await _unitOfWork.SaveChangesAsync();
+                route.IsDeleted = true;
+                route.DeletedAt = DateTimeOffset.UtcNow;
+                route.UpdatedAt = DateTimeOffset.UtcNow;
+
+                _unitOfWork.Routes.Update(route);
+                await _unitOfWork.AuditLog.Add(audit);
+                await _unitOfWork.SaveChangesAsync();
+                return true;
+            });
+        }
+
+        private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action)
+        {
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var result = await action();
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitTransactionAsync();
+                return result;
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
         }
     }
 }

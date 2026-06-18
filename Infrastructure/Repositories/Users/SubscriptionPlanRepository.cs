@@ -25,31 +25,24 @@ namespace Infrastructure.Repositories.Users
             subscriptionPlan.IsDeleted = true;
         }
 
-        public async Task<IReadOnlyCollection<SubscriptionPlan?>> GetAllAsync()
+        public Task<IReadOnlyCollection<SubscriptionPlan?>> GetAllAsync()
         {
-            var query = _context.SubscriptionPlans
-                .Include(x => x.PlanFeatures)
-                    .ThenInclude(x => x.SubscriptionFeature)
-                .Include(x => x.PlanLimits)
-                .Select(x => x)
-                .Where(x => x.IsActive).AsNoTracking();
-            return await query.ToListAsync();
+            throw new NotImplementedException();
         }
 
-        public async Task<SubscriptionPlan?> GetByIdAsync(Guid subscriptionPlanId)
+        public Task<SubscriptionFeature?> GetByCodeAsync(string code)
         {
-            return await _context.SubscriptionPlans
-                .Include(x => x.PlanFeatures)
-                    .ThenInclude(x => x.SubscriptionFeature)
-                .Include(x => x.PlanLimits)
-                .FirstOrDefaultAsync(x => x.Id == subscriptionPlanId);
+            throw new NotImplementedException();
         }
-        public async Task<SubscriptionFeature?> GetByCodeAsync(string code)
-        {
-            var normalizedCode = code.Trim().ToUpperInvariant();
 
-            return await _context.SubscriptionFeatures
-                .FirstOrDefaultAsync(x => x.FeatureCode.ToUpper() == normalizedCode);
+        public Task<SubscriptionPlan?> GetByIdAsync(Guid subscriptionPlanId)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<SubscriptionPlanLimit?> GetSubscriptionPlanLimitByIdAsync(Guid subscriptionPlanId)
+        {
+            throw new NotImplementedException();
         }
     }
 }

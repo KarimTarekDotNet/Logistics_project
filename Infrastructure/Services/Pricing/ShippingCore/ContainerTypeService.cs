@@ -5,9 +5,12 @@ using Application.Interfaces.Services.Aliases;
 using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
 using AutoMapper;
+using Domain.Entities.Audits;
 using Domain.Entities.ShippingCore;
 using Domain.Enums;
 using Domain.Exceptions;
+using Infrastructure.Helper;
+using System.Text.Json;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
 {
@@ -39,69 +42,136 @@ namespace Infrastructure.Services.Pricing.ShippingCore
             return _mapper.Map<IEnumerable<ContainerTypeResponse>>(containerTypes);
         }
 
-        public async Task<ContainerTypeResponse> CreateAsync(CreateContainerTypeRequest dto)
+        public async Task<ContainerTypeResponse> CreateAsync(CreateContainerTypeRequest dto, string userId)
         {
-            var existing = await _unitOfWork.ContainerTypes.GetByNameAsync(dto.Name);
-
-            if (existing != null && !existing.IsDeleted)
-                throw new BusinessRuleException($"A container type with name '{dto.Name}' already exists.");
-
-            var containerType = _mapper.Map<ContainerType>(dto);
-            containerType.CreatedAt = DateTimeOffset.UtcNow;
-            containerType.IsDeleted = false;
-
-            await _unitOfWork.ContainerTypes.AddAsync(containerType);
-            await _unitOfWork.SaveChangesAsync();
-
-            await _aliasService.CreateAsync(new CreateAliasRequest
+            return await ExecuteInTransactionAsync(async () =>
             {
-                AliasName = containerType.Name,
-                EntityId = containerType.Id,
-                Type = AliasType.ContainerType
-            });
+                var existing = await _unitOfWork.ContainerTypes.GetByNameAsync(dto.Name);
 
-            return _mapper.Map<ContainerTypeResponse>(containerType);
+                if (existing != null && !existing.IsDeleted)
+                    throw new BusinessRuleException($"A container type with name '{dto.Name}' already exists.");
+
+                var containerType = _mapper.Map<ContainerType>(dto);
+                containerType.CreatedAt = DateTimeOffset.UtcNow;
+                containerType.IsDeleted = false;
+
+                var audit = new AuditLog
+                {
+                    CreatedAt = containerType.CreatedAt,
+                    EntityId = containerType.Id,
+                    EntityName = nameof(ContainerType).ToUpper(),
+                    Action = nameof(CreateAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = null,
+                    NewValues = JsonSerializer.Serialize(containerType),
+                    UserId = userId
+                };
+
+                await _unitOfWork.ContainerTypes.AddAsync(containerType);
+                await _unitOfWork.AuditLog.Add(audit);
+                await _unitOfWork.SaveChangesAsync();
+
+                await _aliasService.CreateAsync(new CreateAliasRequest
+                {
+                    AliasName = containerType.Name,
+                    EntityId = containerType.Id,
+                    Type = AliasType.ContainerType
+                });
+
+                return _mapper.Map<ContainerTypeResponse>(containerType);
+            });
         }
 
-        public async Task<ContainerTypeResponse> UpdateAsync(Guid id, UpdateContainerTypeRequest dto)
+        public async Task<ContainerTypeResponse> UpdateAsync(Guid id, UpdateContainerTypeRequest dto, string userId)
         {
-            var containerType = await _unitOfWork.ContainerTypes.GetByIdAsync(id);
-            if (containerType == null || containerType.IsDeleted)
-                throw new KeyNotFoundException("Container type not found.");
-
-            var existing = await _unitOfWork.ContainerTypes.GetAllAsync(ct =>
-                !ct.IsDeleted && ct.Name == dto.Name && ct.Id != id);
-
-            if (existing.Any())
-                throw new BusinessRuleException($"A container type with name '{dto.Name}' already exists.");
-
-            containerType.Name = dto.Name;
-            containerType.UpdatedAt = DateTimeOffset.UtcNow;
-
-            await _unitOfWork.SaveChangesAsync();
-
-
-            await _aliasService.CreateAsync(new CreateAliasRequest
+            return await ExecuteInTransactionAsync(async () =>
             {
-                AliasName = containerType.Name,
-                EntityId = containerType.Id,
-                Type = AliasType.ContainerType
-            });
+                var containerType = await _unitOfWork.ContainerTypes.GetByIdAsync(id);
+                if (containerType == null || containerType.IsDeleted)
+                    throw new KeyNotFoundException("Container type not found.");
 
-            return _mapper.Map<ContainerTypeResponse>(containerType);
+                var oldContainerType = containerType;
+
+                var existing = await _unitOfWork.ContainerTypes.GetAllAsync(ct =>
+                    !ct.IsDeleted && ct.Name == dto.Name && ct.Id != id);
+
+                if (existing.Any())
+                    throw new BusinessRuleException($"A container type with name '{dto.Name}' already exists.");
+
+                containerType.Name = dto.Name;
+                containerType.UpdatedAt = DateTimeOffset.UtcNow;
+
+                var audit = new AuditLog
+                {
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    EntityId = containerType.Id,
+                    EntityName = nameof(ContainerType).ToUpper(),
+                    Action = nameof(UpdateAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = JsonSerializer.Serialize(oldContainerType),
+                    NewValues = JsonSerializer.Serialize(containerType),
+                    UserId = userId
+                };
+
+                await _unitOfWork.AuditLog.Add(audit);
+                await _unitOfWork.SaveChangesAsync();
+
+                await _aliasService.CreateAsync(new CreateAliasRequest
+                {
+                    AliasName = containerType.Name,
+                    EntityId = containerType.Id,
+                    Type = AliasType.ContainerType
+                });
+
+                return _mapper.Map<ContainerTypeResponse>(containerType);
+            });
         }
 
-        public async Task DeleteAsync(Guid id)
+        public async Task DeleteAsync(Guid id, string userId)
         {
-            var containerType = await _unitOfWork.ContainerTypes.GetByIdAsync(id);
-            if (containerType == null || containerType.IsDeleted)
-                throw new KeyNotFoundException("Container type not found.");
+            await ExecuteInTransactionAsync(async () =>
+            {
+                var containerType = await _unitOfWork.ContainerTypes.GetByIdAsync(id);
+                if (containerType == null || containerType.IsDeleted)
+                    throw new KeyNotFoundException("Container type not found.");
 
-            containerType.IsDeleted = true;
-            containerType.DeletedAt = DateTimeOffset.UtcNow;
-            containerType.UpdatedAt = DateTimeOffset.UtcNow;
+                var audit = new AuditLog
+                {
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    EntityId = containerType.Id,
+                    EntityName = nameof(ContainerType).ToUpper(),
+                    Action = nameof(DeleteAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = JsonSerializer.Serialize(containerType),
+                    NewValues = "Deleted",
+                    UserId = userId
+                };
 
-            await _unitOfWork.SaveChangesAsync();
+                containerType.IsDeleted = true;
+                containerType.DeletedAt = DateTimeOffset.UtcNow;
+                containerType.UpdatedAt = DateTimeOffset.UtcNow;
+
+                await _unitOfWork.AuditLog.Add(audit);
+                await _unitOfWork.SaveChangesAsync();
+                return true;
+            });
+        }
+
+        private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action)
+        {
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var result = await action();
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitTransactionAsync();
+                return result;
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
         }
     }
 }

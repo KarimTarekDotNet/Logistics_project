@@ -266,33 +266,43 @@ namespace Infrastructure.Services.Auth
 
         public async Task<AuthResponse> RefreshAsync(string refreshToken, string? ipAddress)
         {
-            var oldToken = await _refreshTokenSerivce.GetByRawTokenAsync(refreshToken);
-            if (oldToken == null || !oldToken.IsActive)
+            try
+            {
+                var oldToken = await _refreshTokenSerivce.GetByRawTokenAsync(refreshToken);
+                if (oldToken == null || !oldToken.IsActive)
+                {
+                    return new AuthResponse
+                    {
+                        IsAuthenticated = false,
+                        Message = "Invalid refresh token.",
+                        Expiration = DateTime.UtcNow,
+                        AccessToken = string.Empty
+                    };
+                }
+                var token = await _refreshTokenSerivce.RotateAsync(oldToken,
+                oldToken.ApplicationUserId, ipAddress);
+
+                var accessToken = await GenerateJwtToken(oldToken.ApplicationUser);
+                await work.SaveChangesAsync();
+                return new AuthResponse
+                {
+                    IsAuthenticated = true,
+                    Message = "Token refreshed successfully.",
+                    Id = oldToken.ApplicationUserId,
+                    Email = oldToken.ApplicationUser.Email,
+                    UserName = oldToken.ApplicationUser.UserName,
+                    AccessToken = accessToken,
+                    Expiration = DateTime.UtcNow.AddMinutes(_configuration.GetValue<double>("Jwt:ExpiryMinutes")),
+                    RefreshToken = token.RawToken
+                };
+            }
+            catch (Exception ex)
             {
                 return new AuthResponse
                 {
-                    IsAuthenticated = false,
-                    Message = "Invalid refresh token.",
-                    Expiration = DateTime.UtcNow,
-                    AccessToken = string.Empty
+                    Message = ex.Message
                 };
             }
-            var token = await _refreshTokenSerivce.RotateAsync(oldToken,
-            oldToken.ApplicationUserId, ipAddress);
-
-            var accessToken = await GenerateJwtToken(oldToken.ApplicationUser);
-            await work.SaveChangesAsync();
-            return new AuthResponse
-            {
-                IsAuthenticated = true,
-                Message = "Token refreshed successfully.",
-                Id = oldToken.ApplicationUserId,
-                Email = oldToken.ApplicationUser.Email,
-                UserName = oldToken.ApplicationUser.UserName,
-                AccessToken = accessToken,
-                Expiration = DateTime.UtcNow.AddMinutes(_configuration.GetValue<double>("Jwt:ExpiryMinutes")),
-                RefreshToken = token.RawToken
-            };
         }
 
         public async Task<bool> LogoutAsync(string refreshToken, string? ipAddress)

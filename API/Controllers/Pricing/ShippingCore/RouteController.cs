@@ -4,6 +4,7 @@ using Application.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace API.Controllers.Pricing.ShippingCore
 {
@@ -68,7 +69,7 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreateRoute([FromBody] CreateRouteRequest request)
         {
-            var result = await _routeService.CreateAsync(request);
+            var result = await _routeService.CreateAsync(request, getCurrentUser());
 
             return CreatedAtAction(nameof(GetRouteById), new { id = result.Id }, result);
         }
@@ -78,7 +79,7 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdateRoute(Guid id, [FromBody] UpdateRouteRequest request)
         {
-            var updated = await _routeService.UpdateAsync(id, request);
+            var updated = await _routeService.UpdateAsync(id, request, getCurrentUser());
 
             if (updated == null)
                 return NotFound(new { message = "Route not found" });
@@ -91,9 +92,11 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteRoute(Guid id)
         {
-            await _routeService.DeleteAsync(id);
+            await _routeService.DeleteAsync(id, getCurrentUser());
 
             return Ok(new { message = "Route deleted successfully" });
         }
+
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new Exception("user not found");
     }
 }

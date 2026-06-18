@@ -5,9 +5,9 @@ namespace Application.Interfaces.Services.Pricing.Quotation
 {
     public interface IQuoteService
     {
-        Task<QuoteResponse> CreateAsync(CreateQuoteRequest dto);
+        Task<QuoteResponse> CreateAsync(CreateQuoteRequest dto, string userId);
 
-        Task DeleteAsync(Guid id, bool isAdmin);
+        Task DeleteAsync(Guid id, bool isAdmin, string userId);
 
         Task<QuoteResponse?> GetByIdAsync(Guid id, string userId, bool isAdminOrStaff);
 

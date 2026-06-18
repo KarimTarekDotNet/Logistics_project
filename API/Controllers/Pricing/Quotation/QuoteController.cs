@@ -86,7 +86,8 @@ namespace API.Controllers.Pricing.Quotation
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreateQuote([FromBody] CreateQuoteRequest request)
         {
-            var result = await _quoteService.CreateAsync(request);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var result = await _quoteService.CreateAsync(request, userId);
 
             return CreatedAtAction(nameof(GetQuoteById), new { id = result.Id }, result);
         }
@@ -120,9 +121,10 @@ namespace API.Controllers.Pricing.Quotation
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteQuote(Guid id)
         {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var isAdmin = User.IsInRole("Admin");
 
-            await _quoteService.DeleteAsync(id, isAdmin);
+            await _quoteService.DeleteAsync(id, isAdmin, userId);
 
             return Ok(new { message = "Quote deleted successfully" });
         }

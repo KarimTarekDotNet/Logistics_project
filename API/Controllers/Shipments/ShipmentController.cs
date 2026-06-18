@@ -97,7 +97,8 @@ namespace API.Controllers.Shipments
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Update(Guid id, [FromBody] UpdateShipmentRequest request)
         {
-            var updatedShipment = await _shipmentCommandService.UpdateAsync(id, request);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var updatedShipment = await _shipmentCommandService.UpdateAsync(id, request, userId);
             if (updatedShipment == null)
                 return NotFound();
 

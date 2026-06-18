@@ -11,6 +11,6 @@ namespace Application.Interfaces.Services.Shipments.Core
         Task<InvoiceResponse?> ConfirmAsync(Guid id, string userId);
         Task<InvoiceResponse?> CancelAsync(Guid id, string userId, bool isPrivileged, string reason);
 
-        Task<bool> DeleteAsync(Guid id);
+        Task<bool> DeleteAsync(Guid id, string userId);
     }
 }

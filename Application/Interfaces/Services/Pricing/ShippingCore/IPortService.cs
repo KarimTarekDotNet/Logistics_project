@@ -8,8 +8,8 @@ namespace Application.Interfaces.Services.Pricing.ShippingCore
         Task<PortResponse?> GetByIdAsync(Guid id);
         Task<IEnumerable<PortResponse>> GetAllAsync(QueryParameters query);
         Task<IEnumerable<PortResponse>> GetByCountryAsync(string country, QueryParameters query);
-        Task<PortResponse> CreateAsync(CreatePortRequest dto);
-        Task<PortResponse> UpdateAsync(Guid id, UpdatePortRequest dto);
-        Task DeleteAsync(Guid id);
+        Task<PortResponse> CreateAsync(CreatePortRequest dto, string userId);
+        Task<PortResponse> UpdateAsync(Guid id, UpdatePortRequest dto, string userId);
+        Task DeleteAsync(Guid id, string userId);
     }
 }

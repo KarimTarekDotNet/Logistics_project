@@ -1,9 +1,9 @@
 ﻿using Application.DTOs.Auth;
 using Application.Interfaces.Services.Auth;
+using Infrastructure.Helper;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Newtonsoft.Json.Linq;
 using System.Security.Claims;
 
 namespace API.Controllers.Auth
@@ -30,7 +30,7 @@ namespace API.Controllers.Auth
         [HttpPost("login")]
         public async Task<IActionResult> LoginAsync([FromBody] LoginRequest request)
         {
-            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var ipAddress = await IpAddressHelper.GetRealPublicIpAsync();
             var loginResult = await auth.LoginAsync(request, ipAddress);
 
             if (!loginResult.IsAuthenticated)
@@ -104,7 +104,7 @@ namespace API.Controllers.Auth
             if (string.IsNullOrWhiteSpace(refreshToken))
                 return Unauthorized();
 
-            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var ipAddress = await IpAddressHelper.GetRealPublicIpAsync();
             var result = await auth.RefreshAsync(refreshToken, ipAddress);
             if (!result.IsAuthenticated)
                 return Unauthorized(result);
@@ -128,7 +128,7 @@ namespace API.Controllers.Auth
             if (string.IsNullOrWhiteSpace(refreshToken))
                 return Unauthorized();
 
-            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var ipAddress = await IpAddressHelper.GetRealPublicIpAsync();
             var result = await auth.LogoutAsync(refreshToken, ipAddress);
             if (!result)
                 return BadRequest(new { Message = "Failed to logout" });
@@ -143,7 +143,7 @@ namespace API.Controllers.Auth
         public async Task<IActionResult> LogoutAll()
         {
             var currentUserId = GetUserId();
-            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var ipAddress = await IpAddressHelper.GetRealPublicIpAsync();
             var result = await auth.LogoutAllAsync(currentUserId, ipAddress);
             if (!result)
                 return BadRequest(new { Message = "Failed to logout from all sessions" });

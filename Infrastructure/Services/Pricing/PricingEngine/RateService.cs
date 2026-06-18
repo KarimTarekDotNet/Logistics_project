@@ -5,10 +5,13 @@ using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Services.Pricing.PricingEngine;
 using Application.Models;
 using AutoMapper;
+using Domain.Entities.Audits;
 using Domain.Entities.Pricing.PricingEngine;
 using Domain.Enums;
 using Domain.Exceptions;
+using Infrastructure.Helper;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Infrastructure.Services.Pricing.PricingEngine
 {
@@ -33,7 +36,7 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                 return 0;
         }
 
-        public async Task<RateResponse> CreateAsync(CreateRateRequest dto)
+        public async Task<RateResponse> CreateAsync(CreateRateRequest dto, string userId)
         {
             return await ExecuteInTransactionAsync(async () =>
             {
@@ -67,13 +70,26 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                     rate.ContainerTypeId, dto.ValidFrom, dto.ValidTo);
                 }
 
+                var audit = new AuditLog
+                {
+                    CreatedAt = rate.CreatedAt,
+                    EntityId = rate.Id,
+                    EntityName = nameof(Rate).ToUpper(),
+                    Action = nameof(CreateAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = null,
+                    NewValues = JsonSerializer.Serialize(rate),
+                    UserId = userId
+                };
+
                 await _unitOfWork.Rates.AddAsync(rate);
+                await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
                 return _mapper.Map<RateResponse>(rate);
             });
         }
 
-        public async Task DeleteAsync(Guid id)
+        public async Task DeleteAsync(Guid id, string userId)
         {
             await ExecuteInTransactionAsync(async () =>
             {
@@ -88,18 +104,31 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                 rate.IsActive = false;
                 rate.DeletedAt = DateTimeOffset.UtcNow;
 
+                var audit = new AuditLog
+                {
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    EntityId = rate.Id,
+                    EntityName = nameof(Rate).ToUpper(),
+                    Action = nameof(DeleteAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = JsonSerializer.Serialize(rate),
+                    NewValues = "Deleted",
+                    UserId = userId
+                };
+
                 _unitOfWork.Rates.Update(rate);
+                await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
                 return true;
             });
         }
 
-        public async Task<RateResponse> UpdateAsync(Guid id, UpdateRateRequest dto)
+        public async Task<RateResponse> UpdateAsync(Guid id, UpdateRateRequest dto, string userId)
         {
             return await ExecuteInTransactionAsync(async () =>
             {
                 var rate = await GetRateWithDetailsOrThrowAsync(id);
-
+                var oldRate = rate;
                 if(string.IsNullOrEmpty(dto.Currency))
                     dto.Currency = rate.Currency;
 
@@ -143,7 +172,20 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                     rate.ContainerTypeId, dto.ValidFrom, dto.ValidTo, rate.Id);
                 }
 
+                var audit = new AuditLog
+                {
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    EntityId = rate.Id,
+                    EntityName = nameof(Rate).ToUpper(),
+                    Action = nameof(UpdateAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = JsonSerializer.Serialize(oldRate),
+                    NewValues = JsonSerializer.Serialize(rate),
+                    UserId = userId
+                };
+
                 _unitOfWork.Rates.Update(rate);
+                await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
                 return _mapper.Map<RateResponse>(rate);
             });
@@ -232,13 +274,15 @@ namespace Infrastructure.Services.Pricing.PricingEngine
             return rate == null ? null : _mapper.Map<RateResponse>(rate);
         }
 
-        public async Task<bool> ChangeRateActive(Guid rateId)
+        public async Task<bool> ChangeRateActive(Guid rateId, string userId)
         {
             return await ExecuteInTransactionAsync(async () =>
             {
                 var rate = await _unitOfWork.Rates.GetByIdAsync(rateId);
                 if (rate == null)
                     throw new KeyNotFoundException("Rate not found.");
+
+                var oldRate = rate;
 
                 if (rate.IsDeleted)
                     throw new BusinessRuleException("Cannot change active state of a deleted rate.");
@@ -258,6 +302,19 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                     rate.IsActive = false;
                 }
 
+                var audit = new AuditLog
+                {
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    EntityId = rate.Id,
+                    EntityName = nameof(Rate).ToUpper(),
+                    Action = nameof(ChangeRateActive).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = JsonSerializer.Serialize(oldRate),
+                    NewValues = JsonSerializer.Serialize(rate),
+                    UserId = userId
+                };
+
+                await _unitOfWork.AuditLog.Add(audit);
                 _unitOfWork.Rates.Update(rate);
 
                 return rate.IsActive;

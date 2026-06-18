@@ -6,9 +6,12 @@ using Application.Interfaces.Services.Aliases;
 using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
 using AutoMapper;
+using Domain.Entities.Audits;
 using Domain.Entities.ShippingCore;
 using Domain.Enums;
 using Domain.Exceptions;
+using Infrastructure.Helper;
+using System.Text.Json;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
 {
@@ -55,90 +58,157 @@ namespace Infrastructure.Services.Pricing.ShippingCore
             return _mapper.Map<IEnumerable<CarrierResponse>>(carriers);
         }
 
-        public async Task<CarrierResponse> CreateAsync(CreateCarrierRequest dto)
+        public async Task<CarrierResponse> CreateAsync(CreateCarrierRequest dto, string userId)
         {
-            var existing = await _unitOfWork.Carriers.GetByNameOrCodeAsync(dto.Code);
-            if (existing != null && !existing.IsDeleted)
-                throw new BusinessRuleException($"A carrier with code '{dto.Code}' already exists.");
-
-            var carrier = _mapper.Map<Carrier>(dto);
-            carrier.CreatedAt = DateTimeOffset.UtcNow;
-            carrier.IsDeleted = false;
-
-            await _unitOfWork.Carriers.AddAsync(carrier);
-            await _unitOfWork.SaveChangesAsync();
-
-            await _aliasService.CreateAsync(new CreateAliasRequest
+            return await ExecuteInTransactionAsync(async () =>
             {
-                AliasName = carrier.Name,
-                EntityId = carrier.Id,
-                Type = AliasType.Carrier
+                var existing = await _unitOfWork.Carriers.GetByNameOrCodeAsync(dto.Code);
+                if (existing != null && !existing.IsDeleted)
+                    throw new BusinessRuleException($"A carrier with code '{dto.Code}' already exists.");
+
+                var carrier = _mapper.Map<Carrier>(dto);
+                carrier.CreatedAt = DateTimeOffset.UtcNow;
+                carrier.IsDeleted = false;
+
+                var audit = new AuditLog
+                {
+                    CreatedAt = carrier.CreatedAt,
+                    EntityId = carrier.Id,
+                    EntityName = nameof(Carrier).ToUpper(),
+                    Action = nameof(CreateAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = null,
+                    NewValues = JsonSerializer.Serialize(carrier),
+                    UserId = userId
+                };
+
+                await _unitOfWork.Carriers.AddAsync(carrier);
+                await _unitOfWork.AuditLog.Add(audit);
+                await _unitOfWork.SaveChangesAsync();
+
+                await _aliasService.CreateAsync(new CreateAliasRequest
+                {
+                    AliasName = carrier.Name,
+                    EntityId = carrier.Id,
+                    Type = AliasType.Carrier
+                });
+
+                await _aliasService.CreateAsync(new CreateAliasRequest
+                {
+                    AliasName = carrier.Code,
+                    EntityId = carrier.Id,
+                    Type = AliasType.Carrier
+                });
+
+                return _mapper.Map<CarrierResponse>(carrier);
             });
-
-            await _aliasService.CreateAsync(new CreateAliasRequest
-            {
-                AliasName = carrier.Code,
-                EntityId = carrier.Id,
-                Type = AliasType.Carrier
-            });
-
-
-            return _mapper.Map<CarrierResponse>(carrier);
         }
 
-        public async Task<CarrierResponse> UpdateAsync(Guid id, UpdateCarrierRequest dto)
+        public async Task<CarrierResponse> UpdateAsync(Guid id, UpdateCarrierRequest dto, string userId)
         {
-            var carrier = await _unitOfWork.Carriers.GetByIdAsync(id);
-            if (carrier == null || carrier.IsDeleted)
-                throw new KeyNotFoundException("Carrier not found.");
-
-            if(string.IsNullOrWhiteSpace(dto.Code))
-                dto.Code = carrier.Code;
-
-            if (!CarrierRule.IsCodeMatch(dto.Code))
-                throw new BusinessRuleException("Carrier code must be exactly 4 uppercase letters (SCAC format).");
-
-            var existing = await _unitOfWork.Carriers.GetByNameOrCodeAsync(dto.Code);
-            if (existing != null && !existing.IsDeleted && existing.Id != id)
-                throw new BusinessRuleException($"A carrier with code '{dto.Code}' already exists.");
-
-            if(string.IsNullOrEmpty(dto.Name))
-                dto.Name = carrier.Name;
-
-            carrier.Name = dto.Name;
-            carrier.Code = dto.Code;
-            carrier.UpdatedAt = DateTimeOffset.UtcNow;
-
-            await _unitOfWork.SaveChangesAsync();
-
-            await _aliasService.CreateAsync(new CreateAliasRequest
+            return await ExecuteInTransactionAsync(async () =>
             {
-                AliasName = carrier.Name,
-                EntityId = carrier.Id,
-                Type = AliasType.Carrier
-            });
+                var carrier = await _unitOfWork.Carriers.GetByIdAsync(id);
+                if (carrier == null || carrier.IsDeleted)
+                    throw new KeyNotFoundException("Carrier not found.");
 
-            await _aliasService.CreateAsync(new CreateAliasRequest
-            {
-                AliasName = carrier.Code,
-                EntityId = carrier.Id,
-                Type = AliasType.Carrier
-            });
+                var oldCarrier = carrier;
 
-            return _mapper.Map<CarrierResponse>(carrier);
+                if (string.IsNullOrWhiteSpace(dto.Code))
+                    dto.Code = carrier.Code;
+
+                if (!CarrierRule.IsCodeMatch(dto.Code))
+                    throw new BusinessRuleException("Carrier code must be exactly 4 uppercase letters (SCAC format).");
+
+                var existing = await _unitOfWork.Carriers.GetByNameOrCodeAsync(dto.Code);
+                if (existing != null && !existing.IsDeleted && existing.Id != id)
+                    throw new BusinessRuleException($"A carrier with code '{dto.Code}' already exists.");
+
+                if (string.IsNullOrEmpty(dto.Name))
+                    dto.Name = carrier.Name;
+
+                carrier.Name = dto.Name;
+                carrier.Code = dto.Code;
+                carrier.UpdatedAt = DateTimeOffset.UtcNow;
+
+                var audit = new AuditLog
+                {
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    EntityId = carrier.Id,
+                    EntityName = nameof(Carrier).ToUpper(),
+                    Action = nameof(UpdateAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = JsonSerializer.Serialize(oldCarrier),
+                    NewValues = JsonSerializer.Serialize(carrier),
+                    UserId = userId
+                };
+
+                await _unitOfWork.AuditLog.Add(audit);
+                await _unitOfWork.SaveChangesAsync();
+
+                await _aliasService.CreateAsync(new CreateAliasRequest
+                {
+                    AliasName = carrier.Name,
+                    EntityId = carrier.Id,
+                    Type = AliasType.Carrier
+                });
+
+                await _aliasService.CreateAsync(new CreateAliasRequest
+                {
+                    AliasName = carrier.Code,
+                    EntityId = carrier.Id,
+                    Type = AliasType.Carrier
+                });
+
+                return _mapper.Map<CarrierResponse>(carrier);
+            });
         }
 
-        public async Task DeleteAsync(Guid id)
+        public async Task DeleteAsync(Guid id, string userId)
         {
-            var carrier = await _unitOfWork.Carriers.GetByIdAsync(id);
-            if (carrier == null || carrier.IsDeleted)
-                throw new KeyNotFoundException("Carrier not found.");
+            await ExecuteInTransactionAsync(async () =>
+            {
+                var carrier = await _unitOfWork.Carriers.GetByIdAsync(id);
+                if (carrier == null || carrier.IsDeleted)
+                    throw new KeyNotFoundException("Carrier not found.");
 
-            carrier.IsDeleted = true;
-            carrier.DeletedAt = DateTimeOffset.UtcNow;
-            carrier.UpdatedAt = DateTimeOffset.UtcNow;
+                var audit = new AuditLog
+                {
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    EntityId = carrier.Id,
+                    EntityName = nameof(Carrier).ToUpper(),
+                    Action = nameof(DeleteAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = JsonSerializer.Serialize(carrier),
+                    NewValues = "Deleted",
+                    UserId = userId
+                };
 
-            await _unitOfWork.SaveChangesAsync();
+                carrier.IsDeleted = true;
+                carrier.DeletedAt = DateTimeOffset.UtcNow;
+                carrier.UpdatedAt = DateTimeOffset.UtcNow;
+
+                await _unitOfWork.AuditLog.Add(audit);
+                await _unitOfWork.SaveChangesAsync();
+                return true;
+            });
+        }
+
+        private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action)
+        {
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var result = await action();
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitTransactionAsync();
+                return result;
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
         }
     }
 }

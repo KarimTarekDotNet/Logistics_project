@@ -4,6 +4,7 @@ using Application.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace API.Controllers.Pricing.ShippingCore
 {
@@ -49,7 +50,7 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreateCarrier([FromBody] CreateCarrierRequest request)
         {
-            var result = await _carrierService.CreateAsync(request);
+            var result = await _carrierService.CreateAsync(request, getCurrentUser());
 
             return CreatedAtAction(nameof(GetCarrierById), new { id = result.Id }, result);
         }
@@ -59,7 +60,7 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdateCarrier(Guid id, [FromBody] UpdateCarrierRequest request)
         {
-            var updated = await _carrierService.UpdateAsync(id, request);
+            var updated = await _carrierService.UpdateAsync(id, request, getCurrentUser());
 
             if (updated == null)
                 return NotFound(new { message = "Carrier not found" });
@@ -72,9 +73,11 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteCarrier(Guid id)
         {
-            await _carrierService.DeleteAsync(id);
+            await _carrierService.DeleteAsync(id, getCurrentUser());
 
             return Ok(new { message = "Carrier deleted successfully" });
         }
+
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new Exception("user not found");
     }
 }

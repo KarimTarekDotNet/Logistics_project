@@ -142,7 +142,8 @@ namespace API.Controllers.Shipments
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var deleted = await invoiceService.DeleteAsync(id);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var deleted = await invoiceService.DeleteAsync(id, userId);
             if (!deleted)
                 return NotFound();
 

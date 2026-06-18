@@ -1,5 +1,6 @@
 ﻿using API.Mapping;
 using Application.Interfaces.Repositories.Aliases;
+using Application.Interfaces.Repositories.Audit;
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Repositories.Payments;
 using Application.Interfaces.Repositories.Pricing.Imports;
@@ -27,6 +28,7 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 using Infrastructure.Data.Database;
 using Infrastructure.Repositories.Aliases;
+using Infrastructure.Repositories.Audit;
 using Infrastructure.Repositories.Patterns;
 using Infrastructure.Repositories.Payment;
 using Infrastructure.Repositories.Pricing.Imports;
@@ -97,6 +99,7 @@ namespace API.Extensions
             services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
             services.AddScoped<ISubscriptionPlanRepository, SubscriptionPlanRepository>();
             services.AddScoped<IUserSubscriptionRepository, UserSubscriptionRepository>();
+            services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 
             // Unit of Work
             services.AddScoped<IUnitOfWork, UnitOfWork>();
