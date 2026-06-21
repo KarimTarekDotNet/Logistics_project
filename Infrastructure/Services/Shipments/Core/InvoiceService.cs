@@ -1,4 +1,5 @@
 ﻿using Application.ApplicationRules.Shipments;
+using Application.Common;
 using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Services.Shipments.Core;
@@ -7,10 +8,10 @@ using Domain.Entities.Audits;
 using Domain.Entities.Shipments;
 using Domain.Entities.Users;
 using Domain.Enums;
-using Domain.Exceptions;
 using Infrastructure.Helper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 namespace Infrastructure.Services.Shipments.Core
@@ -20,56 +21,40 @@ namespace Infrastructure.Services.Shipments.Core
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
+        private readonly ILogger<InvoiceService> _logger;
 
-        public InvoiceService(IUnitOfWork unitOfWork, IMapper mapper, UserManager<ApplicationUser> userManager)
+        public InvoiceService(IUnitOfWork unitOfWork, IMapper mapper, UserManager<ApplicationUser> userManager, ILogger<InvoiceService> logger)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
             _userManager = userManager;
+            _logger = logger;
         }
 
         private static bool IsBaseFreightCharge(Domain.Entities.Shipments.Shipment shipment, ShipmentCharge charge)
         {
-            if (charge.ChargeType != ChargeType.OceanFreight)
-                return false;
-
+            if (charge.ChargeType != ChargeType.OceanFreight) return false;
             var invoice = charge.InvoiceId.HasValue
                 ? shipment.Invoices.FirstOrDefault(x => x.Id == charge.InvoiceId.Value && !x.IsDeleted)
                 : null;
-
-            if (invoice?.NetShipmentPrice > 0)
-                return true;
-
-            return false;
+            return invoice?.NetShipmentPrice > 0;
         }
 
-        public async Task<InvoiceResponse> CreateOrUpdateDraftInvoiceAsync(Guid shipmentId, string userId)
+        public async Task<Result<InvoiceResponse>> CreateOrUpdateDraftInvoiceAsync(Guid shipmentId, string userId)
         {
+            _logger.LogInformation("Creating/updating draft invoice for shipment {ShipmentId} by user {UserId}", shipmentId, userId);
             return await ExecuteInTransactionAsync(async () =>
             {
-                var user = await _userManager.Users.Include(x => x.CustomerProfile)
-                .FirstOrDefaultAsync(x => x.Id == userId);
-
+                var user = await _userManager.Users.Include(x => x.CustomerProfile).FirstOrDefaultAsync(x => x.Id == userId);
                 if (user == null || user.CustomerProfile == null)
-                    throw new KeyNotFoundException("user not found.");
+                    return Result<InvoiceResponse>.NotFound("User not found.");
 
-                var shipment = await _unitOfWork.Shipments
-                    .GetTrackedByIdWithDetailsAsync(shipmentId);
-
-                if (shipment == null)
-                    throw new KeyNotFoundException("Shipment not found.");
-
-                if (shipment.CustomerId != user.CustomerProfile.Id)
-                    throw new UnauthorizedAccessException("You do not have access to this invoice.");
-
-                if (!ShipmentStatusRules.CanCreateInvoice(shipment.Status))
-                    throw new BusinessRuleException("Cannot create invoice for the current shipment status.");
-
-                if (shipment.Customer == null)
-                    throw new BusinessRuleException("Shipment customer data is required.");
-
-                if (string.IsNullOrWhiteSpace(shipment.Customer.NationalId))
-                    throw new BusinessRuleException("Customer national id is required.");
+                var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(shipmentId);
+                if (shipment == null) return Result<InvoiceResponse>.NotFound("Shipment not found.");
+                if (shipment.CustomerId != user.CustomerProfile.Id) return Result<InvoiceResponse>.Unauthorized("You do not have access to this invoice.");
+                if (!ShipmentStatusRules.CanCreateInvoice(shipment.Status)) return Result<InvoiceResponse>.Failure("Cannot create invoice for the current shipment status.");
+                if (shipment.Customer == null) return Result<InvoiceResponse>.Failure("Shipment customer data is required.");
+                if (string.IsNullOrWhiteSpace(shipment.Customer.NationalId)) return Result<InvoiceResponse>.Failure("Customer national id is required.");
 
                 var draftInvoice = shipment.Invoices.FirstOrDefault(x => x.PaymentStatus == PaymentStatus.Draft && !x.IsDeleted);
 
@@ -79,11 +64,8 @@ namespace Infrastructure.Services.Shipments.Core
                     .Where(x => !IsBaseFreightCharge(shipment, x))
                     .ToList();
 
-                if (!charges.Any())
-                    throw new BusinessRuleException("No charges found to create invoice.");
-
-                if (charges.Select(x => x.PayerType).Distinct().Count() > 1)
-                    throw new BusinessRuleException("Cannot create one invoice for multiple payer types.");
+                if (!charges.Any()) return Result<InvoiceResponse>.Failure("No charges found to create invoice.");
+                if (charges.Select(x => x.PayerType).Distinct().Count() > 1) return Result<InvoiceResponse>.Failure("Cannot create one invoice for multiple payer types.");
 
                 var isCreate = draftInvoice == null;
                 if (isCreate)
@@ -93,14 +75,10 @@ namespace Infrastructure.Services.Shipments.Core
                         ShipmentId = shipment.Id,
                         InvoiceNumber = InvoiceHelper.GenerateInvoiceNumber(shipment.Customer.NationalId),
                         Currency = InvoiceHelper.NormalizeAndValidateCurrency(shipment.Currency),
-                        NetShipmentPrice = 0.0m,
-                        PaymentStatus = PaymentStatus.Draft,
-                        IssuedAt = DateTimeOffset.UtcNow,
-                        DueDate = DateTimeOffset.UtcNow.AddDays(7),
-                        CreatedAt = DateTimeOffset.UtcNow,
-                        PayerType = charges.First().PayerType
+                        NetShipmentPrice = 0.0m, PaymentStatus = PaymentStatus.Draft,
+                        IssuedAt = DateTimeOffset.UtcNow, DueDate = DateTimeOffset.UtcNow.AddDays(7),
+                        CreatedAt = DateTimeOffset.UtcNow, PayerType = charges.First().PayerType
                     };
-
                     await _unitOfWork.Invoices.AddAsync(draftInvoice);
                 }
                 else
@@ -124,100 +102,87 @@ namespace Infrastructure.Services.Shipments.Core
 
                 var audit = new AuditLog
                 {
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    EntityId = draftInvoice.Id,
-                    EntityName = nameof(Invoice).ToUpper(),
-                    Action = nameof(CreateOrUpdateDraftInvoiceAsync).ToUpper(),
+                    CreatedAt = DateTimeOffset.UtcNow, EntityId = draftInvoice.Id,
+                    EntityName = nameof(Invoice).ToUpper(), Action = nameof(CreateOrUpdateDraftInvoiceAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
                     OldValues = isCreate ? null : JsonSerializer.Serialize(draftInvoice),
-                    NewValues = JsonSerializer.Serialize(draftInvoice),
-                    UserId = userId
+                    NewValues = JsonSerializer.Serialize(draftInvoice), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
 
-                return _mapper.Map<InvoiceResponse>(draftInvoice);
+                _logger.LogInformation("Draft invoice {Id} {Action} for shipment {ShipmentId}", draftInvoice.Id, isCreate ? "created" : "updated", shipmentId);
+                return Result<InvoiceResponse>.Success(_mapper.Map<InvoiceResponse>(draftInvoice), isCreate ? 201 : 200);
             });
         }
 
-        public async Task<bool> DeleteAsync(Guid id, string userId)
+        public async Task<Result<bool>> DeleteAsync(Guid id, string userId)
         {
+            _logger.LogInformation("Deleting invoice {Id} by user {UserId}", id, userId);
             return await ExecuteInTransactionAsync(async () =>
             {
                 var invoice = await _unitOfWork.Invoices.GetByIdAsync(id);
-                if (invoice == null)
-                    return false;
+                if (invoice == null) return Result<bool>.NotFound("Invoice not found.");
 
                 if (invoice.PaymentStatus == PaymentStatus.PartiallyPaid || invoice.PaymentStatus == PaymentStatus.Paid)
-                    throw new BusinessRuleException("Paid or partially paid invoices cannot be cancelled.");
+                    return Result<bool>.Failure("Paid or partially paid invoices cannot be cancelled.");
 
                 var audit = new AuditLog
                 {
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    EntityId = invoice.Id,
-                    EntityName = nameof(Invoice).ToUpper(),
-                    Action = nameof(DeleteAsync).ToUpper(),
+                    CreatedAt = DateTimeOffset.UtcNow, EntityId = invoice.Id,
+                    EntityName = nameof(Invoice).ToUpper(), Action = nameof(DeleteAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(invoice),
-                    NewValues = "Deleted",
-                    UserId = userId
+                    OldValues = JsonSerializer.Serialize(invoice), NewValues = "Deleted", UserId = userId
                 };
 
                 invoice.UpdatedAt = DateTimeOffset.UtcNow;
                 await _unitOfWork.AuditLog.Add(audit);
                 _unitOfWork.Invoices.Delete(invoice);
                 await _unitOfWork.SaveChangesAsync();
-                return true;
+
+                _logger.LogInformation("Invoice {Id} deleted", id);
+                return Result<bool>.Success(true);
             });
         }
 
-        public async Task<InvoiceResponse?> CancelAsync(Guid id, string userId, bool isPrivileged, string reason)
+        public async Task<Result<InvoiceResponse>> CancelAsync(Guid id, string userId, bool isPrivileged, string reason)
         {
+            _logger.LogInformation("Cancelling invoice {Id} by user {UserId}", id, userId);
             return await ExecuteInTransactionAsync(async () =>
             {
-                var user = await _userManager.Users.Include(x => x.CustomerProfile)
-                .FirstOrDefaultAsync(x => x.Id == userId);
-
-                if (user == null)
-                    throw new KeyNotFoundException("User not found.");
+                var user = await _userManager.Users.Include(x => x.CustomerProfile).FirstOrDefaultAsync(x => x.Id == userId);
+                if (user == null) return Result<InvoiceResponse>.NotFound("User not found.");
 
                 var invoice = await _unitOfWork.Invoices.GetByIdAsync(id);
-                if (invoice == null)
-                    throw new KeyNotFoundException("Invoice not found.");
+                if (invoice == null) return Result<InvoiceResponse>.NotFound("Invoice not found.");
 
                 var shipment = await _unitOfWork.Shipments.GetTrackedByIdWithDetailsAsync(invoice.ShipmentId);
-                if (shipment == null)
-                    throw new KeyNotFoundException("Shipment not found.");
+                if (shipment == null) return Result<InvoiceResponse>.NotFound("Shipment not found.");
 
                 if (!ShipmentStatusRules.CanCancelInvoice(shipment.Status))
-                    throw new BusinessRuleException("Cannot cancel invoice for the current shipment status.");
+                    return Result<InvoiceResponse>.Failure("Cannot cancel invoice for the current shipment status.");
 
                 if (!isPrivileged)
                 {
-                    if (user.CustomerProfile == null)
-                        throw new KeyNotFoundException("Customer profile not found.");
-
-                    if (shipment.CustomerId != user.CustomerProfile.Id)
-                        throw new UnauthorizedAccessException("You do not have access to this invoice.");
-
+                    if (user.CustomerProfile == null) return Result<InvoiceResponse>.NotFound("Customer profile not found.");
+                    if (shipment.CustomerId != user.CustomerProfile.Id) return Result<InvoiceResponse>.Unauthorized("You do not have access to this invoice.");
                     if (invoice.PaymentStatus is not (PaymentStatus.Draft or PaymentStatus.Pending))
-                        throw new BusinessRuleException("Only draft or pending invoices can be cancelled by customer.");
+                        return Result<InvoiceResponse>.Failure("Only draft or pending invoices can be cancelled by customer.");
                 }
                 else
                 {
                     if (invoice.PaymentStatus is PaymentStatus.Paid or PaymentStatus.PartiallyPaid)
-                        throw new BusinessRuleException("Paid or partially paid invoices cannot be cancelled.");
+                        return Result<InvoiceResponse>.Failure("Paid or partially paid invoices cannot be cancelled.");
                 }
 
                 if (invoice.PaymentStatus == PaymentStatus.Cancelled)
-                    throw new BusinessRuleException("Invoice is already cancelled.");
+                    return Result<InvoiceResponse>.Failure("Invoice is already cancelled.");
 
                 if (string.IsNullOrWhiteSpace(reason))
-                    throw new BusinessRuleException("Cancellation reason is required.");
+                    return Result<InvoiceResponse>.Failure("Cancellation reason is required.");
 
                 var oldInvoice = invoice;
-
                 invoice.UpdatedAt = DateTimeOffset.UtcNow;
                 invoice.PaymentStatus = PaymentStatus.Cancelled;
                 invoice.CancelledAt = DateTimeOffset.UtcNow;
@@ -226,85 +191,72 @@ namespace Infrastructure.Services.Shipments.Core
 
                 var audit = new AuditLog
                 {
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    EntityId = invoice.Id,
-                    EntityName = nameof(Invoice).ToUpper(),
-                    Action = nameof(CancelAsync).ToUpper(),
+                    CreatedAt = DateTimeOffset.UtcNow, EntityId = invoice.Id,
+                    EntityName = nameof(Invoice).ToUpper(), Action = nameof(CancelAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldInvoice),
-                    NewValues = JsonSerializer.Serialize(invoice),
-                    UserId = userId
+                    OldValues = JsonSerializer.Serialize(oldInvoice), NewValues = JsonSerializer.Serialize(invoice), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
 
-                return _mapper.Map<InvoiceResponse>(invoice);
+                _logger.LogInformation("Invoice {Id} cancelled", id);
+                return Result<InvoiceResponse>.Success(_mapper.Map<InvoiceResponse>(invoice));
             });
         }
 
-        public async Task<InvoiceResponse?> GetByIdAsync(Guid id, string userId, bool isPrivileged)
+        public async Task<Result<InvoiceResponse>> GetByIdAsync(Guid id, string userId, bool isPrivileged)
         {
-            var context = await InvoiceHelper
-            .GetInvoiceContextAsync(id, userId, isPrivileged, _userManager, _unitOfWork);
-
-            return _mapper.Map<InvoiceResponse>(context.Invoice);
+            var context = await InvoiceHelper.GetInvoiceContextAsync(id, userId, isPrivileged, _userManager, _unitOfWork);
+            return Result<InvoiceResponse>.Success(_mapper.Map<InvoiceResponse>(context.Invoice));
         }
 
-        public async Task<IReadOnlyList<InvoiceResponse>> GetByShipmentIdAsync(Guid shipmentId, string userId, bool isPrivileged)
+        public async Task<Result<IReadOnlyList<InvoiceResponse>>> GetByShipmentIdAsync(Guid shipmentId, string userId, bool isPrivileged)
         {
             var user = await InvoiceHelper.GetUserOrThrowAsync(userId, _userManager);
-
             var shipment = await InvoiceHelper.GetShipmentOrThrowAsync(shipmentId, _unitOfWork);
 
-            if (!isPrivileged)
-                InvoiceHelper.EnsureCustomerOwnsShipment(user, shipment);
+            if (!isPrivileged) InvoiceHelper.EnsureCustomerOwnsShipment(user, shipment);
 
             var invoices = await _unitOfWork.Invoices.GetByShipmentIdAsync(shipmentId);
+            if (!invoices.Any()) return Result<IReadOnlyList<InvoiceResponse>>.NotFound("Invoice not found.");
 
-            if (!invoices.Any())
-                throw new KeyNotFoundException("Invoice not found.");
-
-            return _mapper.Map<IReadOnlyList<InvoiceResponse>>(invoices);
+            return Result<IReadOnlyList<InvoiceResponse>>.Success(_mapper.Map<IReadOnlyList<InvoiceResponse>>(invoices));
         }
 
-        public async Task<InvoiceResponse?> ConfirmAsync(Guid id, string userId)
+        public async Task<Result<InvoiceResponse>> ConfirmAsync(Guid id, string userId)
         {
+            _logger.LogInformation("Confirming invoice {Id} by user {UserId}", id, userId);
             return await ExecuteInTransactionAsync(async () =>
             {
-                var (_, invoice, shipment) = await InvoiceHelper
-                .GetInvoiceContextAsync(id, userId, isPrivileged: false, _userManager, _unitOfWork);
+                var (_, invoice, shipment) = await InvoiceHelper.GetInvoiceContextAsync(id, userId, isPrivileged: false, _userManager, _unitOfWork);
 
                 if (!ShipmentStatusRules.CanPayInvoice(shipment.Status))
-                    throw new BusinessRuleException("Cannot confirm invoice for the current shipment status.");
+                    return Result<InvoiceResponse>.Failure("Cannot confirm invoice for the current shipment status.");
 
                 InvoiceHelper.EnsureInvoiceCanBeConfirmed(invoice);
 
                 var oldInvoice = invoice;
-
                 invoice.UpdatedAt = DateTimeOffset.UtcNow;
                 invoice.PaymentStatus = PaymentStatus.Pending;
 
                 var audit = new AuditLog
                 {
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    EntityId = invoice.Id,
-                    EntityName = nameof(Invoice).ToUpper(),
-                    Action = nameof(ConfirmAsync).ToUpper(),
+                    CreatedAt = DateTimeOffset.UtcNow, EntityId = invoice.Id,
+                    EntityName = nameof(Invoice).ToUpper(), Action = nameof(ConfirmAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldInvoice),
-                    NewValues = JsonSerializer.Serialize(invoice),
-                    UserId = userId
+                    OldValues = JsonSerializer.Serialize(oldInvoice), NewValues = JsonSerializer.Serialize(invoice), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
 
-                return _mapper.Map<InvoiceResponse>(invoice);
+                _logger.LogInformation("Invoice {Id} confirmed", id);
+                return Result<InvoiceResponse>.Success(_mapper.Map<InvoiceResponse>(invoice));
             });
         }
 
-        private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action)
+        private async Task<Result<T>> ExecuteInTransactionAsync<T>(Func<Task<Result<T>>> action)
         {
             await _unitOfWork.BeginTransactionAsync();
             try
@@ -314,9 +266,10 @@ namespace Infrastructure.Services.Shipments.Core
                 await _unitOfWork.CommitTransactionAsync();
                 return result;
             }
-            catch
+            catch (Exception ex)
             {
                 await _unitOfWork.RollbackTransactionAsync();
+                _logger.LogError(ex, "Transaction failed in {Service}", nameof(InvoiceService));
                 throw;
             }
         }

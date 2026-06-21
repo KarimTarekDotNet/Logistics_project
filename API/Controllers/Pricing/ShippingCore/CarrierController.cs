@@ -1,4 +1,5 @@
-﻿using Application.DTOs.ShippingCore;
+﻿using API.Extensions;
+using Application.DTOs.ShippingCore;
 using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -25,24 +26,16 @@ namespace API.Controllers.Pricing.ShippingCore
         [HttpGet]
         public async Task<IActionResult> GetAllCarriers([FromQuery] QueryParameters query)
         {
-            var carriers = await _carrierService.GetAllAsync(query);
-
-            if (carriers == null || !carriers.Any())
-                return NotFound(new { message = "No carriers found" });
-
-            return Ok(carriers);
+            var result = await _carrierService.GetAllAsync(query);
+            return result.ToActionResult(this);
         }
 
         [AllowAnonymous]
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetCarrierById(Guid id)
         {
-            var carrier = await _carrierService.GetByIdAsync(id);
-
-            if (carrier == null)
-                return NotFound(new { message = "Carrier not found" });
-
-            return Ok(carrier);
+            var result = await _carrierService.GetByIdAsync(id);
+            return result.ToActionResult(this);
         }
 
         [HttpPost]
@@ -51,8 +44,7 @@ namespace API.Controllers.Pricing.ShippingCore
         public async Task<IActionResult> CreateCarrier([FromBody] CreateCarrierRequest request)
         {
             var result = await _carrierService.CreateAsync(request, getCurrentUser());
-
-            return CreatedAtAction(nameof(GetCarrierById), new { id = result.Id }, result);
+            return result.ToCreatedResult(this, nameof(GetCarrierById), new { id = result.Value?.Id });
         }
 
         [HttpPut("{id:guid}")]
@@ -60,12 +52,8 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdateCarrier(Guid id, [FromBody] UpdateCarrierRequest request)
         {
-            var updated = await _carrierService.UpdateAsync(id, request, getCurrentUser());
-
-            if (updated == null)
-                return NotFound(new { message = "Carrier not found" });
-
-            return Ok(updated);
+            var result = await _carrierService.UpdateAsync(id, request, getCurrentUser());
+            return result.ToActionResult(this);
         }
 
         [HttpDelete("{id:guid}")]
@@ -73,11 +61,11 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteCarrier(Guid id)
         {
-            await _carrierService.DeleteAsync(id, getCurrentUser());
-
-            return Ok(new { message = "Carrier deleted successfully" });
+            var result = await _carrierService.DeleteAsync(id, getCurrentUser());
+            if (result.IsSuccess) return Ok(new { message = "Carrier deleted successfully" });
+            return result.ToActionResult(this);
         }
 
-        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new Exception("user not found");
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new UnauthorizedAccessException("User not found");
     }
 }

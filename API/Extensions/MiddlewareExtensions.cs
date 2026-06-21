@@ -1,4 +1,7 @@
-﻿namespace API.Extensions
+﻿using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Serilog;
+
+namespace API.Extensions
 {
     public static class MiddlewareExtensions
     {
@@ -26,7 +29,25 @@
 
             app.UseAuthorization();
 
+            //// expose /metrics
+            //app.UseHttpMetrics();
+
+            //app.MapMetrics();
+
+            // 3. Add clean HTTP request logging middleware
+            app.UseSerilogRequestLogging();
+
             app.MapControllers();
+
+            app.MapHealthChecks("/health/live", new HealthCheckOptions
+            {
+                Predicate = _ => false
+            });
+
+            app.MapHealthChecks("/health/ready", new HealthCheckOptions
+            {
+                Predicate = _ => true
+            });
 
             return app;
         }

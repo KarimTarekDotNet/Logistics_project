@@ -1,7 +1,7 @@
-﻿using Application.DTOs.Shipments.Core;
+﻿using API.Extensions;
+using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Services.Shipments.Core;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
@@ -24,63 +24,51 @@ namespace API.Controllers.Shipments
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            (string userId, bool isPrivileged) = GetCurrentUserContext();
-            var shipmentItem = await _shipmentItemService.GetByIdAsync(id, userId, isPrivileged);
-            if (shipmentItem == null)
-                return NotFound();
-
-            return Ok(shipmentItem);
+            var (userId, isPrivileged) = GetCurrentUserContext();
+            var result = await _shipmentItemService.GetByIdAsync(id, userId, isPrivileged);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("shipment/{shipmentId}")]
         public async Task<IActionResult> GetByShipmentId(Guid shipmentId)
         {
-            (string userId, bool isPrivileged) = GetCurrentUserContext();
-            var shipmentItems = await _shipmentItemService.GetByShipmentIdAsync(shipmentId, userId, isPrivileged);
-            if (!shipmentItems.Any())
-                return NotFound();
-
-            return Ok(shipmentItems);
+            var (userId, isPrivileged) = GetCurrentUserContext();
+            var result = await _shipmentItemService.GetByShipmentIdAsync(shipmentId, userId, isPrivileged);
+            return result.ToActionResult(this);
         }
 
         [HttpPost]
         [EnableRateLimiting("HeavyPolicy")]
         public async Task<IActionResult> Create([FromBody] CreateShipmentItemRequest request)
         {
-            (string userId, bool isPrivileged) = GetCurrentUserContext();
-            var createdItem = await _shipmentItemService.CreateAsync(request, userId, isPrivileged);
-            return CreatedAtAction(nameof(GetById), new { id = createdItem.Id }, createdItem);
+            var (userId, isPrivileged) = GetCurrentUserContext();
+            var result = await _shipmentItemService.CreateAsync(request, userId, isPrivileged);
+            return result.ToCreatedResult(this, nameof(GetById), new { id = result.Value?.Id });
         }
 
         [HttpPut("{id}")]
         [EnableRateLimiting("HeavyPolicy")]
         public async Task<IActionResult> Update(Guid id, [FromBody] UpdateShipmentItemRequest request)
         {
-            (string userId, bool isPrivileged) = GetCurrentUserContext();
-            var updatedItem = await _shipmentItemService.UpdateAsync(id, userId, isPrivileged, request);
-            if (updatedItem == null)
-                return NotFound();
-
-            return Ok(updatedItem);
+            var (userId, isPrivileged) = GetCurrentUserContext();
+            var result = await _shipmentItemService.UpdateAsync(id, userId, isPrivileged, request);
+            return result.ToActionResult(this);
         }
 
         [HttpDelete("{id}")]
         [EnableRateLimiting("HeavyPolicy")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            (string userId, bool isPrivileged) = GetCurrentUserContext();
-            var success = await _shipmentItemService.DeleteAsync(id, userId, isPrivileged);
-            if (!success)
-                return NotFound();
-
-            return Ok("Shipment item deleted successfully.");
+            var (userId, isPrivileged) = GetCurrentUserContext();
+            var result = await _shipmentItemService.DeleteAsync(id, userId, isPrivileged);
+            if (result.IsSuccess) return Ok(new { message = "Shipment item deleted successfully." });
+            return result.ToActionResult(this);
         }
 
         private (string userId, bool isPrivileged) GetCurrentUserContext()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
-
             return (userId, isPrivileged);
         }
     }

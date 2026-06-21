@@ -53,6 +53,7 @@ using Infrastructure.Services.System;
 using Infrastructure.Services.User;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using StackExchange.Redis;
 
 namespace API.Extensions
@@ -61,9 +62,10 @@ namespace API.Extensions
     {
         public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
         {
+            var dbconn = configuration.GetConnectionString("DefaultConnection");
             // Database
             services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+                options.UseSqlServer(dbconn));
             services
                 .AddIdentity<ApplicationUser, IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -73,8 +75,11 @@ namespace API.Extensions
             var redisConnectionString =configuration.GetConnectionString("Redis");
 
             services.AddSingleton<IConnectionMultiplexer>(sp =>
-            ConnectionMultiplexer.Connect(redisConnectionString!)
-            ?? throw new InvalidOperationException("Failed to connect to Redis"));
+            ConnectionMultiplexer.Connect(redisConnectionString!));
+
+            services.AddHealthChecks()
+                .AddSqlServer(dbconn!)
+                .AddRedis(redisConnectionString!);
 
 
             // Repositories
@@ -137,6 +142,7 @@ namespace API.Extensions
             services.AddScoped<IPaymobPaymentService, PaymobPaymentService>();
             services.AddScoped<IUserSubscriptionService, UserSubscriptionService>();
             services.AddScoped<ISubscriptionPlanService, SubscriptionPlanService>();
+            services.AddScoped<IIdempotencyService, IdempotencyService>();
             services.AddScoped<IRedisService, RedisService>();
 
             // APIs Integrations

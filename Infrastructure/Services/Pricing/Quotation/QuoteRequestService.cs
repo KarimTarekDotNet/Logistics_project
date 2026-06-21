@@ -1,4 +1,5 @@
-﻿using Application.DTOs.Pricing.Quotation;
+﻿using Application.Common;
+using Application.DTOs.Pricing.Quotation;
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Services.Pricing.Quotation;
 using Application.Models;
@@ -8,10 +9,10 @@ using Domain.Entities.Pricing.Quotation;
 using Domain.Entities.Shipments;
 using Domain.Entities.Users;
 using Domain.Enums;
-using Domain.Exceptions;
 using Infrastructure.Helper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 namespace Infrastructure.Services.Pricing.Quotation
@@ -22,54 +23,47 @@ namespace Infrastructure.Services.Pricing.Quotation
         private readonly Application.Interfaces.Services.Auth.IEmailSender _emailSender;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IMapper _mapper;
+        private readonly ILogger<QuoteRequestService> _logger;
 
         public QuoteRequestService(IUnitOfWork unitOfWork, UserManager<ApplicationUser> userManager, IMapper mapper,
-            Application.Interfaces.Services.Auth.IEmailSender emailSender)
+            Application.Interfaces.Services.Auth.IEmailSender emailSender, ILogger<QuoteRequestService> logger)
         {
             _unitOfWork = unitOfWork;
             _userManager = userManager;
             _mapper = mapper;
             _emailSender = emailSender;
+            _logger = logger;
         }
 
-        public async Task<QuoteRequestResponse> ApproveAsync(Guid requestId, string userId)
+        public async Task<Result<QuoteRequestResponse>> ApproveAsync(Guid requestId, string userId)
         {
+            _logger.LogInformation("Approving quote request {RequestId} by user {UserId}", requestId, userId);
             return await ExecuteInTransactionAsync(async () =>
             {
-                var user = await ValidateReviewerAsync(userId);
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null) return Result<QuoteRequestResponse>.NotFound("User not found.");
+                var isAdminOrStaff = await _userManager.IsInRoleAsync(user, "Admin") || await _userManager.IsInRoleAsync(user, "Staff");
+                if (!isAdminOrStaff) return Result<QuoteRequestResponse>.Forbidden("Only admins or staff members can review quote requests.");
 
                 var request = await _unitOfWork.QuoteRequest.GetById(requestId);
-                if (request == null)
-                    throw new BusinessRuleException("Quote request not found.");
-
+                if (request == null) return Result<QuoteRequestResponse>.NotFound("Quote request not found.");
                 if (request.Status != QuoteRequestStatus.PendingReview)
-                    throw new BusinessRuleException("Only pending quote requests can be approved.");
+                    return Result<QuoteRequestResponse>.Failure("Only pending quote requests can be approved.");
 
-                var ownerQuote = await _userManager.Users.Include(x => x.CustomerProfile)
-                .FirstOrDefaultAsync(x => x.CustomerProfile!.Id == request.CustomerId);
-
-                if (ownerQuote == null)
-                    throw new BusinessRuleException("Owner quote not found");
+                var ownerQuote = await _userManager.Users.Include(x => x.CustomerProfile).FirstOrDefaultAsync(x => x.CustomerProfile!.Id == request.CustomerId);
+                if (ownerQuote == null) return Result<QuoteRequestResponse>.NotFound("Owner quote not found.");
 
                 var oldRequest = request;
 
                 var quote = new Quote
                 {
-                    CustomerId = request.CustomerId,
-                    RateId = request.RateId,
-                    RouteId = request.Rate.RouteId,
-                    CarrierId = request.Rate.CarrierId,
-                    ContainerTypeId = request.Rate.ContainerTypeId,
-                    FinalPrice = request.RequestedRatePrice,
-                    Currency = request.Currency,
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    Status = QuoteStatus.Accepted,
-                    RequestedGrossWeightKg = request.RequestedGrossWeightKg,
-                    RequestedNetWeightKg = request.RequestedNetWeightKg,
-                    RequestedVolumeCbm = request.RequestedVolumeCbm,
-                    RequiredTemperatureCelsius = request.RequiredTemperatureCelsius,
-                    RequestedChargeableWeightKg = ShipmentWeightCalculator
-                    .CalculateItemChargeableWeight(request.RequestedGrossWeightKg, request.RequestedVolumeCbm),
+                    CustomerId = request.CustomerId, RateId = request.RateId,
+                    RouteId = request.Rate.RouteId, CarrierId = request.Rate.CarrierId,
+                    ContainerTypeId = request.Rate.ContainerTypeId, FinalPrice = request.RequestedRatePrice,
+                    Currency = request.Currency, CreatedAt = DateTimeOffset.UtcNow, Status = QuoteStatus.Accepted,
+                    RequestedGrossWeightKg = request.RequestedGrossWeightKg, RequestedNetWeightKg = request.RequestedNetWeightKg,
+                    RequestedVolumeCbm = request.RequestedVolumeCbm, RequiredTemperatureCelsius = request.RequiredTemperatureCelsius,
+                    RequestedChargeableWeightKg = ShipmentWeightCalculator.CalculateItemChargeableWeight(request.RequestedGrossWeightKg, request.RequestedVolumeCbm),
                     IsHazardous = request.IsHazardous,
                 };
 
@@ -77,55 +71,37 @@ namespace Infrastructure.Services.Pricing.Quotation
 
                 var shipment = new Shipment
                 {
-                    QuoteId = quote.Id,
-                    Quote = quote,
-                    CustomerId = quote.CustomerId,
-                    RouteId = quote.RouteId,
-                    ContainerTypeId = quote.ContainerTypeId,
-                    CarrierId = quote.CarrierId,
-                    AgreedPrice = quote.FinalPrice,
-                    Currency = quote.Currency,
-                    Status = ShipmentStatus.Created,
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    AllowedGrossWeightKg = request.RequestedGrossWeightKg,
-                    AllowedNetWeightKg = request.RequestedNetWeightKg,
-                    AllowedVolumeCbm = request.RequestedVolumeCbm,
-                    IsHazardousAllowed = request.IsHazardous,
-                    AllowedChargeableWeightKg = ShipmentWeightCalculator
-                    .CalculateItemChargeableWeight(request.RequestedGrossWeightKg, request.RequestedVolumeCbm),
+                    QuoteId = quote.Id, Quote = quote, CustomerId = quote.CustomerId,
+                    RouteId = quote.RouteId, ContainerTypeId = quote.ContainerTypeId, CarrierId = quote.CarrierId,
+                    AgreedPrice = quote.FinalPrice, Currency = quote.Currency,
+                    Status = ShipmentStatus.Created, CreatedAt = DateTimeOffset.UtcNow,
+                    AllowedGrossWeightKg = request.RequestedGrossWeightKg, AllowedNetWeightKg = request.RequestedNetWeightKg,
+                    AllowedVolumeCbm = request.RequestedVolumeCbm, IsHazardousAllowed = request.IsHazardous,
+                    AllowedChargeableWeightKg = ShipmentWeightCalculator.CalculateItemChargeableWeight(request.RequestedGrossWeightKg, request.RequestedVolumeCbm),
                 };
 
                 await _unitOfWork.Shipments.AddAsync(shipment);
 
                 var invoice = new Invoice
                 {
-                    ShipmentId = shipment.Id,
-                    Shipment = shipment,
+                    ShipmentId = shipment.Id, Shipment = shipment,
                     InvoiceNumber = InvoiceHelper.GenerateInvoiceNumber(shipment.Customer.NationalId!),
                     Currency = InvoiceHelper.NormalizeAndValidateCurrency(shipment.Currency),
-                    NetShipmentPrice = shipment.AgreedPrice,
-                    SubTotal = shipment.AgreedPrice,
+                    NetShipmentPrice = shipment.AgreedPrice, SubTotal = shipment.AgreedPrice,
                     TaxAmount = 0.14m * shipment.AgreedPrice,
                     TotalAmount = shipment.AgreedPrice + (0.14m * shipment.AgreedPrice),
-                    PaymentStatus = PaymentStatus.Pending,
-                    IssuedAt = DateTimeOffset.UtcNow,
-                    DueDate = DateTimeOffset.UtcNow.AddDays(7),
-                    CreatedAt = DateTimeOffset.UtcNow,
+                    PaymentStatus = PaymentStatus.Pending, IssuedAt = DateTimeOffset.UtcNow,
+                    DueDate = DateTimeOffset.UtcNow.AddDays(7), CreatedAt = DateTimeOffset.UtcNow,
                     PayerType = PayerType.Shipper,
                 };
 
                 var charge = new ShipmentCharge
                 {
-                    Shipment = shipment,
-                    InvoiceId = invoice.Id,
-                    Invoice = invoice,
-                    ChargeType = ChargeType.OceanFreight,
-                    PayerType = invoice.PayerType,
+                    Shipment = shipment, InvoiceId = invoice.Id, Invoice = invoice,
+                    ChargeType = ChargeType.OceanFreight, PayerType = invoice.PayerType,
                     Description = "Ocean freight charge based on approved quote request",
-                    Amount = quote.FinalPrice,
-                    TaxAmount = invoice.TaxAmount,
-                    Currency = quote.Currency,
-                    CreatedAt = DateTimeOffset.UtcNow,
+                    Amount = quote.FinalPrice, TaxAmount = invoice.TaxAmount,
+                    Currency = quote.Currency, CreatedAt = DateTimeOffset.UtcNow,
                 };
 
                 invoice.Charges.Add(charge);
@@ -137,80 +113,70 @@ namespace Infrastructure.Services.Pricing.Quotation
 
                 var audit = new AuditLog
                 {
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    EntityId = request.Id,
-                    EntityName = nameof(QuoteRequest).ToUpper(),
-                    Action = nameof(ApproveAsync).ToUpper(),
+                    CreatedAt = DateTimeOffset.UtcNow, EntityId = request.Id,
+                    EntityName = nameof(QuoteRequest).ToUpper(), Action = nameof(ApproveAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldRequest),
-                    NewValues = JsonSerializer.Serialize(request),
-                    UserId = userId
+                    OldValues = JsonSerializer.Serialize(oldRequest), NewValues = JsonSerializer.Serialize(request), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
 
-                return result;
+                _logger.LogInformation("Quote request {RequestId} approved", requestId);
+                return Result<QuoteRequestResponse>.Success(result);
             });
         }
 
-        public async Task<QuoteRequestResponse> CancelByUserAsync(Guid requestId, string userId)
+        public async Task<Result<QuoteRequestResponse>> CancelByUserAsync(Guid requestId, string userId)
         {
+            _logger.LogInformation("User {UserId} cancelling quote request {RequestId}", userId, requestId);
             return await ExecuteInTransactionAsync(async () =>
             {
-                var user = await _userManager.Users
-                    .Include(x => x.CustomerProfile)
-                    .FirstOrDefaultAsync(x => x.Id == userId);
-
+                var user = await _userManager.Users.Include(x => x.CustomerProfile).FirstOrDefaultAsync(x => x.Id == userId);
                 if (user == null || user.CustomerProfile == null)
-                    throw new BusinessRuleException("User not found.");
+                    return Result<QuoteRequestResponse>.NotFound("User not found.");
 
                 var request = await _unitOfWork.QuoteRequest.GetMyRequestById(user.CustomerProfile.Id, requestId);
-
                 if (request == null)
-                    throw new BusinessRuleException("Quote request not found.");
+                    return Result<QuoteRequestResponse>.NotFound("Quote request not found.");
 
                 var oldRequest = request;
                 var result = await UpdateRequestStatusAsync(request, user, QuoteRequestStatus.Cancelled);
 
                 var audit = new AuditLog
                 {
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    EntityId = request.Id,
-                    EntityName = nameof(QuoteRequest).ToUpper(),
-                    Action = nameof(CancelByUserAsync).ToUpper(),
+                    CreatedAt = DateTimeOffset.UtcNow, EntityId = request.Id,
+                    EntityName = nameof(QuoteRequest).ToUpper(), Action = nameof(CancelByUserAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldRequest),
-                    NewValues = JsonSerializer.Serialize(request),
-                    UserId = userId
+                    OldValues = JsonSerializer.Serialize(oldRequest), NewValues = JsonSerializer.Serialize(request), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
 
-                return result;
+                _logger.LogInformation("Quote request {RequestId} cancelled by user {UserId}", requestId, userId);
+                return Result<QuoteRequestResponse>.Success(result);
             });
         }
 
-        public async Task<QuoteRequestResponse> RejectAsync(Guid requestId, string userId, string reason)
+        public async Task<Result<QuoteRequestResponse>> RejectAsync(Guid requestId, string userId, string reason)
         {
+            _logger.LogInformation("Rejecting quote request {RequestId} by user {UserId}", requestId, userId);
             return await ExecuteInTransactionAsync(async () =>
             {
                 if (string.IsNullOrWhiteSpace(reason))
-                    throw new BusinessRuleException("Rejection reason is required.");
+                    return Result<QuoteRequestResponse>.Failure("Rejection reason is required.");
 
-                var user = await ValidateReviewerAsync(userId);
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null) return Result<QuoteRequestResponse>.NotFound("User not found.");
+                var isAdminOrStaff = await _userManager.IsInRoleAsync(user, "Admin") || await _userManager.IsInRoleAsync(user, "Staff");
+                if (!isAdminOrStaff) return Result<QuoteRequestResponse>.Forbidden("Only admins or staff members can review quote requests.");
 
                 var request = await _unitOfWork.QuoteRequest.GetById(requestId);
+                if (request == null) return Result<QuoteRequestResponse>.NotFound("Quote request not found.");
 
-                if (request == null)
-                    throw new BusinessRuleException("Quote request not found.");
-
-                var ownerQuote = await _userManager.Users.Include(x => x.CustomerProfile)
-                    .FirstOrDefaultAsync(x => x.CustomerProfile!.Id == request.CustomerId);
-
-                if (ownerQuote == null)
-                    throw new BusinessRuleException("Owner quote not found");
+                var ownerQuote = await _userManager.Users.Include(x => x.CustomerProfile).FirstOrDefaultAsync(x => x.CustomerProfile!.Id == request.CustomerId);
+                if (ownerQuote == null) return Result<QuoteRequestResponse>.NotFound("Owner quote not found.");
 
                 await SendRejectionEmailAsync(ownerQuote, request);
 
@@ -219,71 +185,52 @@ namespace Infrastructure.Services.Pricing.Quotation
 
                 var audit = new AuditLog
                 {
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    EntityId = request.Id,
-                    EntityName = nameof(QuoteRequest).ToUpper(),
-                    Action = nameof(RejectAsync).ToUpper(),
+                    CreatedAt = DateTimeOffset.UtcNow, EntityId = request.Id,
+                    EntityName = nameof(QuoteRequest).ToUpper(), Action = nameof(RejectAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldRequest),
-                    NewValues = JsonSerializer.Serialize(request),
-                    UserId = userId
+                    OldValues = JsonSerializer.Serialize(oldRequest), NewValues = JsonSerializer.Serialize(request), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
 
-                return result;
+                _logger.LogInformation("Quote request {RequestId} rejected", requestId);
+                return Result<QuoteRequestResponse>.Success(result);
             });
         }
 
-        public async Task<QuoteRequestResponse> CreateFromRateAsync(CreateQuoteRequestFromRate request, string userId)
+        public async Task<Result<QuoteRequestResponse>> CreateFromRateAsync(CreateQuoteRequestFromRate request, string userId)
         {
+            _logger.LogInformation("Creating quote request for rate {RateId} by user {UserId}", request.RateId, userId);
             return await ExecuteInTransactionAsync(async () =>
             {
-                var user = await _userManager.Users
-                    .Include(x => x.CustomerProfile)
-                    .FirstOrDefaultAsync(x => x.Id == userId);
-
+                var user = await _userManager.Users.Include(x => x.CustomerProfile).FirstOrDefaultAsync(x => x.Id == userId);
                 if (user == null || user.CustomerProfile == null)
-                    throw new BusinessRuleException("User not found.");
+                    return Result<QuoteRequestResponse>.NotFound("User not found.");
 
                 var rate = await _unitOfWork.Rates.GetByIdWithDetailsAsync(request.RateId);
-
                 if (rate == null || rate.IsDeleted)
-                    throw new BusinessRuleException("Rate not found.");
+                    return Result<QuoteRequestResponse>.NotFound("Rate not found.");
 
                 var requestExists = await _unitOfWork.QuoteRequest.HasPendingRequestForRateAsync(user.CustomerProfile.Id, rate.Id);
                 if (requestExists)
-                    throw new BusinessRuleException("You already have a pending quote request for this rate.");
+                    return Result<QuoteRequestResponse>.Failure("You already have a pending quote request for this rate.");
 
                 var now = DateTimeOffset.UtcNow;
+                if (!rate.IsActive) return Result<QuoteRequestResponse>.Failure("This rate is no longer active.");
+                if (rate.ValidFrom > now || rate.ValidTo < now) return Result<QuoteRequestResponse>.Failure("This rate is not valid at the current time.");
 
-                if (!rate.IsActive)
-                    throw new BusinessRuleException("This rate is no longer active.");
-
-                if (rate.ValidFrom > now || rate.ValidTo < now)
-                    throw new BusinessRuleException("This rate is not valid at the current time.");
-
-                if (request.RequiredTemperatureCelsius.HasValue && !rate.ContainerType.Name
-                .Contains("Reefer", StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new BusinessRuleException("Temperature-controlled cargo requires a reefer container.");
-                }
+                if (request.RequiredTemperatureCelsius.HasValue && !rate.ContainerType.Name.Contains("Reefer", StringComparison.OrdinalIgnoreCase))
+                    return Result<QuoteRequestResponse>.Failure("Temperature-controlled cargo requires a reefer container.");
 
                 if (request.RequestedGrossWeightKg > rate.MaxGrossWeightKg)
-                    throw new BusinessRuleException(
-                        "Requested gross weight exceeds the maximum allowed gross weight for this rate.");
-
+                    return Result<QuoteRequestResponse>.Failure("Requested gross weight exceeds the maximum allowed gross weight for this rate.");
                 if (request.RequestedNetWeightKg > rate.MaxNetWeightKg)
-                    throw new BusinessRuleException(
-                        "Requested net weight exceeds the maximum allowed net weight for this rate.");
-
+                    return Result<QuoteRequestResponse>.Failure("Requested net weight exceeds the maximum allowed net weight for this rate.");
                 if (request.RequestedVolumeCbm > rate.MaxVolumeCbm)
-                    throw new BusinessRuleException(
-                        "Requested volume exceeds the maximum allowed volume for this rate.");
+                    return Result<QuoteRequestResponse>.Failure("Requested volume exceeds the maximum allowed volume for this rate.");
 
                 var quoteRequest = _mapper.Map<QuoteRequest>(request);
-
                 quoteRequest.RequiredTemperatureCelsius = rate.MaxTemperatureCelsius;
                 quoteRequest.CustomerId = user.CustomerProfile.Id;
                 quoteRequest.RateId = rate.Id;
@@ -294,191 +241,102 @@ namespace Infrastructure.Services.Pricing.Quotation
 
                 var audit = new AuditLog
                 {
-                    CreatedAt = quoteRequest.CreatedAt,
-                    EntityId = quoteRequest.Id,
-                    EntityName = nameof(QuoteRequest).ToUpper(),
-                    Action = nameof(CreateFromRateAsync).ToUpper(),
+                    CreatedAt = quoteRequest.CreatedAt, EntityId = quoteRequest.Id,
+                    EntityName = nameof(QuoteRequest).ToUpper(), Action = nameof(CreateFromRateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = null,
-                    NewValues = JsonSerializer.Serialize(quoteRequest),
-                    UserId = userId
+                    OldValues = null, NewValues = JsonSerializer.Serialize(quoteRequest), UserId = userId
                 };
 
                 await _unitOfWork.QuoteRequest.AddAsync(quoteRequest);
                 await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
 
-                return _mapper.Map<QuoteRequestResponse>(quoteRequest);
+                _logger.LogInformation("Quote request {Id} created for rate {RateId}", quoteRequest.Id, request.RateId);
+                return Result<QuoteRequestResponse>.Success(_mapper.Map<QuoteRequestResponse>(quoteRequest), 201);
             });
         }
 
-        public async Task<IEnumerable<QuoteRequestResponse>> GetAllAsync(string userId, QueryParameters query)
+        public async Task<Result<IEnumerable<QuoteRequestResponse>>> GetAllAsync(string userId, QueryParameters query)
         {
-            var user = await ValidateReviewerAsync(userId);
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return Result<IEnumerable<QuoteRequestResponse>>.NotFound("User not found.");
+            var isAdminOrStaff = await _userManager.IsInRoleAsync(user, "Admin") || await _userManager.IsInRoleAsync(user, "Staff");
+            if (!isAdminOrStaff) return Result<IEnumerable<QuoteRequestResponse>>.Forbidden("Only admins or staff members can view all quote requests.");
 
             var quotes = await _unitOfWork.QuoteRequest.GetAllAsync(query);
-            if (!quotes.Any())
-                return new List<QuoteRequestResponse>();
-
-            return _mapper.Map<IEnumerable<QuoteRequestResponse>>(quotes);
+            return Result<IEnumerable<QuoteRequestResponse>>.Success(_mapper.Map<IEnumerable<QuoteRequestResponse>>(quotes));
         }
 
-        public async Task<QuoteRequestResponse> GetByIdAsync(Guid id)
+        public async Task<Result<QuoteRequestResponse>> GetByIdAsync(Guid id)
         {
             var request = await _unitOfWork.QuoteRequest.GetById(id);
-
-            if (request == null)
-                throw new BusinessRuleException("Quote request not found.");
-
-            return _mapper.Map<QuoteRequestResponse>(request);
+            if (request == null) return Result<QuoteRequestResponse>.NotFound("Quote request not found.");
+            return Result<QuoteRequestResponse>.Success(_mapper.Map<QuoteRequestResponse>(request));
         }
 
-        public async Task<IEnumerable<QuoteRequestResponse>> GetMyRequestsAsync(string userId, QueryParameters query)
+        public async Task<Result<IEnumerable<QuoteRequestResponse>>> GetMyRequestsAsync(string userId, QueryParameters query)
         {
-            var user = await _userManager.Users
-               .Include(x => x.CustomerProfile)
-               .FirstOrDefaultAsync(x => x.Id == userId);
-
+            var user = await _userManager.Users.Include(x => x.CustomerProfile).FirstOrDefaultAsync(x => x.Id == userId);
             if (user == null || user.CustomerProfile == null)
-                throw new BusinessRuleException("User not found.");
+                return Result<IEnumerable<QuoteRequestResponse>>.NotFound("User not found.");
 
             var quotes = await _unitOfWork.QuoteRequest.GetMyRequests(user.CustomerProfile.Id, query);
-            if (!quotes.Any())
-                return new List<QuoteRequestResponse>();
-
-            return _mapper.Map<IEnumerable<QuoteRequestResponse>>(quotes);
+            return Result<IEnumerable<QuoteRequestResponse>>.Success(_mapper.Map<IEnumerable<QuoteRequestResponse>>(quotes));
         }
 
         private async Task SendRejectionEmailAsync(ApplicationUser user, QuoteRequest request)
         {
             var subject = "Quote Request Update";
-
             var body = $@"
             <div style='font-family:Arial,sans-serif;font-size:14px;line-height:1.6'>
                 <h2 style='color:#dc2626'>Quote Request Not Approved</h2>
-
                 <p>Hi {user.FirstName},</p>
-
-                <p>
-                    Thank you for your interest in our logistics services.
-                </p>
-
-                <p>
-                    After reviewing your request for the route
-                    <strong>{request.Rate.Route.FromPort.Name}</strong>
-                    →
-                    <strong>{request.Rate.Route.ToPort.Name}</strong>,
-                    we're unable to approve it at this time.
-                </p>
-
-                <p>
-                    <strong>Reason:</strong><br/>
-                    {request.RejectionReason}
-                </p>
-
-                <p>
-                    You're welcome to submit a new request or contact our team if you'd like assistance finding an alternative shipping option.
-                </p>
-
-                <hr />
-
-                <p>
-                    Thanks,<br/>
-                    <strong>The Logistics Team</strong>
-                </p>
+                <p>Thank you for your interest in our logistics services.</p>
+                <p>After reviewing your request for the route <strong>{request.Rate.Route.FromPort.Name}</strong> → <strong>{request.Rate.Route.ToPort.Name}</strong>, we're unable to approve it at this time.</p>
+                <p><strong>Reason:</strong><br/>{request.RejectionReason}</p>
+                <p>You're welcome to submit a new request or contact our team if you'd like assistance finding an alternative shipping option.</p>
+                <hr /><p>Thanks,<br/><strong>The Logistics Team</strong></p>
             </div>";
-
             await _emailSender.SendEmailAsync(user.Email!, subject, body);
         }
 
         private async Task SendApprovalEmailAsync(ApplicationUser user, QuoteRequest request)
         {
             var subject = "Quote Request Approved";
-
             var body = $@"
             <div style='font-family:Arial,sans-serif;font-size:14px;line-height:1.6'>
                 <h2 style='color:#16a34a'>Your Quote Request Has Been Approved</h2>
-
                 <p>Hi {user.FirstName},</p>
-
-                <p>
-                    Good news — your quote request for the route
-                    <strong>{request.Rate.Route.FromPort.Name}</strong>
-                    →
-                    <strong>{request.Rate.Route.ToPort.Name}</strong>
-                    has been approved.
-                </p>
-
-                <p>
-                    You can now review the quotation details and proceed with the next steps from your dashboard.
-                </p>
-
-                <p>
-                    If you need any assistance, simply reply to this email or contact our support team.
-                </p>
-
-                <hr />
-
-                <p>
-                    Thanks,<br/>
-                    <strong>The Logistics Team</strong>
-                </p>
+                <p>Good news — your quote request for the route <strong>{request.Rate.Route.FromPort.Name}</strong> → <strong>{request.Rate.Route.ToPort.Name}</strong> has been approved.</p>
+                <p>You can now review the quotation details and proceed with the next steps from your dashboard.</p>
+                <p>If you need any assistance, simply reply to this email or contact our support team.</p>
+                <hr /><p>Thanks,<br/><strong>The Logistics Team</strong></p>
             </div>";
-
             await _emailSender.SendEmailAsync(user.Email!, subject, body);
         }
 
-        private async Task<QuoteRequestResponse> UpdateRequestStatusAsync(QuoteRequest request, ApplicationUser reviewer,
-        QuoteRequestStatus newStatus, string? rejectionReason = null)
+        private async Task<QuoteRequestResponse> UpdateRequestStatusAsync(QuoteRequest request, ApplicationUser reviewer, QuoteRequestStatus newStatus, string? rejectionReason = null)
         {
             switch (request.Status)
             {
-                case QuoteRequestStatus.Approved:
-                    throw new BusinessRuleException("This quote request has already been approved.");
-
-                case QuoteRequestStatus.Rejected:
-                    throw new BusinessRuleException("This quote request has already been rejected.");
-
-                case QuoteRequestStatus.Cancelled:
-                    throw new BusinessRuleException("This quote request has been cancelled.");
+                case QuoteRequestStatus.Approved: throw new InvalidOperationException("This quote request has already been approved.");
+                case QuoteRequestStatus.Rejected: throw new InvalidOperationException("This quote request has already been rejected.");
+                case QuoteRequestStatus.Cancelled: throw new InvalidOperationException("This quote request has been cancelled.");
             }
 
             request.Status = newStatus;
             request.ReviewedAt = DateTimeOffset.UtcNow;
             request.ReviewedByUserId = reviewer.Id;
-
-            if (newStatus == QuoteRequestStatus.Rejected)
-            {
-                request.RejectionReason = rejectionReason?.Trim();
-            }
+            if (newStatus == QuoteRequestStatus.Rejected) request.RejectionReason = rejectionReason?.Trim();
 
             await _unitOfWork.SaveChangesAsync();
 
             var dto = _mapper.Map<QuoteRequestResponse>(request);
-
             dto.ReviewedByUserName = $"{reviewer.FirstName} {reviewer.LastName}";
-
             return dto;
         }
 
-        private async Task<ApplicationUser> ValidateReviewerAsync(string userId)
-        {
-            var user = await _userManager.FindByIdAsync(userId);
-
-            if (user == null)
-                throw new BusinessRuleException("User not found.");
-
-            var isAdminOrStaff =
-                await _userManager.IsInRoleAsync(user, "Admin") ||
-                await _userManager.IsInRoleAsync(user, "Staff");
-
-            if (!isAdminOrStaff)
-                throw new BusinessRuleException("Only admins or staff members can review quote requests.");
-
-            return user;
-        }
-
-        private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action)
+        private async Task<Result<T>> ExecuteInTransactionAsync<T>(Func<Task<Result<T>>> action)
         {
             await _unitOfWork.BeginTransactionAsync();
             try
@@ -488,9 +346,10 @@ namespace Infrastructure.Services.Pricing.Quotation
                 await _unitOfWork.CommitTransactionAsync();
                 return result;
             }
-            catch
+            catch (Exception ex)
             {
                 await _unitOfWork.RollbackTransactionAsync();
+                _logger.LogError(ex, "Transaction failed in {Service}", nameof(QuoteRequestService));
                 throw;
             }
         }

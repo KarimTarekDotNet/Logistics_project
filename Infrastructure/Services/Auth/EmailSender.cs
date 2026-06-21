@@ -1,7 +1,6 @@
 ﻿using Application.Interfaces.Services.Auth;
 using Domain.Exceptions;
 using Microsoft.Extensions.Configuration;
-using Resend;
 using System.Net;
 using System.Net.Mail;
 

@@ -1,4 +1,5 @@
-﻿using Application.DTOs.Pricing.Quotation;
+﻿using API.Extensions;
+using Application.DTOs.Pricing.Quotation;
 using Application.Interfaces.Services.Pricing.Quotation;
 using Application.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -25,60 +26,39 @@ namespace API.Controllers.Pricing.Quotation
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetAllQuotes([FromQuery] QueryParameters query)
         {
-            var quotes = await _quoteService.GetAllAsync(query);
-
-            if (quotes == null || !quotes.Any())
-                return NotFound(new { message = "No quotes found" });
-
-            return Ok(quotes);
+            var result = await _quoteService.GetAllAsync(query);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("my")]
         public async Task<IActionResult> GetMyQuotes([FromQuery] QueryParameters query)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var quotes = await _quoteService.GetMyQuotesAsync(userId, query);
-
-            if (quotes == null || !quotes.Any())
-                return NotFound(new { message = "No quotes found" });
-
-            return Ok(quotes);
+            var result = await _quoteService.GetMyQuotesAsync(getCurrentUser(), query);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetQuoteById(Guid id)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var isAdminOrStaff = User.IsInRole("Admin") || User.IsInRole("Staff");
-
-            var quote = await _quoteService.GetByIdAsync(id, userId, isAdminOrStaff);
-
-            if (quote == null)
-                return NotFound(new { message = "Quote not found" });
-
-            return Ok(quote);
+            var result = await _quoteService.GetByIdAsync(id, getCurrentUser(), isAdminOrStaff);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("customer/{customerName}")]
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetQuotesByCustomerName(string customerName, [FromQuery] QueryParameters query)
         {
-            var quotes = await _quoteService.GetByCustomerNameAsync(customerName, query);
-
-            if (quotes == null || !quotes.Any())
-                return NotFound(new { message = $"No quotes found for customer '{customerName}'" });
-
-            return Ok(quotes);
+            var result = await _quoteService.GetByCustomerNameAsync(customerName, query);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("route/{routeId:guid}")]
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetQuotesByRouteId(Guid routeId, [FromQuery] QueryParameters query)
         {
-            var quotes = await _quoteService.GetByRouteIdAsync(routeId, query);
-            if (quotes == null || !quotes.Any())
-                return NotFound(new { message = $"No quotes found for route ID '{routeId}'" });
-            return Ok(quotes);
+            var result = await _quoteService.GetByRouteIdAsync(routeId, query);
+            return result.ToActionResult(this);
         }
 
         [HttpPost]
@@ -86,10 +66,8 @@ namespace API.Controllers.Pricing.Quotation
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreateQuote([FromBody] CreateQuoteRequest request)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var result = await _quoteService.CreateAsync(request, userId);
-
-            return CreatedAtAction(nameof(GetQuoteById), new { id = result.Id }, result);
+            var result = await _quoteService.CreateAsync(request, getCurrentUser());
+            return result.ToCreatedResult(this, nameof(GetQuoteById), new { id = result.Value?.Id });
         }
 
         [HttpPatch("{id}/accept-from-user")]
@@ -97,11 +75,8 @@ namespace API.Controllers.Pricing.Quotation
         [Authorize(Roles = "User")]
         public async Task<IActionResult> AcceptFromUser(Guid id)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-            var result = await _quoteService.AcceptFromUserAsync(id, userId);
-
-            return Ok(result);
+            var result = await _quoteService.AcceptFromUserAsync(id, getCurrentUser());
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id}/rejected-from-user")]
@@ -109,11 +84,8 @@ namespace API.Controllers.Pricing.Quotation
         [Authorize(Roles = "User")]
         public async Task<IActionResult> RejectedFromUser(Guid id, string reason)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-            var result = await _quoteService.RejectFromUserAsync(id, userId, reason);
-
-            return Ok(result);
+            var result = await _quoteService.RejectFromUserAsync(id, getCurrentUser(), reason);
+            return result.ToActionResult(this);
         }
 
         [HttpDelete("{id:guid}")]
@@ -121,12 +93,12 @@ namespace API.Controllers.Pricing.Quotation
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteQuote(Guid id)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var isAdmin = User.IsInRole("Admin");
-
-            await _quoteService.DeleteAsync(id, isAdmin, userId);
-
-            return Ok(new { message = "Quote deleted successfully" });
+            var result = await _quoteService.DeleteAsync(id, isAdmin, getCurrentUser());
+            if (result.IsSuccess) return Ok(new { message = "Quote deleted successfully" });
+            return result.ToActionResult(this);
         }
+
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new UnauthorizedAccessException("User not found");
     }
 }

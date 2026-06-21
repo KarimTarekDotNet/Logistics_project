@@ -1,4 +1,5 @@
-﻿using Application.DTOs.Shipments.User;
+﻿using API.Extensions;
+using Application.DTOs.Shipments.User;
 using Application.Interfaces.Services.Shipments.User;
 using Application.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -22,44 +23,30 @@ namespace API.Controllers.Shipments
         [HttpPost]
         public async Task<IActionResult> AddCustomer([FromBody] CreateCustomerRequest request)
         {
-            var userId = GetUserId();
-
-            var result = await _customerService.AddCustomerAsync(userId, request);
-
-            return CreatedAtAction(nameof(GetMyCustomerProfile), new { }, result);
+            var result = await _customerService.AddCustomerAsync(getCurrentUser(), request);
+            return result.ToCreatedResult(this, nameof(GetMyCustomerProfile), new { });
         }
 
         [HttpGet("me")]
         public async Task<IActionResult> GetMyCustomerProfile()
         {
-            var userId = GetUserId();
-
-            var result = await _customerService.GetByApplicationUserIdAsync(userId);
-
-            if (result == null)
-                return NotFound("Customer profile not found.");
-
-            return Ok(result);
+            var result = await _customerService.GetByApplicationUserIdAsync(getCurrentUser());
+            return result.ToActionResult(this);
         }
 
         [HttpPut]
         public async Task<IActionResult> UpdateCustomer([FromBody] UpdateCustomerRequest request)
         {
-            var userId = GetUserId();
-
-            var result = await _customerService.UpdateCustomerAsync(userId, request);
-
-            return Ok(result);
+            var result = await _customerService.UpdateCustomerAsync(getCurrentUser(), request);
+            return result.ToActionResult(this);
         }
 
         [HttpDelete]
         public async Task<IActionResult> DeleteCustomer()
         {
-            var userId = GetUserId();
-
-            await _customerService.DeleteCustomerAsync(userId);
-
-            return Ok("Customer deleted successfully.");
+            var result = await _customerService.DeleteCustomerAsync(getCurrentUser());
+            if (result.IsSuccess) return Ok(new { message = "Customer deleted successfully." });
+            return result.ToActionResult(this);
         }
 
         [HttpGet]
@@ -67,18 +54,9 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> GetAll([FromQuery] CustomerParameters parameters)
         {
             var result = await _customerService.GetAllAsync(parameters);
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
-        private string GetUserId()
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-            if (string.IsNullOrWhiteSpace(userId))
-                throw new UnauthorizedAccessException("User id was not found in token.");
-
-            return userId;
-        }
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new UnauthorizedAccessException("User not found in token.");
     }
 }

@@ -1,8 +1,8 @@
-﻿using Application.DTOs.Shipments.Core;
+﻿using API.Extensions;
+using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Services.Shipments.Core;
 using Application.Models;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
@@ -23,10 +23,14 @@ namespace API.Controllers.Shipments
         private readonly IShipmentTrackingService _shipmentTrackingService;
         private readonly IShipmentTimelineService _shipmentTimelineService;
 
-        public ShipmentController(IShipmentQueryService shipmentQueryService,
-        IShipmentCommandService shipmentCommandService, IShipmentLifecycleService shipmentLifecycleService,
-        IShipmentHoldService shipmentHoldService, IShipmentCancellationService shipmentCancellationService,
-        IShipmentTrackingService shipmentTrackingService, IShipmentTimelineService shipmentTimelineService)
+        public ShipmentController(
+            IShipmentQueryService shipmentQueryService,
+            IShipmentCommandService shipmentCommandService,
+            IShipmentLifecycleService shipmentLifecycleService,
+            IShipmentHoldService shipmentHoldService,
+            IShipmentCancellationService shipmentCancellationService,
+            IShipmentTrackingService shipmentTrackingService,
+            IShipmentTimelineService shipmentTimelineService)
         {
             _shipmentQueryService = shipmentQueryService;
             _shipmentCommandService = shipmentCommandService;
@@ -55,8 +59,7 @@ namespace API.Controllers.Shipments
         [HttpGet("my")]
         public async Task<IActionResult> GetAllForCurrentUser([FromQuery] ShipmentParameters parameters)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var shipments = await _shipmentQueryService.GetAllForUserAsync(userId, parameters);
+            var shipments = await _shipmentQueryService.GetAllForUserAsync(getCurrentUser(), parameters);
             return Ok(shipments);
         }
 
@@ -65,9 +68,7 @@ namespace API.Controllers.Shipments
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
             var shipment = await _shipmentQueryService.GetByIdAsync(id, userId, isPrivileged);
-            if (shipment == null)
-                return NotFound();
-
+            if (shipment == null) return NotFound();
             return Ok(shipment);
         }
 
@@ -75,10 +76,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> GetShipmentTimeline(Guid id, [FromQuery] QueryParameters query)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-            var result = await _shipmentTimelineService
-            .GetShipmentTimelineAsync(id, query, userId, isPrivileged);
-            if (!result.Any())
-                return NotFound();
+            var result = await _shipmentTimelineService.GetShipmentTimelineAsync(id, query, userId, isPrivileged);
+            if (!result.Any()) return NotFound();
             return Ok(result);
         }
 
@@ -87,9 +86,8 @@ namespace API.Controllers.Shipments
         [Authorize(Roles = "User")]
         public async Task<IActionResult> Create([FromBody] CreateShipmentRequest request)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var createdShipment = await _shipmentCommandService.CreateAsync(userId, request);
-            return CreatedAtAction(nameof(GetById), new { id = createdShipment.Id }, createdShipment);
+            var result = await _shipmentCommandService.CreateAsync(getCurrentUser(), request);
+            return result.ToCreatedResult(this, nameof(GetById), new { id = result.Value?.Id });
         }
 
         [HttpPut("{id}")]
@@ -97,12 +95,8 @@ namespace API.Controllers.Shipments
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Update(Guid id, [FromBody] UpdateShipmentRequest request)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var updatedShipment = await _shipmentCommandService.UpdateAsync(id, request, userId);
-            if (updatedShipment == null)
-                return NotFound();
-
-            return Ok(updatedShipment);
+            var result = await _shipmentCommandService.UpdateAsync(id, request, getCurrentUser());
+            return result.ToActionResult(this);
         }
 
         [HttpDelete("{id}")]
@@ -110,12 +104,9 @@ namespace API.Controllers.Shipments
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var deleted = await _shipmentCommandService.DeleteAsync(id, userId);
-            if (!deleted)
-                return NotFound();
-
-            return Ok("shipment deleted successfully");
+            var result = await _shipmentCommandService.DeleteAsync(id, getCurrentUser());
+            if (result.IsSuccess) return Ok(new { message = "Shipment deleted successfully" });
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/confirm-client")]
@@ -124,10 +115,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> ConfirmClient(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentLifecycleService.ConfirmClientAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/request-booking")]
@@ -136,10 +125,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> RequestBooking(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentLifecycleService.RequestBookingAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/confirm-booking")]
@@ -148,10 +135,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> ConfirmBooking(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentLifecycleService.ConfirmBookingAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/submit-shipping-instructions")]
@@ -160,10 +145,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> SubmitShippingInstructions(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentLifecycleService.SubmitShippingInstructionsAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/receive-draft-bl")]
@@ -172,10 +155,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> ReceiveDraftBl(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentLifecycleService.ReceiveDraftBlAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/approve-draft-bl")]
@@ -184,10 +165,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> ApproveDraftBl(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentLifecycleService.ApproveDraftBlAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/mark-payment-pending")]
@@ -196,10 +175,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> MarkPaymentPending(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentLifecycleService.MarkPaymentPendingAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/confirm-payment")]
@@ -208,10 +185,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> ConfirmPayment(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentLifecycleService.ConfirmPaymentAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/release-telex")]
@@ -220,10 +195,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> ReleaseTelex(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentLifecycleService.ReleaseTelexAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/complete-delivery")]
@@ -232,10 +205,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> CompleteDelivery(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentLifecycleService.CompleteDeliveryAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/close")]
@@ -244,10 +215,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> Close(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentLifecycleService.CloseAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/put-on-hold")]
@@ -256,10 +225,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> PutOnHold(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentHoldService.PutOnHoldAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/resume-from-hold")]
@@ -268,10 +235,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> ResumeFromHold(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentHoldService.ResumeFromHoldAsync(id, userId, isPrivileged, request);
-
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/cancellation")]
@@ -280,9 +245,8 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> Cancellation(Guid id, [FromBody] ChangeShipmentStatusRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentCancellationService.CancelAsync(id, userId, isPrivileged, request);
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPut("{id:guid}/tracking")]
@@ -291,15 +255,16 @@ namespace API.Controllers.Shipments
         public async Task<IActionResult> UpdateTracking(Guid id, UpdateShipmentTrackingRequest request)
         {
             var (userId, isPrivileged) = GetCurrentUserContext();
-
             var result = await _shipmentTrackingService.UpdateTrackingAsync(id, userId, isPrivileged, request);
-            return result == null ? NotFound() : Ok(result);
+            return result.ToActionResult(this);
         }
+
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new UnauthorizedAccessException("User not found");
+
         private (string userId, bool isPrivileged) GetCurrentUserContext()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
-
             return (userId, isPrivileged);
         }
     }

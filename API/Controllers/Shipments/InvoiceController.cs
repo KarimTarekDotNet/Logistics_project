@@ -1,4 +1,5 @@
-﻿using Application.DTOs.Shipments.Core;
+﻿using API.Extensions;
+using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Services.Shipments.Core;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,26 +14,21 @@ namespace API.Controllers.Shipments
     [EnableRateLimiting("ReadPolicy")]
     public class InvoiceController : ControllerBase
     {
-        private readonly IInvoiceService invoiceService;
-        public readonly IInvoicePaymentService invoicePaymentService;
+        private readonly IInvoiceService _invoiceService;
+        private readonly IInvoicePaymentService _invoicePaymentService;
 
         public InvoiceController(IInvoiceService invoiceService, IInvoicePaymentService invoicePaymentService)
         {
-            this.invoiceService = invoiceService;
-            this.invoicePaymentService = invoicePaymentService;
+            _invoiceService = invoiceService;
+            _invoicePaymentService = invoicePaymentService;
         }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
-
-            var invoice = await invoiceService.GetByIdAsync(id, userId, isPrivileged);
-            if (invoice == null)
-                return NotFound();
-
-            return Ok(invoice);
+            var (userId, isPrivileged) = GetCurrentUserContext();
+            var result = await _invoiceService.GetByIdAsync(id, userId, isPrivileged);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("payments/{invoiceId}")]
@@ -40,65 +36,42 @@ namespace API.Controllers.Shipments
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
-
-            var payments = await invoicePaymentService.GetPaymentsByInvoiceIdAsync(invoiceId, userId, isPrivileged);
-            if (!payments.Any())
-                return NotFound();
-
+            var payments = await _invoicePaymentService.GetPaymentsByInvoiceIdAsync(invoiceId, userId, isPrivileged);
+            if (!payments.Any()) return NotFound();
             return Ok(payments);
         }
 
         [HttpGet("shipment/{shipmentId}")]
         public async Task<IActionResult> GetByShipmentId(Guid shipmentId)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
-
-            var invoices = await invoiceService.GetByShipmentIdAsync(shipmentId, userId, isPrivileged);
-            if (!invoices.Any())
-                return NotFound();
-
-            return Ok(invoices);
+            var (userId, isPrivileged) = GetCurrentUserContext();
+            var result = await _invoiceService.GetByShipmentIdAsync(shipmentId, userId, isPrivileged);
+            return result.ToActionResult(this);
         }
 
-        [HttpPost("{ShipmentId}")]
+        [HttpPost("{shipmentId}")]
         [EnableRateLimiting("HeavyPolicy")]
-        public async Task<IActionResult> Create(Guid ShipmentId)
+        public async Task<IActionResult> Create(Guid shipmentId)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-            var createdInvoice = await invoiceService.CreateOrUpdateDraftInvoiceAsync(ShipmentId, userId);
-
-            return CreatedAtAction(nameof(GetById), new { id = createdInvoice.Id }, createdInvoice);
+            var result = await _invoiceService.CreateOrUpdateDraftInvoiceAsync(shipmentId, getCurrentUser());
+            return result.ToCreatedResult(this, nameof(GetById), new { id = result.Value?.Id });
         }
-
-
 
         [HttpPatch("{id}/cancel")]
         [EnableRateLimiting("HeavyPolicy")]
         public async Task<IActionResult> Cancel(Guid id, CancelInvoiceRequest request)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
-
-            var cancelledInvoice = await invoiceService.CancelAsync(id, userId, isPrivileged, request.Reason);
-            if (cancelledInvoice == null)
-                return NotFound();
-
-            return Ok(cancelledInvoice);
+            var (userId, isPrivileged) = GetCurrentUserContext();
+            var result = await _invoiceService.CancelAsync(id, userId, isPrivileged, request.Reason);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id}/confirm")]
         [EnableRateLimiting("HeavyPolicy")]
-        public async Task<IActionResult> Confirm(Guid id, CancelInvoiceRequest request)
+        public async Task<IActionResult> Confirm(Guid id)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-            var cancelledInvoice = await invoiceService.ConfirmAsync(id, userId);
-            if (cancelledInvoice == null)
-                return NotFound();
-
-            return Ok(cancelledInvoice);
+            var result = await _invoiceService.ConfirmAsync(id, getCurrentUser());
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id}/mark-as-paid")]
@@ -106,10 +79,8 @@ namespace API.Controllers.Shipments
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> MarkAsPaid(Guid id, [FromBody] CreateInvoicePaymentRequest request)
         {
-            var paidInvoice = await invoicePaymentService.MarkAsPaidAsync(id, request);
-            if (paidInvoice == null)
-                return NotFound();
-
+            var paidInvoice = await _invoicePaymentService.MarkAsPaidAsync(id, request);
+            if (paidInvoice == null) return NotFound();
             return Ok(paidInvoice);
         }
 
@@ -118,10 +89,8 @@ namespace API.Controllers.Shipments
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> MarkAsPartiallyPaid(Guid id, [FromBody] CreateInvoicePaymentRequest request)
         {
-            var paidInvoice = await invoicePaymentService.MarkAsPartiallyPaidAsync(id, request);
-            if (paidInvoice == null)
-                return NotFound();
-
+            var paidInvoice = await _invoicePaymentService.MarkAsPartiallyPaidAsync(id, request);
+            if (paidInvoice == null) return NotFound();
             return Ok(paidInvoice);
         }
 
@@ -130,10 +99,8 @@ namespace API.Controllers.Shipments
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> MarkAsRefunded(Guid id)
         {
-            var paidInvoice = await invoicePaymentService.MarkAsRefundedAsync(id);
-            if (paidInvoice == null)
-                return NotFound();
-
+            var paidInvoice = await _invoicePaymentService.MarkAsRefundedAsync(id);
+            if (paidInvoice == null) return NotFound();
             return Ok(paidInvoice);
         }
 
@@ -142,12 +109,18 @@ namespace API.Controllers.Shipments
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var deleted = await invoiceService.DeleteAsync(id, userId);
-            if (!deleted)
-                return NotFound();
+            var result = await _invoiceService.DeleteAsync(id, getCurrentUser());
+            if (result.IsSuccess) return Ok(new { message = "Invoice deleted successfully." });
+            return result.ToActionResult(this);
+        }
 
-            return Ok("Invoice deleted successfully.");
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new UnauthorizedAccessException("User not found");
+
+        private (string userId, bool isPrivileged) GetCurrentUserContext()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
+            return (userId, isPrivileged);
         }
     }
 }

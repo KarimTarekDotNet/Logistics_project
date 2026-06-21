@@ -1,4 +1,5 @@
-﻿using Application.DTOs.Pricing.Quotation;
+﻿using API.Extensions;
+using Application.DTOs.Pricing.Quotation;
 using Application.Interfaces.Services.Pricing.Quotation;
 using Application.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -26,39 +27,31 @@ namespace API.Controllers.Pricing.Quotation
         [EnableRateLimiting("HeavyPolicy")]
         public async Task<IActionResult> CreateFromRate([FromBody] CreateQuoteRequestFromRate request)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-            var result = await _quoteRequestService.CreateFromRateAsync(request, userId);
-
-            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+            var result = await _quoteRequestService.CreateFromRateAsync(request, getCurrentUser());
+            return result.ToCreatedResult(this, nameof(GetById), new { id = result.Value?.Id });
         }
 
         [HttpGet("my")]
         [Authorize(Roles = "User")]
         public async Task<IActionResult> GetMyRequests([FromQuery] QueryParameters query)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-            var result = await _quoteRequestService.GetMyRequestsAsync(userId, query);
-
-            return Ok(result);
+            var result = await _quoteRequestService.GetMyRequestsAsync(getCurrentUser(), query);
+            return result.ToActionResult(this);
         }
 
         [HttpGet]
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetAll([FromQuery] QueryParameters query)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-            var result = await _quoteRequestService.GetAllAsync(userId, query);
-
-            return Ok(result);
+            var result = await _quoteRequestService.GetAllAsync(getCurrentUser(), query);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            return Ok(await _quoteRequestService.GetByIdAsync(id));
+            var result = await _quoteRequestService.GetByIdAsync(id);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/approve")]
@@ -66,11 +59,8 @@ namespace API.Controllers.Pricing.Quotation
         [EnableRateLimiting("HeavyPolicy")]
         public async Task<IActionResult> Approve(Guid id)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-            var result = await _quoteRequestService.ApproveAsync(id, userId);
-
-            return Ok(result);
+            var result = await _quoteRequestService.ApproveAsync(id, getCurrentUser());
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/reject")]
@@ -78,11 +68,8 @@ namespace API.Controllers.Pricing.Quotation
         [EnableRateLimiting("HeavyPolicy")]
         public async Task<IActionResult> Reject(Guid id, [FromBody] RejectQuoteRequest request)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-            var result = await _quoteRequestService.RejectAsync(id, userId, request.Reason);
-
-            return Ok(result);
+            var result = await _quoteRequestService.RejectAsync(id, getCurrentUser(), request.Reason);
+            return result.ToActionResult(this);
         }
 
         [HttpPatch("{id:guid}/cancel")]
@@ -90,11 +77,10 @@ namespace API.Controllers.Pricing.Quotation
         [EnableRateLimiting("HeavyPolicy")]
         public async Task<IActionResult> CancelByUser(Guid id)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-            var result = await _quoteRequestService.CancelByUserAsync(id, userId);
-
-            return Ok(result);
+            var result = await _quoteRequestService.CancelByUserAsync(id, getCurrentUser());
+            return result.ToActionResult(this);
         }
+
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new UnauthorizedAccessException("User not found");
     }
 }

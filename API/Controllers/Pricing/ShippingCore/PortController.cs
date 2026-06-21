@@ -1,4 +1,5 @@
-﻿using Application.DTOs.ShippingCore;
+﻿using API.Extensions;
+using Application.DTOs.ShippingCore;
 using Application.Interfaces.Services.Pricing.ShippingCore;
 using Application.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -23,34 +24,22 @@ namespace API.Controllers.Pricing.ShippingCore
         [HttpGet]
         public async Task<IActionResult> GetAllPorts([FromQuery] QueryParameters query)
         {
-            var ports = await _portService.GetAllAsync(query);
-
-            if (ports == null || !ports.Any())
-                return NotFound(new { message = "No ports found" });
-
-            return Ok(ports);
+            var result = await _portService.GetAllAsync(query);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetPortById(Guid id)
         {
-            var port = await _portService.GetByIdAsync(id);
-
-            if (port == null)
-                return NotFound(new { message = "Port not found" });
-
-            return Ok(port);
+            var result = await _portService.GetByIdAsync(id);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("country")]
         public async Task<IActionResult> GetPortsByCountry([FromQuery] string country, [FromQuery] QueryParameters query)
         {
-            var ports = await _portService.GetByCountryAsync(country, query);
-
-            if (ports == null || !ports.Any())
-                return NotFound(new { message = $"No ports found for country '{country}'" });
-
-            return Ok(ports);
+            var result = await _portService.GetByCountryAsync(country, query);
+            return result.ToActionResult(this);
         }
 
         [HttpPost]
@@ -59,8 +48,7 @@ namespace API.Controllers.Pricing.ShippingCore
         public async Task<IActionResult> CreatePort([FromBody] CreatePortRequest request)
         {
             var result = await _portService.CreateAsync(request, getCurrentUser());
-
-            return CreatedAtAction(nameof(GetPortById), new { id = result.Id }, result);
+            return result.ToCreatedResult(this, nameof(GetPortById), new { id = result.Value?.Id });
         }
 
         [HttpPut("{id:guid}")]
@@ -68,12 +56,8 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdatePort(Guid id, [FromBody] UpdatePortRequest request)
         {
-            var updated = await _portService.UpdateAsync(id, request, getCurrentUser());
-
-            if (updated == null)
-                return NotFound(new { message = "Port not found" });
-
-            return Ok(updated);
+            var result = await _portService.UpdateAsync(id, request, getCurrentUser());
+            return result.ToActionResult(this);
         }
 
         [HttpDelete("{id:guid}")]
@@ -81,11 +65,11 @@ namespace API.Controllers.Pricing.ShippingCore
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeletePort(Guid id)
         {
-            await _portService.DeleteAsync(id, getCurrentUser());
-
-            return Ok(new { message = "Port deleted successfully" });
+            var result = await _portService.DeleteAsync(id, getCurrentUser());
+            if (result.IsSuccess) return Ok(new { message = "Port deleted successfully" });
+            return result.ToActionResult(this);
         }
 
-        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new Exception("user not found");
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new UnauthorizedAccessException("User not found");
     }
 }

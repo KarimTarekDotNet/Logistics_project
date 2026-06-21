@@ -1,4 +1,5 @@
-﻿using Application.DTOs.Pricing.PricingEngine.Rates;
+﻿using API.Extensions;
+using Application.DTOs.Pricing.PricingEngine.Rates;
 using Application.DTOs.Pricing.Recommendations;
 using Application.Interfaces.Services.Pricing.PricingEngine;
 using Application.Models;
@@ -26,94 +27,76 @@ namespace API.Controllers.Pricing.PricingEngine
         [AllowAnonymous]
         public async Task<IActionResult> Count()
         {
-            return Ok(await _rateService.CountAsync());
+            var result = await _rateService.CountAsync();
+            return result.ToActionResult(this);
         }
 
         [HttpGet]
         public async Task<IActionResult> SearchAsync([FromQuery] RateParameters query)
         {
-            var rates = await _rateService.SearchAsync(query);
-
-            return Ok(rates);
+            var result = await _rateService.SearchAsync(query);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("market-analytics")]
         public async Task<IActionResult> GetMarketAnalyticsAsync([FromQuery] QueryMarketRequest request)
         {
-            var rates = await _rateService.GetMarketAnalyticsAsync
-            (request.RouteId, request.ContainerId, request.Currency);
-
-            return Ok(rates);
+            var result = await _rateService.GetMarketAnalyticsAsync(request.RouteId, request.ContainerId, request.Currency);
+            return result.ToActionResult(this);
         }
 
         [HttpPost("recommended")]
         public async Task<IActionResult> RecommendationAsync([FromQuery] RateRecommendationRequest request)
         {
-            var recommended = await _rateService.RecommendationAsync(request);
-            if (recommended == null)
-                return NotFound(new { message = "No recommended rates found." });
-
-            return Ok(recommended);
+            var result = await _rateService.RecommendationAsync(request);
+            return result.ToActionResult(this);
         }
 
-        // GET: api/rates/{id}
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetRateById(Guid id)
         {
-            var rate = await _rateService.GetByIdAsync(id);
-
-            return Ok(rate);
+            var result = await _rateService.GetByIdAsync(id);
+            return result.ToActionResult(this);
         }
 
-        // POST: api/rates
         [HttpPost]
         [EnableRateLimiting("HeavyPolicy")]
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreateRate([FromBody] CreateRateRequest request)
         {
             var result = await _rateService.CreateAsync(request, getCurrentUser());
-
-            return CreatedAtAction(nameof(GetRateById),
-                new { id = result.Id },
-                result);
+            return result.ToCreatedResult(this, nameof(GetRateById), new { id = result.Value?.Id });
         }
 
-        // PUT: api/rates/{id}
         [HttpPut("{id:guid}")]
         [EnableRateLimiting("HeavyPolicy")]
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdateRate(Guid id, [FromBody] UpdateRateRequest request)
         {
-            var updated = await _rateService.UpdateAsync(id, request ,getCurrentUser());
-
-            return Ok(updated);
+            var result = await _rateService.UpdateAsync(id, request, getCurrentUser());
+            return result.ToActionResult(this);
         }
 
-        // DELETE: api/rates/{id}
         [HttpDelete("{id:guid}")]
         [EnableRateLimiting("HeavyPolicy")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteRate(Guid id)
         {
-            await _rateService.DeleteAsync(id, getCurrentUser());
-
-            return Ok(new { message = "Rate deleted successfully" });
+            var result = await _rateService.DeleteAsync(id, getCurrentUser());
+            if (result.IsSuccess) return Ok(new { message = "Rate deleted successfully" });
+            return result.ToActionResult(this);
         }
 
-        // PATCH: api/rates/{id}/active
         [HttpPatch("{id:guid}/active")]
         [EnableRateLimiting("HeavyPolicy")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> ChangeRateActive(Guid id)
         {
             var result = await _rateService.ChangeRateActive(id, getCurrentUser());
-
-            return Ok(new
-            {
-                message = result ? "Rate activated" : "Rate deactivated"
-            });
+            if (!result.IsSuccess) return result.ToActionResult(this);
+            return Ok(new { message = result.Value ? "Rate activated" : "Rate deactivated" });
         }
 
-        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new Exception("user not found");
+        private string getCurrentUser() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new UnauthorizedAccessException("User not found");
     }
 }

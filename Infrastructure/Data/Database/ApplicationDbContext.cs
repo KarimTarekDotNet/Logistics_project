@@ -84,14 +84,22 @@ namespace Infrastructure.Data.Database
 
             modelBuilder.Entity<Shipment>().HasQueryFilter(r => !r.IsDeleted);
             modelBuilder.Entity<ShipmentItem>().HasQueryFilter(r => !r.IsDeleted);
+
             modelBuilder.Entity<ShipmentCharge>().HasQueryFilter(r => !r.IsDeleted);
+
+            modelBuilder.Entity<ShipmentChargeItem>().HasQueryFilter(x => !x.ShipmentCharge.IsDeleted);
+
             modelBuilder.Entity<ShipmentStatusHistory>().HasQueryFilter(r => !r.Shipment.IsDeleted);
             modelBuilder.Entity<ShipmentDocument>().HasQueryFilter(r => !r.IsDeleted);
 
             modelBuilder.Entity<SubscriptionPlan>().HasQueryFilter(r => !r.IsDeleted);
-            modelBuilder.Entity<UserSubscription>().HasQueryFilter(r => !r.IsDeleted);
+
+            modelBuilder.Entity<UserSubscription>().HasQueryFilter(r => !r.IsDeleted && !r.SubscriptionPlan.IsDeleted);
+
+            modelBuilder.Entity<UserSubscriptionUsage>().HasQueryFilter(x => !x.UserSubscription.IsDeleted);
 
             modelBuilder.Entity<Invoice>().HasQueryFilter(r => !r.IsDeleted);
+            modelBuilder.Entity<InvoicePayment>().HasQueryFilter(x => !x.Invoice.IsDeleted);
 
             modelBuilder.Entity<Customer>().HasQueryFilter(r => !r.IsDeleted);
 

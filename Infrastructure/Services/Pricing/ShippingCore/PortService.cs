@@ -1,4 +1,5 @@
 using Application.ApplicationRules;
+using Application.Common;
 using Application.DTOs.Aliases;
 using Application.DTOs.ShippingCore;
 using Application.Interfaces.Repositories.Patterns;
@@ -9,8 +10,8 @@ using AutoMapper;
 using Domain.Entities.Audits;
 using Domain.Entities.ShippingCore;
 using Domain.Enums;
-using Domain.Exceptions;
 using Infrastructure.Helper;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
@@ -20,43 +21,51 @@ namespace Infrastructure.Services.Pricing.ShippingCore
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAliasService _aliasService;
         private readonly IMapper _mapper;
+        private readonly ILogger<PortService> _logger;
 
-        public PortService(IUnitOfWork unitOfWork, IMapper mapper, IAliasService aliasService)
+        public PortService(IUnitOfWork unitOfWork, IMapper mapper, IAliasService aliasService, ILogger<PortService> logger)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
             _aliasService = aliasService;
+            _logger = logger;
         }
 
-        public async Task<PortResponse?> GetByIdAsync(Guid id)
+        public async Task<Result<PortResponse>> GetByIdAsync(Guid id)
         {
             var port = await _unitOfWork.Ports.GetByIdAsync(id);
             if (port == null || port.IsDeleted)
-                return null;
-
-            return _mapper.Map<PortResponse>(port);
+            {
+                _logger.LogWarning("Port {Id} not found", id);
+                return Result<PortResponse>.NotFound("Port not found.");
+            }
+            return Result<PortResponse>.Success(_mapper.Map<PortResponse>(port));
         }
 
-        public async Task<IEnumerable<PortResponse>> GetAllAsync(QueryParameters query)
+        public async Task<Result<IEnumerable<PortResponse>>> GetAllAsync(QueryParameters query)
         {
             var ports = await _unitOfWork.Ports.GetAllAsync(query);
-            return _mapper.Map<IEnumerable<PortResponse>>(ports.Where(p => !p.IsDeleted));
+            return Result<IEnumerable<PortResponse>>.Success(_mapper.Map<IEnumerable<PortResponse>>(ports.Where(p => !p.IsDeleted)));
         }
 
-        public async Task<IEnumerable<PortResponse>> GetByCountryAsync(string country, QueryParameters query)
+        public async Task<Result<IEnumerable<PortResponse>>> GetByCountryAsync(string country, QueryParameters query)
         {
             var ports = await _unitOfWork.Ports.GetByCountryAsync(country, query);
-            return _mapper.Map<IEnumerable<PortResponse>>(ports.Where(p => !p.IsDeleted));
+            return Result<IEnumerable<PortResponse>>.Success(_mapper.Map<IEnumerable<PortResponse>>(ports.Where(p => !p.IsDeleted)));
         }
 
-        public async Task<PortResponse> CreateAsync(CreatePortRequest dto, string userId)
+        public async Task<Result<PortResponse>> CreateAsync(CreatePortRequest dto, string userId)
         {
+            _logger.LogInformation("Creating port {Code} by user {UserId}", dto.Code, userId);
             return await ExecuteInTransactionAsync(async () =>
             {
                 dto.Code = dto.Code.Replace(" ", "").Trim().ToUpper();
                 var existing = await _unitOfWork.Ports.GetByCodeAsync(dto.Code);
                 if (existing != null && !existing.IsDeleted)
-                    throw new BusinessRuleException($"A port with code '{dto.Code}' already exists.");
+                {
+                    _logger.LogWarning("Port code {Code} already exists", dto.Code);
+                    return Result<PortResponse>.Failure($"A port with code '{dto.Code}' already exists.");
+                }
 
                 var port = _mapper.Map<Port>(dto);
                 port.CreatedAt = DateTimeOffset.UtcNow;
@@ -64,60 +73,44 @@ namespace Infrastructure.Services.Pricing.ShippingCore
 
                 var audit = new AuditLog
                 {
-                    CreatedAt = port.CreatedAt,
-                    EntityId = port.Id,
-                    EntityName = nameof(Port).ToUpper(),
-                    Action = nameof(CreateAsync).ToUpper(),
+                    CreatedAt = port.CreatedAt, EntityId = port.Id,
+                    EntityName = nameof(Port).ToUpper(), Action = nameof(CreateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = null,
-                    NewValues = JsonSerializer.Serialize(port),
-                    UserId = userId
+                    OldValues = null, NewValues = JsonSerializer.Serialize(port), UserId = userId
                 };
 
                 await _unitOfWork.Ports.AddAsync(port);
                 await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
 
-                await _aliasService.CreateAsync(new CreateAliasRequest
-                {
-                    AliasName = port.Name,
-                    EntityId = port.Id,
-                    Type = AliasType.Port
-                });
+                await _aliasService.CreateAsync(new CreateAliasRequest { AliasName = port.Name, EntityId = port.Id, Type = AliasType.Port });
+                await _aliasService.CreateAsync(new CreateAliasRequest { AliasName = port.Code, EntityId = port.Id, Type = AliasType.Port });
 
-                await _aliasService.CreateAsync(new CreateAliasRequest
-                {
-                    AliasName = port.Code,
-                    EntityId = port.Id,
-                    Type = AliasType.Port
-                });
-
-                return _mapper.Map<PortResponse>(port);
+                _logger.LogInformation("Port {Id} created successfully", port.Id);
+                return Result<PortResponse>.Success(_mapper.Map<PortResponse>(port), 201);
             });
         }
 
-        public async Task<PortResponse> UpdateAsync(Guid id, UpdatePortRequest dto, string userId)
+        public async Task<Result<PortResponse>> UpdateAsync(Guid id, UpdatePortRequest dto, string userId)
         {
+            _logger.LogInformation("Updating port {Id} by user {UserId}", id, userId);
             return await ExecuteInTransactionAsync(async () =>
             {
                 var port = await _unitOfWork.Ports.GetByIdAsync(id);
                 if (port == null || port.IsDeleted)
-                    throw new KeyNotFoundException("Port not found.");
+                {
+                    _logger.LogWarning("Port {Id} not found for update", id);
+                    return Result<PortResponse>.NotFound("Port not found.");
+                }
 
                 var oldPort = port;
-
-                if (string.IsNullOrWhiteSpace(dto.Name))
-                    dto.Name = port.Name;
-
-                if (string.IsNullOrWhiteSpace(dto.Code))
-                    dto.Code = port.Code;
-
-                if (string.IsNullOrWhiteSpace(dto.Country))
-                    dto.Country = port.Country;
+                if (string.IsNullOrWhiteSpace(dto.Name)) dto.Name = port.Name;
+                if (string.IsNullOrWhiteSpace(dto.Code)) dto.Code = port.Code;
+                if (string.IsNullOrWhiteSpace(dto.Country)) dto.Country = port.Country;
 
                 var existing = await _unitOfWork.Ports.GetByCodeAsync(dto.Code);
                 if (existing != null && !existing.IsDeleted && existing.Id != id)
-                    throw new BusinessRuleException($"A port with code '{dto.Code}' already exists.");
+                    return Result<PortResponse>.Failure($"A port with code '{dto.Code}' already exists.");
 
                 port.Name = dto.Name;
                 port.Code = dto.Code.Replace(" ", "").Trim().ToUpper();
@@ -126,55 +119,41 @@ namespace Infrastructure.Services.Pricing.ShippingCore
 
                 var audit = new AuditLog
                 {
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    EntityId = port.Id,
-                    EntityName = nameof(Port).ToUpper(),
-                    Action = nameof(UpdateAsync).ToUpper(),
+                    CreatedAt = DateTimeOffset.UtcNow, EntityId = port.Id,
+                    EntityName = nameof(Port).ToUpper(), Action = nameof(UpdateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldPort),
-                    NewValues = JsonSerializer.Serialize(port),
-                    UserId = userId
+                    OldValues = JsonSerializer.Serialize(oldPort), NewValues = JsonSerializer.Serialize(port), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
 
-                await _aliasService.CreateAsync(new CreateAliasRequest
-                {
-                    AliasName = port.Name,
-                    EntityId = port.Id,
-                    Type = AliasType.Port
-                });
+                await _aliasService.CreateAsync(new CreateAliasRequest { AliasName = port.Name, EntityId = port.Id, Type = AliasType.Port });
+                await _aliasService.CreateAsync(new CreateAliasRequest { AliasName = port.Code, EntityId = port.Id, Type = AliasType.Port });
 
-                await _aliasService.CreateAsync(new CreateAliasRequest
-                {
-                    AliasName = port.Code,
-                    EntityId = port.Id,
-                    Type = AliasType.Port
-                });
-
-                return _mapper.Map<PortResponse>(port);
+                _logger.LogInformation("Port {Id} updated successfully", id);
+                return Result<PortResponse>.Success(_mapper.Map<PortResponse>(port));
             });
         }
 
-        public async Task DeleteAsync(Guid id, string userId)
+        public async Task<Result> DeleteAsync(Guid id, string userId)
         {
-            await ExecuteInTransactionAsync(async () =>
+            _logger.LogInformation("Deleting port {Id} by user {UserId}", id, userId);
+            return await ExecuteInTransactionAsync(async () =>
             {
                 var port = await _unitOfWork.Ports.GetByIdAsync(id);
                 if (port == null || port.IsDeleted)
-                    throw new KeyNotFoundException("Port not found.");
+                {
+                    _logger.LogWarning("Port {Id} not found for deletion", id);
+                    return Result.NotFound("Port not found.");
+                }
 
                 var audit = new AuditLog
                 {
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    EntityId = port.Id,
-                    EntityName = nameof(Port).ToUpper(),
-                    Action = nameof(DeleteAsync).ToUpper(),
+                    CreatedAt = DateTimeOffset.UtcNow, EntityId = port.Id,
+                    EntityName = nameof(Port).ToUpper(), Action = nameof(DeleteAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(port),
-                    NewValues = "Deleted",
-                    UserId = userId
+                    OldValues = JsonSerializer.Serialize(port), NewValues = "Deleted", UserId = userId
                 };
 
                 port.IsDeleted = true;
@@ -183,11 +162,13 @@ namespace Infrastructure.Services.Pricing.ShippingCore
 
                 await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
-                return true;
+
+                _logger.LogInformation("Port {Id} deleted", id);
+                return Result.Success();
             });
         }
 
-        private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action)
+        private async Task<Result<T>> ExecuteInTransactionAsync<T>(Func<Task<Result<T>>> action)
         {
             await _unitOfWork.BeginTransactionAsync();
             try
@@ -197,9 +178,28 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                 await _unitOfWork.CommitTransactionAsync();
                 return result;
             }
-            catch
+            catch (Exception ex)
             {
                 await _unitOfWork.RollbackTransactionAsync();
+                _logger.LogError(ex, "Transaction failed in {Service}", nameof(PortService));
+                throw;
+            }
+        }
+
+        private async Task<Result> ExecuteInTransactionAsync(Func<Task<Result>> action)
+        {
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var result = await action();
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitTransactionAsync();
+                return result;
+            }
+            catch (Exception ex)
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                _logger.LogError(ex, "Transaction failed in {Service}", nameof(PortService));
                 throw;
             }
         }

@@ -53,19 +53,12 @@ namespace API.Controllers.Shipments
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> Upload(Guid shipmentId, [FromForm] UploadShipmentDocumentRequest request)
         {
-            try
-            {
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-                var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isPrivileged = User.IsInRole("Admin") || User.IsInRole("Staff");
 
-                var uploadedDocument = await shipmentDocumentService.UploadAsync(shipmentId, request, userId, isPrivileged);
+            var uploadedDocument = await shipmentDocumentService.UploadAsync(shipmentId, request, userId, isPrivileged);
 
-                return CreatedAtAction(nameof(GetById), new { id = uploadedDocument.Id }, uploadedDocument);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
+            return CreatedAtAction(nameof(GetById), new { id = uploadedDocument.Id }, uploadedDocument);
         }
 
         [HttpDelete("{id}")]
