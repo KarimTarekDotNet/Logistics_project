@@ -12,11 +12,6 @@ namespace Application.Validations.User
                 .When(x => !string.IsNullOrWhiteSpace(x.Email))
                 .WithMessage("Invalid email format.");
 
-            RuleFor(x => x.PhoneNumber)
-                .Matches(@"^\+?[1-9]\d{1,14}$")
-                .When(x => !string.IsNullOrWhiteSpace(x.PhoneNumber))
-                .WithMessage("Invalid phone number format. It should be in E.164 format.");
-
             RuleFor(x => x.Username)
                 .Matches(@"^[a-zA-Z0-9_]+$")
                 .MinimumLength(3)

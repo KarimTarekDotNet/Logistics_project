@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+﻿using API.Extensions.HealthChecks;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
 
 namespace API.Extensions
@@ -41,14 +42,15 @@ namespace API.Extensions
 
             app.MapHealthChecks("/health/live", new HealthCheckOptions
             {
-                Predicate = _ => false
+                Predicate = _ => false,
+                ResponseWriter = HealthCheckResponseWriter.WriteResponseAsync
             });
 
             app.MapHealthChecks("/health/ready", new HealthCheckOptions
             {
-                Predicate = _ => true
+                Predicate = registration => registration.Tags.Contains("ready"),
+                ResponseWriter = HealthCheckResponseWriter.WriteResponseAsync
             });
-
             return app;
         }
     }

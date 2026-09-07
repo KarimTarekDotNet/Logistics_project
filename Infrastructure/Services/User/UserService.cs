@@ -17,15 +17,13 @@ namespace Infrastructure.Services.User
         private readonly ApplicationDbContext _context;
         private readonly IMapper _mapper;
         private readonly IEmailVerificationService _emailVerificationService;
-        private readonly IPhoneOtpService _phoneOtpService;
 
         public UserService(UserManager<ApplicationUser> userManager, IMapper mapper,
-        IEmailVerificationService emailVerificationService, IPhoneOtpService phoneOtpService, ApplicationDbContext context)
+        IEmailVerificationService emailVerificationService, ApplicationDbContext context)
         {
             _userManager = userManager;
             _mapper = mapper;
             _emailVerificationService = emailVerificationService;
-            _phoneOtpService = phoneOtpService;
             _context = context;
         }
 
@@ -108,19 +106,6 @@ namespace Infrastructure.Services.User
                 };
             }
 
-            if(!string.IsNullOrWhiteSpace(request.PhoneNumber) && request.PhoneNumber != user.PhoneNumber)
-            {
-                user.PendingPhoneNumber = request.PhoneNumber;
-                await _userManager.UpdateAsync(user);
-                await _phoneOtpService.SendOtpAsync(request.PhoneNumber);
-                return new ProfileUpdateResponse
-                {
-                    IsPhoneVerificationSent = true,
-                    UpdatedProfile = _mapper.Map<ProfileResponse>(user),
-                    message = "Phone number change requested. Please verify your new phone number to complete the update."
-                };
-            }
-
             var result = await _userManager.UpdateAsync(user);
             if (!result.Succeeded)
                 throw new BusinessRuleException("Failed to update profile");
@@ -157,36 +142,6 @@ namespace Infrastructure.Services.User
             {
                 UpdatedProfile = _mapper.Map<ProfileResponse>(user),
                 message = "Email updated successfully."
-            };
-        }
-
-        public async Task<ProfileUpdateResponse> VerifyPendingPhoneAsync(string userId, string code)
-        {
-            var user = await _userManager.FindByIdAsync(userId);
-
-            if (user == null)
-                throw new BusinessRuleException("User not found");
-
-            if (string.IsNullOrWhiteSpace(user.PendingPhoneNumber))
-                throw new BusinessRuleException("No pending phone change request.");
-
-            var isValid = await _phoneOtpService.VerifyOtpAsync(user.PendingPhoneNumber, code);
-
-            if (!isValid)
-                throw new BusinessRuleException("Invalid phone verification code.");
-
-            user.PhoneNumber = user.PendingPhoneNumber;
-            user.PhoneNumberConfirmed = true;
-            user.PendingPhoneNumber = null;
-
-            var result = await _userManager.UpdateAsync(user);
-            if (!result.Succeeded)
-                throw new BusinessRuleException("Failed to Confirm Phone");
-
-            return new ProfileUpdateResponse
-            {
-                UpdatedProfile = _mapper.Map<ProfileResponse>(user),
-                message = "Phone number updated successfully."
             };
         }
     }

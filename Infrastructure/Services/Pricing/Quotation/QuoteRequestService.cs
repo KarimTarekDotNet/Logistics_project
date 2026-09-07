@@ -46,14 +46,25 @@ namespace Infrastructure.Services.Pricing.Quotation
                 if (!isAdminOrStaff) return Result<QuoteRequestResponse>.Forbidden("Only admins or staff members can review quote requests.");
 
                 var request = await _unitOfWork.QuoteRequest.GetById(requestId);
-                if (request == null) return Result<QuoteRequestResponse>.NotFound("Quote request not found.");
+                if (request == null) 
+                    return Result<QuoteRequestResponse>.NotFound("Quote request not found.");
+
                 if (request.Status != QuoteRequestStatus.PendingReview)
                     return Result<QuoteRequestResponse>.Failure("Only pending quote requests can be approved.");
 
                 var ownerQuote = await _userManager.Users.Include(x => x.CustomerProfile).FirstOrDefaultAsync(x => x.CustomerProfile!.Id == request.CustomerId);
                 if (ownerQuote == null) return Result<QuoteRequestResponse>.NotFound("Owner quote not found.");
 
-                var oldRequest = request;
+                var audit = new AuditLog
+                {
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    EntityId = request.Id,
+                    EntityName = nameof(QuoteRequest).ToUpper(),
+                    Action = nameof(ApproveAsync).ToUpper(),
+                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
+                    OldValues = request.Status.ToString(),
+                    UserId = userId
+                };
 
                 var quote = new Quote
                 {
@@ -64,7 +75,7 @@ namespace Infrastructure.Services.Pricing.Quotation
                     RequestedGrossWeightKg = request.RequestedGrossWeightKg, RequestedNetWeightKg = request.RequestedNetWeightKg,
                     RequestedVolumeCbm = request.RequestedVolumeCbm, RequiredTemperatureCelsius = request.RequiredTemperatureCelsius,
                     RequestedChargeableWeightKg = ShipmentWeightCalculator.CalculateItemChargeableWeight(request.RequestedGrossWeightKg, request.RequestedVolumeCbm),
-                    IsHazardous = request.IsHazardous,
+                    IsHazardous = request.IsHazardous
                 };
 
                 await _unitOfWork.Quotes.AddAsync(quote);
@@ -77,7 +88,7 @@ namespace Infrastructure.Services.Pricing.Quotation
                     Status = ShipmentStatus.Created, CreatedAt = DateTimeOffset.UtcNow,
                     AllowedGrossWeightKg = request.RequestedGrossWeightKg, AllowedNetWeightKg = request.RequestedNetWeightKg,
                     AllowedVolumeCbm = request.RequestedVolumeCbm, IsHazardousAllowed = request.IsHazardous,
-                    AllowedChargeableWeightKg = ShipmentWeightCalculator.CalculateItemChargeableWeight(request.RequestedGrossWeightKg, request.RequestedVolumeCbm),
+                    AllowedChargeableWeightKg = ShipmentWeightCalculator.CalculateItemChargeableWeight(request.RequestedGrossWeightKg, request.RequestedVolumeCbm)
                 };
 
                 await _unitOfWork.Shipments.AddAsync(shipment);
@@ -92,7 +103,7 @@ namespace Infrastructure.Services.Pricing.Quotation
                     TotalAmount = shipment.AgreedPrice + (0.14m * shipment.AgreedPrice),
                     PaymentStatus = PaymentStatus.Pending, IssuedAt = DateTimeOffset.UtcNow,
                     DueDate = DateTimeOffset.UtcNow.AddDays(7), CreatedAt = DateTimeOffset.UtcNow,
-                    PayerType = PayerType.Shipper,
+                    PayerType = PayerType.Shipper
                 };
 
                 var charge = new ShipmentCharge
@@ -101,7 +112,7 @@ namespace Infrastructure.Services.Pricing.Quotation
                     ChargeType = ChargeType.OceanFreight, PayerType = invoice.PayerType,
                     Description = "Ocean freight charge based on approved quote request",
                     Amount = quote.FinalPrice, TaxAmount = invoice.TaxAmount,
-                    Currency = quote.Currency, CreatedAt = DateTimeOffset.UtcNow,
+                    Currency = quote.Currency, CreatedAt = DateTimeOffset.UtcNow
                 };
 
                 invoice.Charges.Add(charge);
@@ -111,14 +122,7 @@ namespace Infrastructure.Services.Pricing.Quotation
 
                 var result = await UpdateRequestStatusAsync(request, user, QuoteRequestStatus.Approved);
 
-                var audit = new AuditLog
-                {
-                    CreatedAt = DateTimeOffset.UtcNow, EntityId = request.Id,
-                    EntityName = nameof(QuoteRequest).ToUpper(), Action = nameof(ApproveAsync).ToUpper(),
-                    IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldRequest), NewValues = JsonSerializer.Serialize(request), UserId = userId
-                };
-
+                audit.NewValues = request.Status.ToString();
                 await _unitOfWork.AuditLog.Add(audit);
                 await _unitOfWork.SaveChangesAsync();
 

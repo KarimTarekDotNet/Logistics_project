@@ -66,16 +66,6 @@ namespace API.Controllers.User
             return Ok(result);
         }
 
-        [HttpPost("verify-phone-change")]
-        public async Task<IActionResult> VerifyPhoneChange([FromBody] VerifyPendingPhoneRequest request)
-        {
-            var userId = GetUserId();
-
-            var result = await _userService.VerifyPendingPhoneAsync(userId, request.Code);
-
-            return Ok(result);
-        }
-
         private string GetUserId()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);

@@ -21,17 +21,15 @@ namespace Infrastructure.Services.Auth
         private readonly IMapper mapper;
         private readonly IUnitOfWork work;
         private readonly IEmailVerificationService _emailVerificationService;
-        private readonly IPhoneOtpService _phoneOtpService;
         private readonly IRefreshTokenService _refreshTokenSerivce;
         public AuthService(IConfiguration configuration, UserManager<ApplicationUser> userManager, IMapper mapper,
-            IUnitOfWork work, IEmailVerificationService emailVerificationService, IPhoneOtpService phoneOtpService, IRefreshTokenService refreshTokenSerivce)
+            IUnitOfWork work, IEmailVerificationService emailVerificationService, IRefreshTokenService refreshTokenSerivce)
         {
             _configuration = configuration;
             _userManager = userManager;
             this.mapper = mapper;
             this.work = work;
             _emailVerificationService = emailVerificationService;
-            _phoneOtpService = phoneOtpService;
             _refreshTokenSerivce = refreshTokenSerivce;
         }
 
@@ -97,15 +95,7 @@ namespace Infrastructure.Services.Auth
         {
             try
             {
-                var normalizedPhone = !string.IsNullOrWhiteSpace(request.PhoneNumber) &&
-                !string.IsNullOrWhiteSpace(request.CountryCode)
-                ? request.CountryCode.Trim() + request.PhoneNumber.Trim()
-                : null;
-
                 var userExists = await _userManager.FindByEmailAsync(request.Email) ??
-                 (normalizedPhone is null
-                 ? null
-                 : await _userManager.Users.FirstOrDefaultAsync(x => x.PhoneNumber == normalizedPhone)) ??
                  await _userManager.FindByNameAsync(request.UserName);
 
 
@@ -122,9 +112,7 @@ namespace Infrastructure.Services.Auth
 
                 var user = mapper.Map<ApplicationUser>(request);
 
-                user.PhoneNumber = normalizedPhone;
                 user.EmailConfirmed = false;
-                user.PhoneNumberConfirmed = false;
 
                 var result = await _userManager.CreateAsync(user, request.Password);
 
@@ -152,9 +140,6 @@ namespace Infrastructure.Services.Auth
                 }
                 await _emailVerificationService.SendEmailConfirmationAsync(user.Id);
 
-                if(user.PhoneNumber is not null)
-                    await _phoneOtpService.SendOtpAsync(user.PhoneNumber);
-
                 return new AuthResponse
                 {
                     IsAuthenticated = false,
@@ -173,59 +158,6 @@ namespace Infrastructure.Services.Auth
                     Message = "An error occurred during registration."
                 };
             }
-        }
-
-        public async Task<AuthResponse> ConfirmPhoneAsync(ConfirmPhoneRequest request)
-        {
-            var phone = string.IsNullOrWhiteSpace(request.PhoneNumber)
-                ? request.Phone
-                : request.PhoneNumber;
-
-            var user = await _userManager.Users
-                .FirstOrDefaultAsync(x => x.PhoneNumber == phone);
-
-            if (user == null)
-            {
-                return new AuthResponse
-                {
-                    IsAuthenticated = false,
-                    Message = "Invalid phone number."
-                };
-            }
-
-            var isValid = await _phoneOtpService.VerifyOtpAsync(phone, request.Code);
-
-            if (!isValid)
-            {
-                return new AuthResponse
-                {
-                    IsAuthenticated = false,
-                    Message = "Invalid or expired OTP code."
-                };
-            }
-
-            user.PhoneNumberConfirmed = true;
-
-            var result = await _userManager.UpdateAsync(user);
-
-            if (!result.Succeeded)
-            {
-                return new AuthResponse
-                {
-                    IsAuthenticated = false,
-                    Message = string.Join(" | ", result.Errors.Select(e => e.Description))
-                };
-            }
-
-            return new AuthResponse
-            {
-                IsAuthenticated = false,
-                Message = "Phone number confirmed successfully.",
-                Id = user.Id,
-                Email = user.Email,
-                UserName = user.UserName,
-                PhoneNumber = user.PhoneNumber
-            };
         }
 
 

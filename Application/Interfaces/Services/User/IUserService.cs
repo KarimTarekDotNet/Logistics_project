@@ -8,6 +8,5 @@ namespace Application.Interfaces.Services.User
         Task<ProfileUpdateResponse> UpdateProfileAsync(string userId, UpdateProfileRequest request);
         Task<bool> UpdatePasswordAsync(string userId, UpdatePasswordRequest request);
         Task<ProfileUpdateResponse> ConfirmPendingEmailAsync(string userId, string token);
-        Task<ProfileUpdateResponse> VerifyPendingPhoneAsync(string userId, string code);
     }
 }

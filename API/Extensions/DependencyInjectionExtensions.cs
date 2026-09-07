@@ -1,4 +1,5 @@
-﻿using API.Mapping;
+﻿using API.Extensions.HealthChecks;
+using API.Mapping;
 using Application.Interfaces.Repositories.Aliases;
 using Application.Interfaces.Repositories.Audit;
 using Application.Interfaces.Repositories.Patterns;
@@ -53,6 +54,7 @@ using Infrastructure.Services.System;
 using Infrastructure.Services.User;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Serilog;
 using StackExchange.Redis;
 
@@ -72,14 +74,26 @@ namespace API.Extensions
                 .AddDefaultTokenProviders();
 
             // cache
-            var redisConnectionString =configuration.GetConnectionString("Redis");
+            var redisConnectionString = configuration.GetConnectionString("Redis");
+            var options = ConfigurationOptions.Parse(redisConnectionString!, true);
+            options.AbortOnConnectFail = false;
+            options.ConnectTimeout = 300;
+            options.AsyncTimeout = 300;
+            options.SyncTimeout = 300;
 
+            // TCP Connections
             services.AddSingleton<IConnectionMultiplexer>(sp =>
-            ConnectionMultiplexer.Connect(redisConnectionString!));
+            ConnectionMultiplexer.Connect(options!));
 
             services.AddHealthChecks()
-                .AddSqlServer(dbconn!)
-                .AddRedis(redisConnectionString!);
+                .AddSqlServer(dbconn!, name: "sql-server", failureStatus: HealthStatus.Unhealthy,
+                timeout: TimeSpan.FromSeconds(5), tags: new[] { "ready", "database" })
+                .AddRedis(sp => sp.GetRequiredService<IConnectionMultiplexer>(), name: "redis-cache",
+                failureStatus: HealthStatus.Degraded, timeout: TimeSpan.FromSeconds(5), tags: new[] { "ready", "cache" })
+                .AddCheck<ClamAVHealthCheck>("clamAV_check", failureStatus: HealthStatus.Unhealthy,
+                tags: new[] { "ready", "clamav" })
+                .AddCheck<SmtpHealthCheck>("smtp_check", failureStatus: HealthStatus.Unhealthy,
+                tags: new[] { "ready", "smtp" });
 
 
             // Repositories
@@ -150,7 +164,6 @@ namespace API.Extensions
             { client.Timeout = TimeSpan.FromSeconds(configuration.GetValue<int>("TaxVerification:TimeoutInSeconds")); });
 
             services.AddScoped<IEmailSender, EmailSender>();
-            services.AddScoped<IPhoneOtpService, TwilioPhoneOtpService>();
 
             // FluentValidation
             services.AddFluentValidationAutoValidation();

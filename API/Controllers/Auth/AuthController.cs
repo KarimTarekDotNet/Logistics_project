@@ -15,15 +15,12 @@ namespace API.Controllers.Auth
     {
         private readonly IAuthService auth;
         private readonly IEmailVerificationService _emailVerificationService;
-        private readonly IPhoneOtpService _phoneOtpService;
         private readonly IAntiforgery _antiforgery;
 
-        public AuthController(IAuthService auth, IEmailVerificationService emailVerificationService,
-        IPhoneOtpService phoneOtpService, IAntiforgery antiforgery)
+        public AuthController(IAuthService auth, IEmailVerificationService emailVerificationService, IAntiforgery antiforgery)
         {
             this.auth = auth;
             _emailVerificationService = emailVerificationService;
-            _phoneOtpService = phoneOtpService;
             _antiforgery = antiforgery;
         }
 
@@ -56,22 +53,6 @@ namespace API.Controllers.Auth
                 return BadRequest(registerResult);
 
             return Ok(registerResult);
-        }
-
-        [HttpPost("confirm-phone")]
-        public async Task<IActionResult> ConfirmPhone([FromBody] ConfirmPhoneRequest request)
-        {
-            var result = await auth.ConfirmPhoneAsync(request);
-
-            return Ok(result);
-        }
-
-        [HttpPost("resend-phone-otp")]
-        [EnableRateLimiting("OtpPolicy")]
-        public async Task<IActionResult> ResendPhoneOtp([FromQuery] string phone)
-        {
-            var result = await _phoneOtpService.ResendAsync(phone);
-            return Ok(result);
         }
 
         [HttpGet("confirm-email")]

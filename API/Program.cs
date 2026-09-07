@@ -23,6 +23,10 @@ namespace API
                   .MinimumLevel.Override("Microsoft.Hosting.Lifetime", Serilog.Events.LogEventLevel.Information);
             });
 
+            builder.WebHost.ConfigureKestrel(options =>
+            {
+                options.AddServerHeader = false; // Removes the "Server: Kestrel" header
+            });
 
             builder.Services.AddApplicationServices(builder.Configuration);
 
@@ -33,6 +37,8 @@ namespace API
             builder.Services.AddAuthConfiguration(builder.Configuration);
 
             var app = builder.Build();
+
+            app.UseSecurityHeaders();
 
             await app.SeedDatabaseAsync();
 

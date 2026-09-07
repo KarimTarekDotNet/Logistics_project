@@ -46,7 +46,7 @@ namespace Infrastructure.Services.Auth
 
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encoded = WebUtility.UrlEncode(token);
-            var frontendBaseUrl = _config.GetValue<string>("SendGridSettings:FrontendBaseUrl");
+            var frontendBaseUrl = _config.GetValue<string>("EmailSettings:FrontendBaseUrl");
             var confirmationLink = $"{frontendBaseUrl}/confirm-email?userId={user.Id}&token={encoded}";
 
 
@@ -220,7 +220,7 @@ namespace Infrastructure.Services.Auth
             var token = await _userManager.GenerateChangeEmailTokenAsync(user, newEmail);
             var encodedToken = WebUtility.UrlEncode(token);
 
-            var frontendBaseUrl = _config.GetValue<string>("SendGridSettings:FrontendBaseUrl");
+            var frontendBaseUrl = _config.GetValue<string>("EmailSettings:FrontendBaseUrl");
             var confirmationLink = $"{frontendBaseUrl}/confirm-email-change?userId={user.Id}&token={encodedToken}";
 
             var subject = "Confirm Your New Email Address";

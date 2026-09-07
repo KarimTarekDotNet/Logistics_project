@@ -37,22 +37,6 @@ public class RegisterRequestValidator : AbstractValidator<RegisterRequest>
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("Invalid email format.");
 
-        RuleFor(x => x.CountryCode)
-            .NotEmpty()
-            .When(x => !string.IsNullOrWhiteSpace(x.PhoneNumber))
-            .WithMessage("Country code is required.")
-            .Matches(@"^\+\d{1,4}$")
-            .When(x => !string.IsNullOrWhiteSpace(x.CountryCode))
-            .WithMessage("Country code must be like +20 or +966.");
-
-        RuleFor(x => x.PhoneNumber)
-            .NotEmpty()
-            .When(x => !string.IsNullOrWhiteSpace(x.CountryCode))
-            .WithMessage("Phone number is required.")
-            .Matches(@"^[0-9]{6,15}$")
-            .When(x => !string.IsNullOrWhiteSpace(x.PhoneNumber))
-            .WithMessage("Phone number must contain only digits.");
-
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password is required.")
             .Matches("^(?=.*[A-Za-z])(?=.*\\d)(?=.*[@$!%*#?&])[A-Za-z\\d@$!%*#?&]{8,}$")
@@ -60,19 +44,5 @@ public class RegisterRequestValidator : AbstractValidator<RegisterRequest>
 
         RuleFor(x => x.ConfirmPassword)
             .Equal(x => x.Password).WithMessage("Passwords do not match.");
-    }
-}
-public class ConfirmPhoneRequestValidator : AbstractValidator<ConfirmPhoneRequest>
-{
-    public ConfirmPhoneRequestValidator()
-    {
-        RuleFor(x => string.IsNullOrWhiteSpace(x.PhoneNumber) ? x.Phone : x.PhoneNumber)
-            .NotEmpty().WithMessage("Phone number is required.")
-            .Matches(@"^\+\d{7,15}$")
-            .WithMessage("Phone number must start with '+' followed by 7 to 15 digits.");
-
-        RuleFor(x => x.Code)
-            .MaximumLength(10)
-            .NotEmpty().WithMessage("Code is required");
     }
 }

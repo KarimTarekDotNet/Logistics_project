@@ -27,17 +27,11 @@ namespace Application.DTOs.User
         public string? LastName { get; set; }
         public string? Username { get; set; }
         public string? Email { get; set; }
-        public string? PhoneNumber { get; set; }
     }
     public record UpdatePasswordRequest
     {
         public string CurrentPassword { get; init; } = string.Empty;
         public string NewPassword { get; init; } = string.Empty;
         public string ConfirmPassword { get; init; } = string.Empty;
-    }
-
-    public record VerifyPendingPhoneRequest
-    {
-        public string Code { get; set; } = null!;
     }
 }

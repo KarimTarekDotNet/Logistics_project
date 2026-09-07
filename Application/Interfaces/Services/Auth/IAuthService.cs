@@ -9,7 +9,6 @@ namespace Application.Interfaces.Services.Auth
         Task<string> GenerateJwtToken(ApplicationUser user);
         Task<AuthResponse> LoginAsync(LoginRequest request, string? ipAddress);
         Task<AuthResponse> RegisterAsync(RegisterRequest request);
-        Task<AuthResponse> ConfirmPhoneAsync(ConfirmPhoneRequest request);
         Task<AuthResponse> RefreshAsync(string refreshToken, string? ipAddress);
         Task<bool> LogoutAsync(string refreshToken, string? ipAddress);
         Task<bool> LogoutAllAsync(string userId, string? ipAddress);
