@@ -1,4 +1,4 @@
-﻿using Application.ApplicationRules.Shipments;
+using Application.ApplicationRules.Shipments;
 using Application.Common;
 using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Repositories.Patterns;
@@ -6,11 +6,11 @@ using Application.Interfaces.Services.Shipments.Core;
 using AutoMapper;
 using Domain.Entities.Audits;
 using Domain.Entities.Users;
+using Infrastructure.Common;
 using Infrastructure.Helper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace Infrastructure.Services.Shipments.Core.Shipment
 {
@@ -58,7 +58,7 @@ namespace Infrastructure.Services.Shipments.Core.Shipment
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = shipment.Id,
                     EntityName = nameof(Domain.Entities.Shipments.Shipment).ToUpper(), Action = nameof(UpdateTrackingAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldShipment), NewValues = JsonSerializer.Serialize(shipment),
+                    OldValues = GenericSerializer.Serialize(oldShipment), NewValues = GenericSerializer.Serialize(shipment),
                     UserId = userId
                 };
 

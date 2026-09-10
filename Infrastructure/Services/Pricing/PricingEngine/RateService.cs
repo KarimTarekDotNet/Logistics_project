@@ -9,6 +9,7 @@ using AutoMapper;
 using Domain.Entities.Audits;
 using Domain.Entities.Pricing.PricingEngine;
 using Domain.Enums;
+using Infrastructure.Common;
 using Infrastructure.Helper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -65,7 +66,7 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                     CreatedAt = rate.CreatedAt, EntityId = rate.Id,
                     EntityName = nameof(Rate).ToUpper(), Action = nameof(CreateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = null, NewValues = JsonSerializer.Serialize(rate), UserId = userId
+                    OldValues = null, NewValues = GenericSerializer.Serialize(rate), UserId = userId
                 };
 
                 await _unitOfWork.Rates.AddAsync(rate);
@@ -100,7 +101,7 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = rate.Id,
                     EntityName = nameof(Rate).ToUpper(), Action = nameof(DeleteAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(rate), NewValues = "Deleted", UserId = userId
+                    OldValues = GenericSerializer.Serialize(rate), NewValues = "Deleted", UserId = userId
                 };
 
                 _unitOfWork.Rates.Update(rate);
@@ -159,7 +160,7 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = rate.Id,
                     EntityName = nameof(Rate).ToUpper(), Action = nameof(UpdateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldRate), NewValues = JsonSerializer.Serialize(rate), UserId = userId
+                    OldValues = GenericSerializer.Serialize(oldRate), NewValues = GenericSerializer.Serialize(rate), UserId = userId
                 };
 
                 _unitOfWork.Rates.Update(rate);
@@ -276,7 +277,7 @@ namespace Infrastructure.Services.Pricing.PricingEngine
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = rate.Id,
                     EntityName = nameof(Rate).ToUpper(), Action = nameof(ChangeRateActive).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldRate), NewValues = JsonSerializer.Serialize(rate), UserId = userId
+                    OldValues = GenericSerializer.Serialize(oldRate), NewValues = GenericSerializer.Serialize(rate), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);

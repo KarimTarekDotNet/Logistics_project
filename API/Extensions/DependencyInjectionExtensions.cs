@@ -156,7 +156,6 @@ namespace API.Extensions
             services.AddScoped<IPaymobPaymentService, PaymobPaymentService>();
             services.AddScoped<IUserSubscriptionService, UserSubscriptionService>();
             services.AddScoped<ISubscriptionPlanService, SubscriptionPlanService>();
-            services.AddScoped<IIdempotencyService, IdempotencyService>();
             services.AddScoped<IRedisService, RedisService>();
 
             // APIs Integrations
@@ -173,7 +172,13 @@ namespace API.Extensions
             // AutoMapper
             services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>());
 
-            services.AddControllers();
+            services.AddControllers()
+                .AddJsonOptions(options =>
+                {
+                    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+                    options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+                    options.JsonSerializerOptions.WriteIndented = false;
+                });
             services.AddOpenApi();
 
             return services;

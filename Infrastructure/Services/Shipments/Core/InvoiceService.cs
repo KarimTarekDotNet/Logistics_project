@@ -1,4 +1,4 @@
-﻿using Application.ApplicationRules.Shipments;
+using Application.ApplicationRules.Shipments;
 using Application.Common;
 using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Repositories.Patterns;
@@ -8,11 +8,11 @@ using Domain.Entities.Audits;
 using Domain.Entities.Shipments;
 using Domain.Entities.Users;
 using Domain.Enums;
+using Infrastructure.Common;
 using Infrastructure.Helper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace Infrastructure.Services.Shipments.Core
 {
@@ -105,8 +105,8 @@ namespace Infrastructure.Services.Shipments.Core
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = draftInvoice.Id,
                     EntityName = nameof(Invoice).ToUpper(), Action = nameof(CreateOrUpdateDraftInvoiceAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = isCreate ? null : JsonSerializer.Serialize(draftInvoice),
-                    NewValues = JsonSerializer.Serialize(draftInvoice), UserId = userId
+                    OldValues = isCreate ? null : GenericSerializer.Serialize(draftInvoice),
+                    NewValues = GenericSerializer.Serialize(draftInvoice), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
@@ -133,7 +133,7 @@ namespace Infrastructure.Services.Shipments.Core
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = invoice.Id,
                     EntityName = nameof(Invoice).ToUpper(), Action = nameof(DeleteAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(invoice), NewValues = "Deleted", UserId = userId
+                    OldValues = GenericSerializer.Serialize(invoice), NewValues = "Deleted", UserId = userId
                 };
 
                 invoice.UpdatedAt = DateTimeOffset.UtcNow;
@@ -194,7 +194,7 @@ namespace Infrastructure.Services.Shipments.Core
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = invoice.Id,
                     EntityName = nameof(Invoice).ToUpper(), Action = nameof(CancelAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldInvoice), NewValues = JsonSerializer.Serialize(invoice), UserId = userId
+                    OldValues = GenericSerializer.Serialize(oldInvoice), NewValues = GenericSerializer.Serialize(invoice), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
@@ -245,7 +245,7 @@ namespace Infrastructure.Services.Shipments.Core
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = invoice.Id,
                     EntityName = nameof(Invoice).ToUpper(), Action = nameof(ConfirmAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldInvoice), NewValues = JsonSerializer.Serialize(invoice), UserId = userId
+                    OldValues = GenericSerializer.Serialize(oldInvoice), NewValues = GenericSerializer.Serialize(invoice), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);

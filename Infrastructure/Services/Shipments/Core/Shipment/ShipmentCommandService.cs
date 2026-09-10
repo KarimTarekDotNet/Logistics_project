@@ -1,4 +1,4 @@
-﻿using Application.ApplicationRules.Shipments;
+using Application.ApplicationRules.Shipments;
 using Application.Common;
 using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Repositories.Patterns;
@@ -7,11 +7,11 @@ using AutoMapper;
 using Domain.Entities.Audits;
 using Domain.Entities.Users;
 using Domain.Enums;
+using Infrastructure.Common;
 using Infrastructure.Helper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace Infrastructure.Services.Shipments.Core.Shipment
 {
@@ -68,7 +68,7 @@ namespace Infrastructure.Services.Shipments.Core.Shipment
                     CreatedAt = shipment.CreatedAt, EntityId = shipment.Id,
                     EntityName = nameof(Domain.Entities.Shipments.Shipment).ToUpper(), Action = nameof(CreateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = null, NewValues = JsonSerializer.Serialize(shipment), UserId = userId
+                    OldValues = null, NewValues = GenericSerializer.Serialize(shipment), UserId = userId
                 };
 
                 await _unitOfWork.Shipments.AddAsync(shipment);
@@ -101,7 +101,7 @@ namespace Infrastructure.Services.Shipments.Core.Shipment
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = shipment.Id,
                     EntityName = nameof(Domain.Entities.Shipments.Shipment).ToUpper(), Action = nameof(DeleteAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(shipment), NewValues = "Deleted", UserId = userId
+                    OldValues = GenericSerializer.Serialize(shipment), NewValues = "Deleted", UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
@@ -157,7 +157,7 @@ namespace Infrastructure.Services.Shipments.Core.Shipment
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = shipment.Id,
                     EntityName = nameof(Domain.Entities.Shipments.Shipment).ToUpper(), Action = nameof(UpdateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldShipment), NewValues = JsonSerializer.Serialize(shipment), UserId = userId
+                    OldValues = GenericSerializer.Serialize(oldShipment), NewValues = GenericSerializer.Serialize(shipment), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);

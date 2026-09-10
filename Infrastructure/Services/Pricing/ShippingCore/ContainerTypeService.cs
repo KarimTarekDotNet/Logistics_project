@@ -9,9 +9,9 @@ using AutoMapper;
 using Domain.Entities.Audits;
 using Domain.Entities.ShippingCore;
 using Domain.Enums;
+using Infrastructure.Common;
 using Infrastructure.Helper;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
 {
@@ -68,7 +68,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                     CreatedAt = containerType.CreatedAt, EntityId = containerType.Id,
                     EntityName = nameof(ContainerType).ToUpper(), Action = nameof(CreateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = null, NewValues = JsonSerializer.Serialize(containerType), UserId = userId
+                    OldValues = null, NewValues = GenericSerializer.Serialize(containerType), UserId = userId
                 };
 
                 await _unitOfWork.ContainerTypes.AddAsync(containerType);
@@ -107,7 +107,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = containerType.Id,
                     EntityName = nameof(ContainerType).ToUpper(), Action = nameof(UpdateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldContainerType), NewValues = JsonSerializer.Serialize(containerType), UserId = userId
+                    OldValues = GenericSerializer.Serialize(oldContainerType), NewValues = GenericSerializer.Serialize(containerType), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
@@ -136,7 +136,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = containerType.Id,
                     EntityName = nameof(ContainerType).ToUpper(), Action = nameof(DeleteAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(containerType), NewValues = "Deleted", UserId = userId
+                    OldValues = GenericSerializer.Serialize(containerType), NewValues = "Deleted", UserId = userId
                 };
 
                 containerType.IsDeleted = true;

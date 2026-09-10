@@ -7,9 +7,9 @@ using Application.Models;
 using AutoMapper;
 using Domain.Entities.Audits;
 using Domain.Entities.ShippingCore;
+using Infrastructure.Common;
 using Infrastructure.Helper;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
 {
@@ -94,7 +94,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                     CreatedAt = route.CreatedAt, EntityId = route.Id,
                     EntityName = nameof(Route).ToUpper(), Action = nameof(CreateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = null, NewValues = JsonSerializer.Serialize(route), UserId = userId
+                    OldValues = null, NewValues = GenericSerializer.Serialize(route), UserId = userId
                 };
 
                 await _unitOfWork.Routes.AddAsync(route);
@@ -144,7 +144,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = route.Id,
                     EntityName = nameof(Route).ToUpper(), Action = nameof(UpdateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldRoute), NewValues = JsonSerializer.Serialize(route), UserId = userId
+                    OldValues = GenericSerializer.Serialize(oldRoute), NewValues = GenericSerializer.Serialize(route), UserId = userId
                 };
 
                 _unitOfWork.Routes.Update(route);
@@ -174,7 +174,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = route.Id,
                     EntityName = nameof(Route).ToUpper(), Action = nameof(DeleteAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(route), NewValues = "Deleted", UserId = userId
+                    OldValues = GenericSerializer.Serialize(route), NewValues = "Deleted", UserId = userId
                 };
 
                 route.IsDeleted = true;

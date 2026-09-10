@@ -25,14 +25,13 @@ namespace Infrastructure.Services.Payment
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUserSubscriptionService _userSubscriptionService;
         private readonly IPaymobPaymentService _paymobPaymentService;
-        private readonly IIdempotencyService _idempotencyService;
         private readonly IMapper _mapper;
         private readonly IConfiguration _configuration;
         private readonly IRedisService _redisService;
 
         public PaymentTransactionService(IUnitOfWork unitOfWork, UserManager<ApplicationUser> userManager,
         IPaymobPaymentService paymobPaymentService, IMapper mapper, IConfiguration configuration,
-        IRedisService redisService, IUserSubscriptionService userSubscriptionService, IIdempotencyService idempotencyService)
+        IRedisService redisService, IUserSubscriptionService userSubscriptionService)
         {
             _unitOfWork = unitOfWork;
             _userManager = userManager;
@@ -41,7 +40,6 @@ namespace Infrastructure.Services.Payment
             _configuration = configuration;
             _redisService = redisService;
             _userSubscriptionService = userSubscriptionService;
-            _idempotencyService = idempotencyService;
         }
 
         public async Task<StartPaymentResponse> StartPaymentAsync(StartPaymentRequest request, string userId)
@@ -73,9 +71,9 @@ namespace Infrastructure.Services.Payment
                 if (request.InvoiceId.HasValue)
                 {
                     var redisKey = $"idempotency:payment:invoice:{request.InvoiceId.Value}:user:{userId}";
-                    var existingTransactionId = await _idempotencyService.GetExisting(redisKey);
+                    var existingTransactionId = await _redisService.GetAsync<string>(redisKey);
 
-                    if (existingTransactionId != null)
+                    if (existingTransactionId.Value != null)
                         await _redisService.RemoveAsync(redisKey);
 
                     var transactions = await _unitOfWork.PaymentTransactions
@@ -88,9 +86,9 @@ namespace Infrastructure.Services.Payment
                 if (request.SubscriptionPlanId.HasValue)
                 {
                     var redisKey = $"idempotency:payment:plan:{request.SubscriptionPlanId.Value}:user:{userId}";
-                    var existingTransactionId = await _idempotencyService.GetExisting(redisKey);
+                    var existingTransactionId = await _redisService.GetAsync<string>(redisKey);
 
-                    if (existingTransactionId != null)
+                    if (existingTransactionId.Value != null)
                         await _redisService.RemoveAsync(redisKey);
 
                     var transaction = await _unitOfWork.PaymentTransactions
@@ -329,13 +327,13 @@ namespace Infrastructure.Services.Payment
             var redisKey = $"idempotency:payment:invoice:{invoice.Id}:user:{user.Id}";
             var paymentTransactionId = Guid.NewGuid();
 
-            var acquired = await _idempotencyService.TryStartOperation(redisKey, paymentTransactionId.ToString(), TimeSpan.FromMinutes(15));
+            var acquired = await _redisService.TryAcquireIdempotencyKeyAsync(redisKey, paymentTransactionId.ToString(), TimeSpan.FromMinutes(15));
 
-            if (!acquired)
+            if (!acquired.Acquired)
             {
                 var existingTransactionId = await _redisService.GetAsync<string>(redisKey);
                 var existingTransaction =
-                await _unitOfWork.PaymentTransactions.GetByIdToCurrentUserAsync(Guid.Parse(existingTransactionId!), user.Id);
+                await _unitOfWork.PaymentTransactions.GetByIdToCurrentUserAsync(Guid.Parse(existingTransactionId.Value!), user.Id);
 
                 if (existingTransaction == null)
                     throw new BusinessRuleException("Payment transaction not found.");
@@ -345,7 +343,7 @@ namespace Infrastructure.Services.Payment
 
                 return new StartPaymentResponse
                 {
-                    PaymentTransactionId = Guid.Parse(existingTransactionId!),
+                    PaymentTransactionId = Guid.Parse(existingTransactionId.Value!),
                     ClientSecret = existingTransaction.ClientSecret,
                     Status = existingTransaction.Status
                 };
@@ -428,13 +426,13 @@ namespace Infrastructure.Services.Payment
             var redisKey = $"idempotency:payment:plan:{plan.Id}:user:{user.Id}";
             var paymentTransactionId = Guid.NewGuid();
 
-            var acquired = await _idempotencyService.TryStartOperation(redisKey, paymentTransactionId.ToString(), TimeSpan.FromMinutes(15));
+            var acquired = await _redisService.TryAcquireIdempotencyKeyAsync(redisKey, paymentTransactionId.ToString(), TimeSpan.FromMinutes(15));
 
-            if (!acquired)
+            if (!acquired.Acquired)
             {
                 var existingTransactionId = await _redisService.GetAsync<string>(redisKey);
                 var existingTransaction =
-                await _unitOfWork.PaymentTransactions.GetByIdToCurrentUserAsync(Guid.Parse(existingTransactionId!), user.Id);
+                await _unitOfWork.PaymentTransactions.GetByIdToCurrentUserAsync(Guid.Parse(existingTransactionId.Value!), user.Id);
 
                 if (existingTransaction == null)
                     throw new BusinessRuleException("Payment transaction not found.");
@@ -444,7 +442,7 @@ namespace Infrastructure.Services.Payment
 
                 return new StartPaymentResponse
                 {
-                    PaymentTransactionId = Guid.Parse(existingTransactionId!),
+                    PaymentTransactionId = Guid.Parse(existingTransactionId.Value!),
                     ClientSecret = existingTransaction.ClientSecret,
                     Status = existingTransaction.Status
                 };

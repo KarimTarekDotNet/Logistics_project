@@ -10,9 +10,9 @@ using AutoMapper;
 using Domain.Entities.Audits;
 using Domain.Entities.ShippingCore;
 using Domain.Enums;
+using Infrastructure.Common;
 using Infrastructure.Helper;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
 {
@@ -84,7 +84,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                     Action = nameof(CreateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
                     OldValues = null,
-                    NewValues = JsonSerializer.Serialize(carrier),
+                    NewValues = GenericSerializer.Serialize(carrier),
                     UserId = userId
                 };
 
@@ -131,7 +131,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = carrier.Id,
                     EntityName = nameof(Carrier).ToUpper(), Action = nameof(UpdateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldCarrier), NewValues = JsonSerializer.Serialize(carrier),
+                    OldValues = GenericSerializer.Serialize(oldCarrier), NewValues = GenericSerializer.Serialize(carrier),
                     UserId = userId
                 };
 
@@ -162,7 +162,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = carrier.Id,
                     EntityName = nameof(Carrier).ToUpper(), Action = nameof(DeleteAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(carrier), NewValues = "Deleted", UserId = userId
+                    OldValues = GenericSerializer.Serialize(carrier), NewValues = "Deleted", UserId = userId
                 };
 
                 carrier.IsDeleted = true;

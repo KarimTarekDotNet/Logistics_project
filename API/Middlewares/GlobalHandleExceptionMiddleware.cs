@@ -1,4 +1,5 @@
 ﻿using Domain.Exceptions;
+using Infrastructure.Common;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
@@ -51,7 +52,7 @@ namespace API.Middlewares
                 context.Response.ContentType = "application/json";
                 context.Response.StatusCode = statusCode;
 
-                await context.Response.WriteAsync(JsonSerializer.Serialize(new
+                await context.Response.WriteAsync(GenericSerializer.Serialize(new
                 {
                     StatusCode = statusCode,
                     Message = message

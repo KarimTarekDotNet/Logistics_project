@@ -10,9 +10,9 @@ using AutoMapper;
 using Domain.Entities.Audits;
 using Domain.Entities.ShippingCore;
 using Domain.Enums;
+using Infrastructure.Common;
 using Infrastructure.Helper;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace Infrastructure.Services.Pricing.ShippingCore
 {
@@ -76,7 +76,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                     CreatedAt = port.CreatedAt, EntityId = port.Id,
                     EntityName = nameof(Port).ToUpper(), Action = nameof(CreateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = null, NewValues = JsonSerializer.Serialize(port), UserId = userId
+                    OldValues = null, NewValues = GenericSerializer.Serialize(port), UserId = userId
                 };
 
                 await _unitOfWork.Ports.AddAsync(port);
@@ -122,7 +122,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = port.Id,
                     EntityName = nameof(Port).ToUpper(), Action = nameof(UpdateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldPort), NewValues = JsonSerializer.Serialize(port), UserId = userId
+                    OldValues = GenericSerializer.Serialize(oldPort), NewValues = GenericSerializer.Serialize(port), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
@@ -153,7 +153,7 @@ namespace Infrastructure.Services.Pricing.ShippingCore
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = port.Id,
                     EntityName = nameof(Port).ToUpper(), Action = nameof(DeleteAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(port), NewValues = "Deleted", UserId = userId
+                    OldValues = GenericSerializer.Serialize(port), NewValues = "Deleted", UserId = userId
                 };
 
                 port.IsDeleted = true;

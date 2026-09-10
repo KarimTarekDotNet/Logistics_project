@@ -9,6 +9,7 @@ using Domain.Entities.Pricing.Quotation;
 using Domain.Entities.Shipments;
 using Domain.Entities.Users;
 using Domain.Enums;
+using Infrastructure.Common;
 using Infrastructure.Helper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -152,7 +153,7 @@ namespace Infrastructure.Services.Pricing.Quotation
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = request.Id,
                     EntityName = nameof(QuoteRequest).ToUpper(), Action = nameof(CancelByUserAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldRequest), NewValues = JsonSerializer.Serialize(request), UserId = userId
+                    OldValues = GenericSerializer.Serialize(oldRequest), NewValues = GenericSerializer.Serialize(request), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
@@ -192,7 +193,7 @@ namespace Infrastructure.Services.Pricing.Quotation
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = request.Id,
                     EntityName = nameof(QuoteRequest).ToUpper(), Action = nameof(RejectAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldRequest), NewValues = JsonSerializer.Serialize(request), UserId = userId
+                    OldValues = GenericSerializer.Serialize(oldRequest), NewValues = GenericSerializer.Serialize(request), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
@@ -248,7 +249,7 @@ namespace Infrastructure.Services.Pricing.Quotation
                     CreatedAt = quoteRequest.CreatedAt, EntityId = quoteRequest.Id,
                     EntityName = nameof(QuoteRequest).ToUpper(), Action = nameof(CreateFromRateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = null, NewValues = JsonSerializer.Serialize(quoteRequest), UserId = userId
+                    OldValues = null, NewValues = GenericSerializer.Serialize(quoteRequest), UserId = userId
                 };
 
                 await _unitOfWork.QuoteRequest.AddAsync(quoteRequest);

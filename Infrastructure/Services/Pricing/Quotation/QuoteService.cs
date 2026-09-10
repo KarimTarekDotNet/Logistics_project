@@ -10,6 +10,7 @@ using Domain.Entities.Pricing.Quotation;
 using Domain.Entities.Shipments;
 using Domain.Entities.Users;
 using Domain.Enums;
+using Infrastructure.Common;
 using Infrastructure.Helper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -119,7 +120,7 @@ namespace Infrastructure.Services.Pricing.Quotation
                     CreatedAt = quote.CreatedAt, EntityId = quote.Id,
                     EntityName = nameof(Quote).ToUpper(), Action = nameof(CreateAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = null, NewValues = JsonSerializer.Serialize(quote), UserId = userId
+                    OldValues = null, NewValues = GenericSerializer.Serialize(quote), UserId = userId
                 };
 
                 await _unitOfWork.Quotes.AddAsync(quote);
@@ -194,7 +195,7 @@ namespace Infrastructure.Services.Pricing.Quotation
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = quote.Id,
                     EntityName = nameof(Quote).ToUpper(), Action = nameof(AcceptFromUserAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldQuote), NewValues = JsonSerializer.Serialize(quote), UserId = userId
+                    OldValues = GenericSerializer.Serialize(oldQuote), NewValues = GenericSerializer.Serialize(quote), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
@@ -229,7 +230,7 @@ namespace Infrastructure.Services.Pricing.Quotation
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = quote.Id,
                     EntityName = nameof(Quote).ToUpper(), Action = nameof(RejectFromUserAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(oldQuote), NewValues = JsonSerializer.Serialize(quote), UserId = userId
+                    OldValues = GenericSerializer.Serialize(oldQuote), NewValues = GenericSerializer.Serialize(quote), UserId = userId
                 };
 
                 await _unitOfWork.AuditLog.Add(audit);
@@ -260,7 +261,7 @@ namespace Infrastructure.Services.Pricing.Quotation
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = quote.Id,
                     EntityName = nameof(Quote).ToUpper(), Action = nameof(DeleteAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(quote), NewValues = "Deleted", UserId = userId
+                    OldValues = GenericSerializer.Serialize(quote), NewValues = "Deleted", UserId = userId
                 };
 
                 quote.IsDeleted = true;

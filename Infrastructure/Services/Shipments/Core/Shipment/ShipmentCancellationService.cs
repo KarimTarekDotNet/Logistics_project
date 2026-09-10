@@ -1,4 +1,4 @@
-﻿using Application.Common;
+using Application.Common;
 using Application.DTOs.Shipments.Core;
 using Application.Interfaces.Repositories.Patterns;
 using Application.Interfaces.Services.Shipments.Core;
@@ -6,10 +6,10 @@ using AutoMapper;
 using Domain.Entities.Audits;
 using Domain.Entities.Users;
 using Domain.Enums;
+using Infrastructure.Common;
 using Infrastructure.Helper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace Infrastructure.Services.Shipments.Core.Shipment
 {
@@ -51,8 +51,8 @@ namespace Infrastructure.Services.Shipments.Core.Shipment
                     CreatedAt = DateTimeOffset.UtcNow, EntityId = shipment.Id,
                     EntityName = nameof(Domain.Entities.Shipments.Shipment).ToUpper(), Action = nameof(CancelAsync).ToUpper(),
                     IpAddress = await IpAddressHelper.GetRealPublicIpAsync(),
-                    OldValues = JsonSerializer.Serialize(new { Status = oldStatus.ToString() }),
-                    NewValues = JsonSerializer.Serialize(new { Status = ShipmentStatus.Cancelled.ToString(), Reason = request.Reason }),
+                    OldValues = GenericSerializer.Serialize(new { Status = oldStatus.ToString() }),
+                    NewValues = GenericSerializer.Serialize(new { Status = ShipmentStatus.Cancelled.ToString(), Reason = request.Reason }),
                     UserId = userId
                 };
 
